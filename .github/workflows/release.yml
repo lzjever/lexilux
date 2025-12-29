@@ -81,10 +81,13 @@ jobs:
           python3 scripts/generate_release_notes.py "$VERSION" "$RELEASE_NOTES_FILE"
           
           # Output to GITHUB_OUTPUT using multiline format
+          # Use a unique delimiter to avoid conflicts with file content
+          DELIMITER="RELEASE_NOTES_$(date +%s)_$$"
           {
-            echo 'notes<<EOF'
+            echo "notes<<${DELIMITER}"
             cat "$RELEASE_NOTES_FILE"
-            echo 'EOF'
+            echo ""
+            echo "${DELIMITER}"
           } >> $GITHUB_OUTPUT
           
           # Cleanup
