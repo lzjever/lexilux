@@ -128,10 +128,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Publish to PyPI (Optional)
-        if: ${{ secrets.PYPI_API_TOKEN != '' }}
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
+          if [ -z "$TWINE_PASSWORD" ]; then
+            echo "PYPI_API_TOKEN not set, skipping PyPI upload"
+            exit 0
+          fi
           echo "Publishing to PyPI..."
           twine upload dist/*
