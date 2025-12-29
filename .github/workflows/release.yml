@@ -1,6 +1,9 @@
 name: Build and Release
 
 on:
+  push:
+    tags:
+      - 'v*'  # Trigger on tags starting with 'v'
   release:
     types: [published]
   workflow_dispatch:  # Allow manual triggering
@@ -38,6 +41,9 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
             VERSION="${{ github.event.release.tag_name }}"
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            # Extract version from tag ref (refs/tags/v0.1.0 -> v0.1.0)
+            VERSION="${{ github.ref_name }}"
           else
             VERSION="${{ github.event.inputs.version }}"
           fi
@@ -69,51 +75,20 @@ jobs:
         id: release_notes
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
-          TAG="${{ steps.get_version.outputs.tag }}"
           
-          if [ -f CHANGELOG.md ]; then
-            # Try to extract changelog for this version
-            if grep -q "## \[$VERSION\]" CHANGELOG.md; then
-              # Extract from ## [version] to next ##
-              awk "/^## \[$VERSION\]/,/^## \[/{if (!/^## \[$VERSION\]/) print}" CHANGELOG.md | head -n -1 > /tmp/release_notes.md || true
-              if [ -s /tmp/release_notes.md ]; then
-                NOTES=$(cat /tmp/release_notes.md)
-              else
-                # Fallback: get full changelog section including header
-                NOTES=$(awk "/^## \[$VERSION\]/,/^## \[/{print}" CHANGELOG.md | head -n -1)
-              fi
-            elif grep -q "## $TAG" CHANGELOG.md; then
-              NOTES=$(awk "/^## $TAG/,/^## /{if (!/^## $TAG/ && !/^## /) print}" CHANGELOG.md)
-            else
-              # Fallback: generate from git commits
-              PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-              if [ -z "$PREV_TAG" ]; then
-                NOTES="## What's Changed\n\nInitial release"
-              else
-                COMMITS=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
-                NOTES="## What's Changed\n\n$COMMITS"
-              fi
-            fi
-          else
-            # Generate from git commits if no CHANGELOG
-            PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-            if [ -z "$PREV_TAG" ]; then
-              NOTES="## What's Changed\n\nInitial release"
-            else
-              COMMITS=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
-              NOTES="## What's Changed\n\n$COMMITS"
-            fi
-          fi
+          # Generate release notes using the script
+          RELEASE_NOTES_FILE=$(mktemp)
+          python3 scripts/generate_release_notes.py "$VERSION" "$RELEASE_NOTES_FILE"
           
-          # Add installation instructions
-          NOTES="$NOTES\n\n## Installation\n\n\`\`\`bash\npip install lexilux\n\`\`\`\n\nOr with tokenizer support:\n\n\`\`\`bash\npip install lexilux[tokenizer]\n\`\`\`"
-          
-          # Escape for GitHub Actions (multiline)
+          # Output to GITHUB_OUTPUT using multiline format
           {
             echo 'notes<<EOF'
-            echo "$NOTES"
+            cat "$RELEASE_NOTES_FILE"
             echo 'EOF'
           } >> $GITHUB_OUTPUT
+          
+          # Cleanup
+          rm -f "$RELEASE_NOTES_FILE"
       
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v1
