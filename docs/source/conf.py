@@ -16,7 +16,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 project = 'Lexilux'
-copyright = '2024, Lexilux Team'
+copyright = '2025, Lexilux Team'
 author = 'Lexilux Team'
 release = '0.1.0'
 version = '0.1.0'
