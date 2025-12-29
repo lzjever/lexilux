@@ -10,7 +10,6 @@ from lexilux.embed import Embed, EmbedResult
 from lexilux.rerank import Rerank, RerankResult
 from lexilux.tokenizer import Tokenizer, TokenizeResult, TokenizerMode
 
-__version__ = "0.1.2"
 
 __all__ = [
     # Usage
@@ -31,3 +30,5 @@ __all__ = [
     "TokenizeResult",
     "TokenizerMode",
 ]
+
+__version__ = "0.1.2"
