@@ -7,7 +7,6 @@ Make sure test_endpoints.json is configured with your API credentials.
 """
 
 import json
-import os
 from pathlib import Path
 
 from lexilux import Chat, Embed, Rerank

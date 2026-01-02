@@ -10,11 +10,10 @@ from lexilux import Rerank, RerankResult
 from lexilux.usage import Usage
 
 
-def _make_chat_response(rerank_results, usage=None):
-    """Helper to create chat-based rerank response format"""
-    rerank_result = {"results": rerank_results}
+def _make_openai_response(rerank_results, usage=None):
+    """Helper to create OpenAI-compatible rerank response format"""
     response = {
-        "choices": [{"message": {"content": json.dumps(rerank_result, ensure_ascii=False)}}],
+        "results": rerank_results,
         "usage": usage or {"total_tokens": 100},
     }
     return response
@@ -45,21 +44,24 @@ class TestRerankCall:
 
     @responses.activate
     def test_call_basic(self):
-        """Test basic rerank call (chat-based)"""
+        """Test basic rerank call (OpenAI-compatible)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
+            mode="openai",
         )
 
         rerank_results = [
-            {"index": 1, "score": 0.95},
-            {"index": 0, "score": 0.80},
-            {"index": 2, "score": 0.70},
+            {"index": 1, "relevance_score": 0.95},
+            {"index": 0, "relevance_score": 0.80},
+            {"index": 2, "relevance_score": 0.70},
         ]
-        response_data = _make_chat_response(rerank_results)
+        response_data = _make_openai_response(rerank_results)
 
         responses.add(
             responses.POST,
-            "https://api.example.com/v1/chat/completions",
+            "https://api.example.com/v1/rerank",
             json=response_data,
             status=200,
         )
@@ -75,20 +77,23 @@ class TestRerankCall:
 
     @responses.activate
     def test_call_with_include_docs(self):
-        """Test rerank call with include_docs=True (chat-based)"""
+        """Test rerank call with include_docs=True (OpenAI-compatible)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
+            mode="openai",
         )
 
         rerank_results = [
-            {"index": 1, "score": 0.95, "document": "requests"},
-            {"index": 0, "score": 0.80, "document": "urllib"},
+            {"index": 1, "relevance_score": 0.95, "document": {"text": "requests"}},
+            {"index": 0, "relevance_score": 0.80, "document": {"text": "urllib"}},
         ]
-        response_data = _make_chat_response(rerank_results)
+        response_data = _make_openai_response(rerank_results)
 
         responses.add(
             responses.POST,
-            "https://api.example.com/v1/chat/completions",
+            "https://api.example.com/v1/rerank",
             json=response_data,
             status=200,
         )
@@ -102,21 +107,24 @@ class TestRerankCall:
 
     @responses.activate
     def test_call_with_top_k(self):
-        """Test rerank call with top_k parameter (chat-based)"""
+        """Test rerank call with top_k parameter (OpenAI-compatible)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
+            mode="openai",
         )
 
         rerank_results = [
-            {"index": 1, "score": 0.95},
-            {"index": 0, "score": 0.80},
-            {"index": 2, "score": 0.70},
+            {"index": 1, "relevance_score": 0.95},
+            {"index": 0, "relevance_score": 0.80},
+            {"index": 2, "relevance_score": 0.70},
         ]
-        response_data = _make_chat_response(rerank_results)
+        response_data = _make_openai_response(rerank_results)
 
         responses.add(
             responses.POST,
-            "https://api.example.com/v1/chat/completions",
+            "https://api.example.com/v1/rerank",
             json=response_data,
             status=200,
         )
@@ -128,17 +136,20 @@ class TestRerankCall:
 
     @responses.activate
     def test_call_with_model_override(self):
-        """Test rerank call with model override (chat-based)"""
+        """Test rerank call with model override (OpenAI-compatible)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
+            mode="openai",
         )
 
-        rerank_results = [{"index": 0, "score": 0.95}]
-        response_data = _make_chat_response(rerank_results)
+        rerank_results = [{"index": 0, "relevance_score": 0.95}]
+        response_data = _make_openai_response(rerank_results)
 
         responses.add(
             responses.POST,
-            "https://api.example.com/v1/chat/completions",
+            "https://api.example.com/v1/rerank",
             json=response_data,
             status=200,
         )
@@ -148,28 +159,26 @@ class TestRerankCall:
         request = responses.calls[0].request
         payload = json.loads(request.body)
         assert payload["model"] == "custom-model"
-        # Verify it's using chat format
-        assert "messages" in payload
-        assert len(payload["messages"]) == 1
-        assert payload["messages"][0]["role"] == "user"
-        # Content should be JSON string with query and candidates
-        content = json.loads(payload["messages"][0]["content"])
-        assert "query" in content
-        assert "candidates" in content
+        # Verify it's using OpenAI format
+        assert "query" in payload
+        assert "documents" in payload
 
     @responses.activate
     def test_call_with_extra_params(self):
-        """Test rerank call with extra parameters (chat-based)"""
+        """Test rerank call with extra parameters (OpenAI-compatible)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
+            mode="openai",
         )
 
-        rerank_results = [{"index": 0, "score": 0.95}]
-        response_data = _make_chat_response(rerank_results)
+        rerank_results = [{"index": 0, "relevance_score": 0.95}]
+        response_data = _make_openai_response(rerank_results)
 
         responses.add(
             responses.POST,
-            "https://api.example.com/v1/chat/completions",
+            "https://api.example.com/v1/rerank",
             json=response_data,
             status=200,
         )
@@ -178,24 +187,26 @@ class TestRerankCall:
 
         request = responses.calls[0].request
         payload = json.loads(request.body)
-        # Extra params should be in the rerank_data (message content)
-        content = json.loads(payload["messages"][0]["content"])
-        assert content["batch_size"] == 10
+        # Extra params should be in the payload
+        assert payload["batch_size"] == 10
 
     @responses.activate
     def test_call_with_return_raw(self):
-        """Test rerank call with return_raw=True (chat-based)"""
+        """Test rerank call with return_raw=True (OpenAI-compatible)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
+            mode="openai",
         )
 
-        rerank_results = [{"index": 0, "score": 0.95}]
-        response_data = _make_chat_response(rerank_results)
+        rerank_results = [{"index": 0, "relevance_score": 0.95}]
+        response_data = _make_openai_response(rerank_results)
         response_data["id"] = "rerank-123"
 
         responses.add(
             responses.POST,
-            "https://api.example.com/v1/chat/completions",
+            "https://api.example.com/v1/rerank",
             json=response_data,
             status=200,
         )
@@ -223,20 +234,23 @@ class TestRerankCall:
 
     @responses.activate
     def test_call_no_results(self):
-        """Test handling response with no results (chat-based)"""
+        """Test handling response with no results (OpenAI-compatible)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
+            mode="openai",
         )
 
-        # Empty results in chat response
+        # Empty results in OpenAI response
         response_data = {
-            "choices": [{"message": {"content": json.dumps({"results": []}, ensure_ascii=False)}}],
+            "results": [],
             "usage": {"total_tokens": 100},
         }
 
         responses.add(
             responses.POST,
-            "https://api.example.com/v1/chat/completions",
+            "https://api.example.com/v1/rerank",
             json=response_data,
             status=200,
         )
@@ -245,74 +259,23 @@ class TestRerankCall:
             rerank("query", ["doc"])
 
     @responses.activate
-    def test_call_alternative_response_format(self):
-        """Test handling alternative response format using 'data' (chat-based)"""
-        rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
-        )
-
-        # Response with 'data' instead of 'results'
-        rerank_result = {
-            "data": [
-                {"index": 1, "score": 0.95},
-                {"index": 0, "score": 0.80},
-            ],
-        }
-        response_data = {
-            "choices": [{"message": {"content": json.dumps(rerank_result, ensure_ascii=False)}}],
-            "usage": {"total_tokens": 100},
-        }
-
-        responses.add(
-            responses.POST,
-            "https://api.example.com/v1/chat/completions",
-            json=response_data,
-            status=200,
-        )
-
-        result = rerank("query", ["doc1", "doc2"])
-        assert len(result.results) == 2
-        assert result.results[0] == (1, 0.95)
-
-    @responses.activate
-    def test_call_alternative_field_names(self):
-        """Test handling alternative field names in results (chat-based)"""
-        rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
-        )
-
-        rerank_results = [
-            {"document_index": 1, "relevance_score": 0.95},
-            {"document_index": 0, "relevance_score": 0.80},
-        ]
-        response_data = _make_chat_response(rerank_results)
-
-        responses.add(
-            responses.POST,
-            "https://api.example.com/v1/chat/completions",
-            json=response_data,
-            status=200,
-        )
-
-        result = rerank("query", ["doc1", "doc2"])
-        assert len(result.results) == 2
-        assert result.results[0] == (1, 0.95)
-
-    @responses.activate
     def test_call_usage_parsing(self):
-        """Test usage parsing (chat-based)"""
+        """Test usage parsing (OpenAI-compatible)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
+            mode="openai",
         )
 
-        rerank_results = [{"index": 0, "score": 0.95}]
-        response_data = _make_chat_response(
+        rerank_results = [{"index": 0, "relevance_score": 0.95}]
+        response_data = _make_openai_response(
             rerank_results, usage={"prompt_tokens": 50, "total_tokens": 50}
         )
 
         responses.add(
             responses.POST,
-            "https://api.example.com/v1/chat/completions",
+            "https://api.example.com/v1/rerank",
             json=response_data,
             status=200,
         )
@@ -325,20 +288,23 @@ class TestRerankCall:
     def test_call_negative_scores_sorting(self):
         """Test sorting with negative scores (less negative = better)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
+            mode="openai",
         )
 
         # Negative scores: -3.0 is better than -4.0
         rerank_results = [
-            {"index": 0, "score": -4.0},
-            {"index": 1, "score": -3.0},
-            {"index": 2, "score": -5.0},
+            {"index": 0, "relevance_score": -4.0},
+            {"index": 1, "relevance_score": -3.0},
+            {"index": 2, "relevance_score": -5.0},
         ]
-        response_data = _make_chat_response(rerank_results)
+        response_data = _make_openai_response(rerank_results)
 
         responses.add(
             responses.POST,
-            "https://api.example.com/v1/chat/completions",
+            "https://api.example.com/v1/rerank",
             json=response_data,
             status=200,
         )
@@ -353,20 +319,23 @@ class TestRerankCall:
     def test_call_positive_scores_sorting(self):
         """Test sorting with positive scores (higher = better)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
+            mode="openai",
         )
 
         # Positive scores: 0.95 is better than 0.80
         rerank_results = [
-            {"index": 0, "score": 0.80},
-            {"index": 1, "score": 0.95},
-            {"index": 2, "score": 0.70},
+            {"index": 0, "relevance_score": 0.80},
+            {"index": 1, "relevance_score": 0.95},
+            {"index": 2, "relevance_score": 0.70},
         ]
-        response_data = _make_chat_response(rerank_results)
+        response_data = _make_openai_response(rerank_results)
 
         responses.add(
             responses.POST,
-            "https://api.example.com/v1/chat/completions",
+            "https://api.example.com/v1/rerank",
             json=response_data,
             status=200,
         )
@@ -377,86 +346,18 @@ class TestRerankCall:
         assert result.results[1] == (0, 0.80)
         assert result.results[2] == (2, 0.70)  # Worst (lowest)
 
-    @responses.activate
-    def test_call_direct_list_format_with_doc_text(self):
-        """Test parsing direct list format [["doc", score], ...]"""
-        rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
-        )
-
-        # Direct list format with doc text and negative scores
-        rerank_result = [
-            ["httpx", -3.9791],
-            ["requests", -4.0256],
-            ["urllib", -4.1798],
-        ]
-        response_data = {
-            "choices": [{"message": {"content": json.dumps(rerank_result, ensure_ascii=False)}}],
-            "usage": {"total_tokens": 100},
-        }
-
-        responses.add(
-            responses.POST,
-            "https://api.example.com/v1/chat/completions",
-            json=response_data,
-            status=200,
-        )
-
-        docs = ["urllib", "requests", "httpx"]
-        result = rerank("query", docs)
-        # Should map doc text to index and sort by score (descending for negative)
-        # httpx (index 2, -3.9791) should be first (best)
-        assert len(result.results) == 3
-        assert result.results[0][0] == 2  # httpx index
-        assert abs(result.results[0][1] - (-3.9791)) < 0.0001
-        assert result.results[1][0] == 1  # requests index
-        assert abs(result.results[1][1] - (-4.0256)) < 0.0001
-        assert result.results[2][0] == 0  # urllib index
-        assert abs(result.results[2][1] - (-4.1798)) < 0.0001
-
-    @responses.activate
-    def test_call_direct_list_format_with_index(self):
-        """Test parsing direct list format [[index, score], ...]"""
-        rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
-        )
-
-        # Direct list format with index and positive scores
-        rerank_result = [
-            [1, 0.95],
-            [0, 0.80],
-            [2, 0.70],
-        ]
-        response_data = {
-            "choices": [{"message": {"content": json.dumps(rerank_result, ensure_ascii=False)}}],
-            "usage": {"total_tokens": 100},
-        }
-
-        responses.add(
-            responses.POST,
-            "https://api.example.com/v1/chat/completions",
-            json=response_data,
-            status=200,
-        )
-
-        result = rerank("query", ["doc0", "doc1", "doc2"])
-        # Should be sorted by score (descending)
-        assert result.results[0] == (1, 0.95)
-        assert result.results[1] == (0, 0.80)
-        assert result.results[2] == (2, 0.70)
-
 
 class TestRerankOpenAIMode:
     """OpenAI-compatible mode tests"""
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_openai_mode_basic(self, test_config, has_real_api_config):
-        """Test OpenAI mode basic rerank call with real API (Jina)"""
-        if not has_real_api_config or "rerank_openai" not in test_config:
+        """Test OpenAI mode basic rerank call with real API (rerank_local_qwen3)"""
+        if not has_real_api_config or "rerank_local_qwen3" not in test_config:
             pytest.skip("No real API config available")
 
-        config = test_config["rerank_openai"]
+        config = test_config["rerank_local_qwen3"]
         rerank = Rerank(
             base_url=config["api_base"],
             api_key=config["api_key"],
@@ -475,14 +376,14 @@ class TestRerankOpenAIMode:
         scores = [score for _, score in result.results]
         assert all(scores[i] >= scores[i + 1] for i in range(len(scores) - 1))
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_openai_mode_with_return_documents(self, test_config, has_real_api_config):
         """Test OpenAI mode with return_documents=True using real API"""
-        if not has_real_api_config or "rerank_openai" not in test_config:
+        if not has_real_api_config or "rerank_local_qwen3" not in test_config:
             pytest.skip("No real API config available")
 
-        config = test_config["rerank_openai"]
+        config = test_config["rerank_local_qwen3"]
         rerank = Rerank(
             base_url=config["api_base"],
             api_key=config["api_key"],
@@ -494,7 +395,7 @@ class TestRerankOpenAIMode:
         result = rerank("python http library", docs, include_docs=True)
         assert len(result.results) >= 1
 
-        # DashScope may not return documents in the same format, so we check what we get
+        # Check if documents are included
         if len(result.results[0]) == 3:
             # Documents are included
             for idx, score, doc in result.results:
@@ -502,17 +403,17 @@ class TestRerankOpenAIMode:
                 assert isinstance(doc, str)
                 assert len(doc) > 0
         else:
-            # Documents not included (DashScope format limitation)
+            # Documents not included (provider limitation)
             assert len(result.results[0]) == 2  # (index, score)
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_openai_mode_with_top_n(self, test_config, has_real_api_config):
         """Test OpenAI mode with top_n parameter using real API"""
-        if not has_real_api_config or "rerank_openai" not in test_config:
+        if not has_real_api_config or "rerank_local_qwen3" not in test_config:
             pytest.skip("No real API config available")
 
-        config = test_config["rerank_openai"]
+        config = test_config["rerank_local_qwen3"]
         rerank = Rerank(
             base_url=config["api_base"],
             api_key=config["api_key"],
@@ -531,14 +432,14 @@ class TestRerankOpenAIMode:
             scores = [score for _, score in result.results]
             assert all(scores[i] >= scores[i + 1] for i in range(len(scores) - 1))
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_openai_mode_request_format(self, test_config, has_real_api_config):
         """Test OpenAI mode request format with real API"""
-        if not has_real_api_config or "rerank_openai" not in test_config:
+        if not has_real_api_config or "rerank_local_qwen3" not in test_config:
             pytest.skip("No real API config available")
 
-        config = test_config["rerank_openai"]
+        config = test_config["rerank_local_qwen3"]
         rerank = Rerank(
             base_url=config["api_base"],
             api_key=config["api_key"],
@@ -554,14 +455,14 @@ class TestRerankOpenAIMode:
         assert len(result.results) >= 1
         assert isinstance(result.usage, Usage)
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_openai_mode_with_extra_params(self, test_config, has_real_api_config):
         """Test OpenAI mode with extra parameters using real API"""
-        if not has_real_api_config or "rerank_openai" not in test_config:
+        if not has_real_api_config or "rerank_local_qwen3" not in test_config:
             pytest.skip("No real API config available")
 
-        config = test_config["rerank_openai"]
+        config = test_config["rerank_local_qwen3"]
         rerank = Rerank(
             base_url=config["api_base"],
             api_key=config["api_key"],
@@ -577,23 +478,23 @@ class TestRerankOpenAIMode:
         assert isinstance(result, RerankResult)
         assert len(result.results) >= 1
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_mode_override_in_call(self, test_config, has_real_api_config):
         """Test overriding mode in __call__ with real API"""
-        if not has_real_api_config or "rerank_openai" not in test_config:
+        if not has_real_api_config or "rerank_local_qwen3" not in test_config:
             pytest.skip("No real API config available")
 
-        config = test_config["rerank_openai"]
-        # Initialize with chat mode (but we'll override to openai)
+        config = test_config["rerank_local_qwen3"]
+        # Initialize with openai mode
         rerank = Rerank(
             base_url=config["api_base"],
             api_key=config["api_key"],
             model=config["model"],
-            mode="chat",  # Initialize with chat mode
+            mode="openai",
         )
 
-        # But use OpenAI mode in this call
+        # Use OpenAI mode in this call
         result = rerank("python http library", ["urllib", "requests"], mode="openai")
 
         # Verify we got valid results from OpenAI endpoint

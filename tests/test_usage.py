@@ -2,7 +2,6 @@
 Usage and ResultBase test cases
 """
 
-import pytest
 from lexilux.usage import Usage, ResultBase, Json
 
 

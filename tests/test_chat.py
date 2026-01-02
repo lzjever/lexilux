@@ -4,11 +4,9 @@ Chat API client test cases (non-streaming)
 
 import json
 import pytest
-from unittest.mock import Mock, patch
 import responses
 
 from lexilux import Chat, ChatResult
-from lexilux.usage import Usage
 
 
 class TestChatInit:

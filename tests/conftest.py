@@ -48,7 +48,9 @@ def has_real_api_config(test_config):
 
 def pytest_configure(config):
     """Register custom markers."""
-    config.addinivalue_line("markers", "real_api: mark test as requiring real API endpoints")
+    config.addinivalue_line(
+        "markers", "integration: mark test as integration test requiring external services"
+    )
     config.addinivalue_line(
         "markers", "skip_if_no_config: skip test if test_endpoints.json is not available"
     )

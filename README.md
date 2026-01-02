@@ -30,8 +30,6 @@ pip install lexilux
 # Using full name
 pip install lexilux[tokenizer]
 
-# Or using short name
-pip install lexilux[token]
 ```
 
 ### Development Setup with uv (Recommended)

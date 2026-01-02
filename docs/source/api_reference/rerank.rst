@@ -1,8 +1,8 @@
 Rerank Module
 =============
 
-The Rerank module provides document reranking functionality with support for three provider modes:
-OpenAI-compatible, DashScope, and Chat-based custom format.
+The Rerank module provides document reranking functionality with support for two provider modes:
+OpenAI-compatible and DashScope.
 
 The module uses a strategy pattern with separate handlers for each mode, ensuring a unified interface
 while hiding provider-specific differences.
@@ -10,9 +10,8 @@ while hiding provider-specific differences.
 Supported Modes
 ---------------
 
-- **openai**: OpenAI-compatible standard rerank API (e.g., Jina AI)
+- **openai**: OpenAI-compatible standard rerank API (e.g., Jina AI) (default)
 - **dashscope**: Alibaba Cloud DashScope rerank API
-- **chat**: Chat-based custom rerank API (default)
 
 All modes return the same ``RerankResult`` format, hiding provider differences from users.
 
@@ -42,5 +41,4 @@ See Also
 --------
 
 - :doc:`../rerank_modes_comparison` - Comprehensive comparison of rerank modes
-- :doc:`../chat_rerank_spec` - Detailed specification for implementing custom chat-based rerank services
 

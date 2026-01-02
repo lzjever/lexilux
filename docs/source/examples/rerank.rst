@@ -5,8 +5,8 @@ Document reranking example demonstrating various features of Lexilux Rerank API.
 
 Lexilux supports two rerank modes:
 
-1. **OpenAI-compatible mode** (``mode="openai"``): Standard rerank API format
-2. **Chat-based mode** (``mode="chat"``): Custom chat-based rerank API (default)
+1. **OpenAI-compatible mode** (``mode="openai"``): Standard rerank API format (default)
+2. **DashScope mode** (``mode="dashscope"``): Alibaba Cloud DashScope rerank API
 
 For a detailed comparison of both modes, see :doc:`../rerank_modes_comparison`.
 
@@ -25,12 +25,12 @@ You can specify the mode when initializing the Rerank client:
        mode="openai"  # Use OpenAI-compatible format
    )
 
-   # Chat-based mode (default)
+   # DashScope mode
    rerank = Rerank(
-       base_url="https://api.example.com/v1",
+       base_url="https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
        api_key="your-api-key",
-       model="rerank-model",
-       mode="chat"  # Use chat-based format (default)
+       model="qwen3-rerank",
+       mode="dashscope"  # Use DashScope format
    )
 
 You can also override the mode for individual calls:
@@ -89,8 +89,10 @@ OpenAI-Compatible Mode
 When using ``mode="openai"``, Lexilux uses the standard OpenAI-compatible rerank API format:
 
 **Request Format:**
+
 - Endpoint: ``POST /rerank``
 - Payload:
+
   .. code-block:: json
   
      {
@@ -102,7 +104,9 @@ When using ``mode="openai"``, Lexilux uses the standard OpenAI-compatible rerank
      }
 
 **Response Format:**
+
 - Expected response:
+
   .. code-block:: json
   
      {
@@ -127,46 +131,53 @@ When using ``mode="openai"``, Lexilux uses the standard OpenAI-compatible rerank
 - Uses ``relevance_score`` instead of ``score``
 - Document is wrapped in ``{"text": "..."}`` object
 
-Chat-Based Mode
----------------
+DashScope Mode
+--------------
 
-When using ``mode="chat"`` (default), Lexilux uses a custom chat-based rerank API format:
+When using ``mode="dashscope"``, Lexilux uses the Alibaba Cloud DashScope rerank API format:
 
 **Request Format:**
-- Endpoint: ``POST /chat/completions``
+
+- Endpoint: ``POST /text-rerank/text-rerank``
 - Payload:
+
   .. code-block:: json
   
      {
-       "model": "rerank-model",
-       "messages": [
-         {
-           "role": "user",
-           "content": "{\"query\": \"search query\", \"candidates\": [\"doc1\", \"doc2\"], \"top_k\": 3}"
-         }
-       ],
-       "stream": false
+       "model": "qwen3-rerank",
+       "input": {
+         "query": "search query",
+         "documents": ["doc1", "doc2", "doc3"]
+       },
+       "parameters": {
+         "top_n": 3,
+         "return_documents": true
+       }
      }
 
 **Response Format:**
+
 - Expected response:
+
   .. code-block:: json
   
      {
-       "choices": [
-         {
-           "message": {
-             "content": "{\"results\": [{\"index\": 0, \"score\": 0.95}, ...]}"
+       "output": {
+         "results": [
+           {
+             "index": 0,
+             "relevance_score": 0.95,
+             "document": {"text": "doc1"}
            }
-         }
-       ],
+         ]
+       },
        "usage": {"total_tokens": 100}
      }
 
 **Key Features:**
-- Rerank data is sent as JSON string in message content
-- Results are returned in message content as JSON string
-- Supports multiple response formats (list, dict with results/data)
+- Query and documents wrapped in ``input`` object
+- Additional parameters in ``parameters`` object
+- Results wrapped in ``output.results``
 
 Response Formats
 ----------------
@@ -174,6 +185,7 @@ Response Formats
 Lexilux supports multiple response formats from rerank APIs:
 
 1. **Dictionary format with results**:
+
    .. code-block:: json
    
       {
@@ -184,6 +196,7 @@ Lexilux supports multiple response formats from rerank APIs:
       }
 
 2. **Dictionary format with data**:
+
    .. code-block:: json
    
       {
@@ -194,6 +207,7 @@ Lexilux supports multiple response formats from rerank APIs:
       }
 
 3. **Direct list format with document text**:
+
    .. code-block:: json
    
       [
@@ -202,6 +216,7 @@ Lexilux supports multiple response formats from rerank APIs:
       ]
 
 4. **Direct list format with index**:
+
    .. code-block:: json
    
       [
@@ -209,16 +224,6 @@ Lexilux supports multiple response formats from rerank APIs:
         [1, 0.80]
       ]
 
-5. **Chat-based rerank** (for services using chat/completions endpoint):
-   .. code-block:: json
-   
-      {
-        "choices": [{
-          "message": {
-            "content": "{\"results\": [{\"index\": 0, \"score\": 0.95}]}"
-          }
-        }]
-      }
 
 The library automatically detects and parses all these formats.
 

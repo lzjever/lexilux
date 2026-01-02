@@ -6,7 +6,7 @@ Provides a simple, function-like API for chat completions with unified usage tra
 
 from __future__ import annotations
 import json
-from typing import Any, Dict, Iterator, List, Literal, Optional, Sequence, Union, TYPE_CHECKING
+from typing import Dict, Iterator, List, Literal, Optional, Sequence, Union, TYPE_CHECKING
 
 import requests
 
@@ -64,10 +64,11 @@ class ChatStreamChunk(ResultBase):
     Chat streaming chunk.
 
     Each chunk in a streaming response contains:
+    
     - delta: The incremental text content (may be empty)
     - done: Whether this is the final chunk
     - usage: Usage statistics (may be empty/None for intermediate chunks,
-             complete only in the final chunk when include_usage=True)
+      complete only in the final chunk when include_usage=True)
 
     Attributes:
         delta: Incremental text content.

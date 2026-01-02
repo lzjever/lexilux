@@ -2,11 +2,10 @@
 Rerank API client.
 
 Provides a simple, function-like API for document reranking with unified usage tracking.
-Supports multiple provider modes: OpenAI-compatible, DashScope, and Chat-based.
+Supports multiple provider modes: OpenAI-compatible and DashScope.
 """
 
 from __future__ import annotations
-import json
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Sequence, Tuple, Union, TYPE_CHECKING
 
@@ -384,139 +383,17 @@ class DashScopeHandler(RerankModeHandler):
         return parsed_results, usage
 
 
-class ChatBasedHandler(RerankModeHandler):
-    """
-    Handler for chat-based custom rerank API.
-
-    Chat-based rerank format:
-    - Endpoint: POST {base_url}/chat/completions
-    - Request: {"model": "...", "messages": [{"role": "user", "content": "{\"query\": ..., \"candidates\": ...}"}]}
-    - Response: {"choices": [{"message": {"content": "..."}}], "usage": {...}}
-    """
-
-    def build_request(
-        self,
-        query: str,
-        docs: Sequence[str],
-        model: str,
-        top_k: Optional[int],
-        include_docs: bool,
-        extra: Optional[Json],
-    ) -> Tuple[str, Json]:
-        """Build chat-based request."""
-        rerank_data: Json = {
-            "query": query,
-            "candidates": list(docs),
-        }
-
-        if top_k is not None:
-            rerank_data["top_k"] = top_k
-
-        if extra:
-            rerank_data.update(extra)
-
-        payload: Json = {
-            "model": model,
-            "messages": [{"role": "user", "content": json.dumps(rerank_data, ensure_ascii=False)}],
-            "stream": False,
-        }
-
-        url = f"{self.base_url}/chat/completions"
-        return url, payload
-
-    def parse_response(
-        self,
-        response_data: Json,
-        docs: Sequence[str],
-        include_docs: bool,
-        top_k: Optional[int],
-    ) -> Tuple[List[Tuple[int, float, Optional[str]]], Usage]:
-        """Parse chat-based response."""
-        choices = response_data.get("choices", [])
-        if not choices:
-            raise ValueError("No choices in API response")
-
-        content = choices[0].get("message", {}).get("content", "")
-        if not content:
-            raise ValueError("Empty content in API response")
-
-        # Try to parse content as JSON
-        try:
-            rerank_result = json.loads(content)
-
-            # Handle different response formats:
-            # 1. Direct list format: [["doc1", score1], ["doc2", score2], ...]
-            # 2. Dict with results: {"results": [{"index": 0, "score": 0.95}, ...]}
-            # 3. Dict with data: {"data": [...]}
-
-            if isinstance(rerank_result, list):
-                results_data = rerank_result
-            elif isinstance(rerank_result, dict):
-                results_data = rerank_result.get("results") or rerank_result.get("data", [])
-            else:
-                raise ValueError(f"Unexpected rerank result type: {type(rerank_result)}")
-
-        except json.JSONDecodeError:
-            raise ValueError(f"Failed to parse rerank result as JSON. Content: {content[:200]}")
-
-        if not results_data:
-            raise ValueError("No results in API response")
-
-        # Parse results
-        parsed_results: List[Tuple[int, float, Optional[str]]] = []
-
-        for idx, item in enumerate(results_data):
-            if isinstance(item, dict):
-                # Dict format: {"index": 0, "score": 0.95, "document": "..."}
-                index = item.get("index", item.get("document_index", idx))
-                score = item.get("score", item.get("relevance_score", 0.0))
-                doc = item.get("document", item.get("text")) if include_docs else None
-                parsed_results.append((index, score, doc))
-            elif isinstance(item, (list, tuple)) and len(item) >= 2:
-                # List/tuple format: ["doc", score] or [index, score] or [index, score, doc]
-                first_elem = item[0]
-                score = float(item[1])
-
-                # Check if first element is string (doc text) or int (index)
-                if isinstance(first_elem, str):
-                    # Format: ["doc", score] - need to find index by matching doc text
-                    doc_text = first_elem
-                    try:
-                        index = list(docs).index(doc_text)
-                    except ValueError:
-                        index = idx
-                    doc = doc_text if include_docs else None
-                    parsed_results.append((index, score, doc))
-                else:
-                    # Format: [index, score] or [index, score, doc]
-                    index = int(first_elem) if isinstance(first_elem, (int, float)) else idx
-                    doc = item[2] if len(item) > 2 and include_docs else None
-                    parsed_results.append((index, score, doc))
-            else:
-                raise ValueError(f"Unexpected result format: {item} (type: {type(item)})")
-
-        # Sort by score (handle both positive and negative scores)
-        if parsed_results:
-            # Both positive and negative scores are sorted descending
-            # (higher positive = better, less negative = better)
-            parsed_results.sort(key=lambda x: x[1], reverse=True)
-
-        usage = self._parse_usage(response_data)
-        return parsed_results, usage
-
-
 class Rerank:
     """
     Rerank API client.
 
     Provides a simple, function-like API for document reranking.
-    Supports three modes:
-    - "openai": OpenAI-compatible standard API
+    Supports two modes:
+    - "openai": OpenAI-compatible standard API (default)
     - "dashscope": Alibaba Cloud DashScope API
-    - "chat": Chat-based custom API (default)
 
     Examples:
-        >>> # OpenAI-compatible mode
+        >>> # OpenAI-compatible mode (default)
         >>> rerank = Rerank(
         ...     base_url="https://api.example.com/v1",
         ...     api_key="key",
@@ -534,22 +411,12 @@ class Rerank:
         ...     mode="dashscope"
         ... )
         >>> result = rerank("python http", ["urllib", "requests", "httpx"])
-
-        >>> # Chat-based mode (default)
-        >>> rerank = Rerank(
-        ...     base_url="https://api.example.com/v1",
-        ...     api_key="key",
-        ...     model="rerank-model",
-        ...     mode="chat"
-        ... )
-        >>> result = rerank("python http", ["urllib", "requests", "httpx"])
     """
 
     # Mode handler registry
     _HANDLERS: Dict[str, type[RerankModeHandler]] = {
         "openai": OpenAICompatibleHandler,
         "dashscope": DashScopeHandler,
-        "chat": ChatBasedHandler,
     }
 
     def __init__(
@@ -558,7 +425,7 @@ class Rerank:
         base_url: str,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
-        mode: str = "chat",
+        mode: str = "openai",
         timeout_s: float = 60.0,
         headers: Optional[Dict[str, str]] = None,
     ):
@@ -569,8 +436,8 @@ class Rerank:
             base_url: Base URL for the API (e.g., "https://api.example.com/v1").
             api_key: API key for authentication (optional if provided in headers).
             model: Default model to use (can be overridden in __call__).
-            mode: Rerank mode. "openai" for OpenAI-compatible, "dashscope" for DashScope,
-                  "chat" for chat-based custom API. Default is "chat".
+            mode: Rerank mode. "openai" for OpenAI-compatible, "dashscope" for DashScope.
+                  Default is "openai".
             timeout_s: Request timeout in seconds.
             headers: Additional headers to include in requests.
 
@@ -625,7 +492,7 @@ class Rerank:
             include_docs: Whether to include documents in results.
             extra: Additional parameters to include in the request.
             return_raw: Whether to include full raw response.
-            mode: Override mode for this call ("openai", "dashscope", or "chat").
+            mode: Override mode for this call ("openai" or "dashscope").
 
         Returns:
             RerankResult with ranked results and usage.

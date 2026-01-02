@@ -1,7 +1,7 @@
 """
 Rerank mode consistency tests.
 
-Tests that all three rerank modes (OpenAI, DashScope, Chat) produce consistent
+Tests that all two rerank modes (OpenAI, DashScope) produce consistent
 RerankResult behavior, hiding provider differences from users.
 """
 
@@ -14,10 +14,10 @@ from lexilux.usage import Usage
 class TestRerankModesConsistency:
     """Test that all rerank modes produce consistent results"""
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_all_modes_basic_consistency(self, test_config, has_real_api_config):
-        """Test that all three modes return consistent result structure"""
+        """Test that all two modes return consistent result structure"""
         if not has_real_api_config:
             pytest.skip("No real API config available")
 
@@ -30,9 +30,9 @@ class TestRerankModesConsistency:
 
         results_by_mode = {}
 
-        # Test OpenAI mode (Jina)
-        if "rerank_openai" in test_config:
-            config = test_config["rerank_openai"]
+        # Test OpenAI mode (rerank_local_qwen3)
+        if "rerank_local_qwen3" in test_config:
+            config = test_config["rerank_local_qwen3"]
             rerank = Rerank(
                 base_url=config["api_base"],
                 api_key=config["api_key"],
@@ -60,21 +60,6 @@ class TestRerankModesConsistency:
             assert len(result.results) >= 1
             assert isinstance(result.usage, Usage)
 
-        # Test Chat mode
-        if "rerank_chat" in test_config:
-            config = test_config["rerank_chat"]
-            rerank = Rerank(
-                base_url=config["api_base"],
-                api_key=config["api_key"],
-                model=config["model"],
-                mode=config.get("mode", "chat"),
-            )
-            result = rerank(query, docs)
-            results_by_mode["chat"] = result
-            assert isinstance(result, RerankResult)
-            assert len(result.results) >= 1
-            assert isinstance(result.usage, Usage)
-
         # Verify all modes return consistent structure
         if len(results_by_mode) > 1:
             # All results should have the same structure
@@ -90,7 +75,7 @@ class TestRerankModesConsistency:
                 ), f"{mode} mode results should be (index, score) tuples"
                 assert isinstance(result.usage, Usage), f"{mode} mode should return Usage object"
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_all_modes_score_sorting_consistency(self, test_config, has_real_api_config):
         """Test that all modes sort scores consistently (descending)"""
@@ -108,9 +93,8 @@ class TestRerankModesConsistency:
 
         # Test each available mode
         for config_key, mode_name in [
-            ("rerank_openai", "openai"),
+            ("rerank_local_qwen3", "openai"),
             ("rerank_dashscope", "dashscope"),
-            ("rerank_chat", "chat"),
         ]:
             if config_key in test_config:
                 config = test_config[config_key]
@@ -132,7 +116,7 @@ class TestRerankModesConsistency:
                     scores[i] >= scores[i + 1] for i in range(len(scores) - 1)
                 ), f"{mode} mode should sort scores in descending order"
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_all_modes_top_k_consistency(self, test_config, has_real_api_config):
         """Test that all modes respect top_k parameter consistently"""
@@ -153,9 +137,8 @@ class TestRerankModesConsistency:
 
         # Test each available mode
         for config_key, mode_name in [
-            ("rerank_openai", "openai"),
+            ("rerank_local_qwen3", "openai"),
             ("rerank_dashscope", "dashscope"),
-            ("rerank_chat", "chat"),
         ]:
             if config_key in test_config:
                 config = test_config[config_key]
@@ -174,7 +157,7 @@ class TestRerankModesConsistency:
                 len(result.results) <= top_k
             ), f"{mode} mode should return at most {top_k} results"
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_all_modes_include_docs_consistency(self, test_config, has_real_api_config):
         """Test that all modes handle include_docs consistently"""
@@ -191,9 +174,8 @@ class TestRerankModesConsistency:
 
         # Test each available mode with include_docs=True
         for config_key, mode_name in [
-            ("rerank_openai", "openai"),
+            ("rerank_local_qwen3", "openai"),
             ("rerank_dashscope", "dashscope"),
-            ("rerank_chat", "chat"),
         ]:
             if config_key in test_config:
                 config = test_config[config_key]
@@ -221,7 +203,7 @@ class TestRerankModesConsistency:
                     len(result.results[0]) == 2
                 ), f"{mode} mode should return (index, score) when docs not available"
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_all_modes_usage_consistency(self, test_config, has_real_api_config):
         """Test that all modes return usage information consistently"""
@@ -235,9 +217,8 @@ class TestRerankModesConsistency:
 
         # Test each available mode
         for config_key, mode_name in [
-            ("rerank_openai", "openai"),
+            ("rerank_local_qwen3", "openai"),
             ("rerank_dashscope", "dashscope"),
-            ("rerank_chat", "chat"),
         ]:
             if config_key in test_config:
                 config = test_config[config_key]
@@ -256,7 +237,7 @@ class TestRerankModesConsistency:
             # Usage may or may not have token counts (provider-dependent)
             # But the structure should be consistent
 
-    @pytest.mark.real_api
+    @pytest.mark.integration
     @pytest.mark.skip_if_no_config
     def test_all_modes_index_mapping_consistency(self, test_config, has_real_api_config):
         """Test that all modes correctly map results to original document indices"""
@@ -274,9 +255,8 @@ class TestRerankModesConsistency:
 
         # Test each available mode
         for config_key, mode_name in [
-            ("rerank_openai", "openai"),
+            ("rerank_local_qwen3", "openai"),
             ("rerank_dashscope", "dashscope"),
-            ("rerank_chat", "chat"),
         ]:
             if config_key in test_config:
                 config = test_config[config_key]
