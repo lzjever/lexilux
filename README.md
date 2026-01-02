@@ -125,7 +125,13 @@ vectors = result.vectors  # List[List[float]]
 ```python
 from lexilux import Rerank
 
-rerank = Rerank(base_url="https://api.example.com/v1", api_key="your-key", model="rerank-model")
+# OpenAI-compatible mode (default)
+rerank = Rerank(
+    base_url="https://api.example.com/v1", 
+    api_key="your-key", 
+    model="rerank-model",
+    mode="openai"  # or "dashscope" for DashScope API
+)
 
 result = rerank("python http", ["urllib", "requests", "httpx"])
 ranked = result.results  # List[Tuple[int, float]] - (index, score)
@@ -174,8 +180,11 @@ python examples/basic_chat.py
 ## 🧪 Testing
 
 ```bash
-# Run all tests
+# Run all unit tests (excludes integration tests)
 make test
+
+# Run integration tests (requires external services)
+make test-integration
 
 # Run with coverage
 make test-cov
