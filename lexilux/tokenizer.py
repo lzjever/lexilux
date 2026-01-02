@@ -5,7 +5,6 @@ Provides local tokenization with support for offline/online modes and automatic 
 """
 
 from __future__ import annotations
-import os
 from typing import Any, Dict, List, Literal, Optional, Sequence, Union, TYPE_CHECKING
 
 from lexilux.usage import Usage, ResultBase, Json

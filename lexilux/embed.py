@@ -5,7 +5,7 @@ Provides a simple, function-like API for text embeddings with unified usage trac
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Sequence, Union, TYPE_CHECKING
+from typing import Dict, List, Optional, Sequence, Union, TYPE_CHECKING
 
 import requests
 

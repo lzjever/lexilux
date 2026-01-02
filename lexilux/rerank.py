@@ -8,7 +8,7 @@ Supports multiple provider modes: OpenAI-compatible, DashScope, and Chat-based.
 from __future__ import annotations
 import json
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, TYPE_CHECKING
+from typing import Dict, List, Optional, Sequence, Tuple, Union, TYPE_CHECKING
 
 import requests
 
@@ -497,7 +497,6 @@ class ChatBasedHandler(RerankModeHandler):
 
         # Sort by score (handle both positive and negative scores)
         if parsed_results:
-            has_negative_scores = all(score < 0 for _, score, _ in parsed_results)
             # Both positive and negative scores are sorted descending
             # (higher positive = better, less negative = better)
             parsed_results.sort(key=lambda x: x[1], reverse=True)
