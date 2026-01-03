@@ -31,6 +31,14 @@ jobs:
       - name: Run tests
         run: |
           uv run pytest tests/ -v
+      
+      - name: Run linting
+        run: |
+          uv run flake8 lexilux/ tests/ examples/ --max-line-length=100 --extend-ignore=E203,W503,E501
+      
+      - name: Check formatting
+        run: |
+          uv run black --check lexilux/ tests/ examples/
 
   build:
     runs-on: ubuntu-latest
