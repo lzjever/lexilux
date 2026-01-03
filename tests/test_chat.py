@@ -169,7 +169,7 @@ class TestChatCall:
             status=200,
         )
 
-        result = chat(
+        chat(
             "Hello",
             temperature=0.9,
             max_tokens=100,
@@ -200,7 +200,7 @@ class TestChatCall:
             status=200,
         )
 
-        result = chat("Hello", stop=[".", "!", "?"])
+        chat("Hello", stop=[".", "!", "?"])
 
         request = responses.calls[0].request
         payload = json.loads(request.body)
@@ -221,7 +221,7 @@ class TestChatCall:
             status=200,
         )
 
-        result = chat("Hello", extra={"top_p": 0.9, "frequency_penalty": 0.5})
+        chat("Hello", extra={"top_p": 0.9, "frequency_penalty": 0.5})
 
         request = responses.calls[0].request
         payload = json.loads(request.body)

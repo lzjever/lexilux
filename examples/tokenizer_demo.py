@@ -18,14 +18,14 @@ def main():
 
     # Single text
     result = tokenizer("Hello, world!")
-    print(f"Text: Hello, world!")
+    print("Text: Hello, world!")
     print(f"Token IDs: {result.input_ids[0]}")
     print(f"Number of tokens: {result.usage.input_tokens}")
 
     # Batch
     texts = ["Hello", "World", "Python"]
     result = tokenizer(texts)
-    print(f"\nBatch tokenization:")
+    print("\nBatch tokenization:")
     for i, (text, ids) in enumerate(zip(texts, result.input_ids)):
         print(f"  {text}: {ids} ({len(ids)} tokens)")
 
@@ -38,7 +38,7 @@ def main():
         truncation=True,
         padding="max_length",
     )
-    print(f"\nWith truncation and padding:")
+    print("\nWith truncation and padding:")
     print(f"Token IDs: {result.input_ids[0]}")
     print(f"Length: {len(result.input_ids[0])}")
 

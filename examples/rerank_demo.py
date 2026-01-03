@@ -34,7 +34,7 @@ def demo_basic_rerank():
 
     result = rerank(query, docs)
     print(f"Query: {query}")
-    print(f"\nRanked results:")
+    print("\nRanked results:")
     for i, (idx, score) in enumerate(result.results, 1):
         print(f"  {i}. Doc {idx}: {docs[idx][:50]}... (score: {score:.4f})")
 
@@ -64,7 +64,7 @@ def demo_top_k():
 
     result = rerank(query, docs, top_k=3)
     print(f"Query: {query}")
-    print(f"\nTop 3 results:")
+    print("\nTop 3 results:")
     for i, (idx, score) in enumerate(result.results, 1):
         print(f"  {i}. Doc {idx}: {docs[idx][:50]}... (score: {score:.4f})")
 
@@ -90,7 +90,7 @@ def demo_include_docs():
 
     result = rerank(query, docs, include_docs=True, top_k=2)
     print(f"Query: {query}")
-    print(f"\nTop 2 results with documents:")
+    print("\nTop 2 results with documents:")
     for i, (idx, score, doc) in enumerate(result.results, 1):
         print(f"  {i}. Score: {score:.4f}")
         print(f"     Document: {doc}")
@@ -113,16 +113,16 @@ def demo_score_sorting_rules():
     print(
         """
     Lexilux handles different score formats automatically:
-    
+
     Positive Scores (e.g., 0.95, 0.80, 0.70):
       - Higher score = Better relevance
       - Sorted in descending order: 0.95 > 0.80 > 0.70
-    
+
     Negative Scores (e.g., -3.0, -4.0, -5.0):
       - Less negative = Better relevance
       - Sorted in descending order: -3.0 > -4.0 > -5.0
       - (Note: -3.0 is mathematically greater than -4.0)
-    
+
     The library automatically detects which format is used
     and applies the correct sorting order.
     """
@@ -156,7 +156,7 @@ def demo_extra_parameters():
     )
 
     print(f"Query: {query}")
-    print(f"\nTop 3 results:")
+    print("\nTop 3 results:")
     for i, (idx, score) in enumerate(result.results, 1):
         print(f"  {i}. Doc {idx} (score: {score:.4f})")
 

@@ -148,7 +148,7 @@ def test_rerank(config):
         ]
         result = rerank(query, docs)
         print(f"   Query: {query}")
-        print(f"   Ranked results:")
+        print("   Ranked results:")
         for i, (idx, score) in enumerate(result.results, 1):
             doc_text = docs[idx] if idx < len(docs) else f"Doc {idx}"
             print(f"     {i}. Doc {idx}: {doc_text} (score: {score:.4f})")
@@ -156,7 +156,7 @@ def test_rerank(config):
         print("   ✓ Success")
     except Exception as e:
         print(f"   ✗ Error: {e}")
-        print(f"   Note: Rerank endpoint might be different. Try checking the API documentation.")
+        print("   Note: Rerank endpoint might be different. Try checking the API documentation.")
 
     # Test 2: With top_k
     print("\n2. Rerank with top_k=2:")
@@ -164,16 +164,16 @@ def test_rerank(config):
         query = "python http"
         docs = ["urllib", "requests", "httpx", "aiohttp"]
         result = rerank(query, docs, top_k=2)
-        print(f"   Top 2 results:")
+        print("   Top 2 results:")
         for i, (idx, score) in enumerate(result.results, 1):
             doc_text = docs[idx] if idx < len(docs) else f"Doc {idx}"
             print(f"     {i}. Doc {idx}: {doc_text} (score: {score:.4f})")
         print("   ✓ Success")
     except Exception as e:
         print(f"   ✗ Error: {e}")
-        print(f"   Note: The rerank endpoint might need a different path.")
+        print("   Note: The rerank endpoint might need a different path.")
         print(f"   Current endpoint: {rerank_config['api_base']}/rerank")
-        print(f"   Try checking if it should be /v1/rerank or /rerank/v1")
+        print("   Try checking if it should be /v1/rerank or /rerank/v1")
 
 
 def main():

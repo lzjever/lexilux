@@ -3,10 +3,9 @@ Tokenizer API client test cases
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 from lexilux import Tokenizer, TokenizeResult
-from lexilux.usage import Usage
 
 
 class TestTokenizerInit:
@@ -176,7 +175,7 @@ class TestTokenizerCall:
         mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
 
         tokenizer = Tokenizer("test-model")
-        result = tokenizer(
+        tokenizer(
             "Hello",
             add_special_tokens=False,
             truncation=True,

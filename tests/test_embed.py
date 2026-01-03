@@ -140,7 +140,7 @@ class TestEmbedCall:
             status=200,
         )
 
-        result = embed("Hello", model="text-embedding-3-large")
+        embed("Hello", model="text-embedding-3-large")
 
         # Verify request payload
         request = responses.calls[0].request
@@ -168,7 +168,7 @@ class TestEmbedCall:
             status=200,
         )
 
-        result = embed("Hello", extra={"encoding_format": "base64"})
+        embed("Hello", extra={"encoding_format": "base64"})
 
         request = responses.calls[0].request
         payload = json.loads(request.body)

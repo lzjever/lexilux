@@ -2,7 +2,6 @@
 Integration tests for lexilux
 """
 
-import pytest
 import responses
 
 from lexilux import Chat, Embed, Rerank, Usage

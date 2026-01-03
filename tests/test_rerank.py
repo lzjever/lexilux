@@ -154,7 +154,7 @@ class TestRerankCall:
             status=200,
         )
 
-        result = rerank("query", ["doc"], model="custom-model")
+        rerank("query", ["doc"], model="custom-model")
 
         request = responses.calls[0].request
         payload = json.loads(request.body)
@@ -183,7 +183,7 @@ class TestRerankCall:
             status=200,
         )
 
-        result = rerank("query", ["doc"], extra={"batch_size": 10})
+        rerank("query", ["doc"], extra={"batch_size": 10})
 
         request = responses.calls[0].request
         payload = json.loads(request.body)

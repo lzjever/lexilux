@@ -64,7 +64,7 @@ class ChatStreamChunk(ResultBase):
     Chat streaming chunk.
 
     Each chunk in a streaming response contains:
-    
+
     - delta: The incremental text content (may be empty)
     - done: Whether this is the final chunk
     - usage: Usage statistics (may be empty/None for intermediate chunks,

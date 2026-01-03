@@ -8,7 +8,6 @@ consistent behavior across all providers.
 import pytest
 
 from lexilux import Rerank, RerankResult
-from lexilux.usage import Usage
 
 
 class TestRerankOpenAIModeReal:

@@ -2,8 +2,6 @@
 Chat streaming test cases
 """
 
-import json
-import pytest
 from unittest.mock import Mock, patch
 
 from lexilux import Chat, ChatStreamChunk
