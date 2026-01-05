@@ -3,8 +3,7 @@ pytest>=7.0.0
 pytest-cov>=4.0.0
 pytest-mock>=3.10.0
 responses>=0.23.0
-black>=22.0.0
-flake8>=5.0.0
+ruff>=0.1.0
 mypy>=0.991
 # Optional: Tokenizer dependencies (for full test coverage)
 # Uncomment if you want to run tokenizer tests with real transformers

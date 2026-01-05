@@ -79,7 +79,7 @@ Or using Makefile:
 
    make dev-install
 
-This installs development tools like pytest, black, flake8, and mypy.
+This installs development tools like pytest, ruff, and mypy.
 
 If you want to run tokenizer tests with real transformers (not just mocks), you can also install tokenizer dependencies:
 

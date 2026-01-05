@@ -61,7 +61,7 @@ jobs:
       
       - name: Check formatting
         run: |
-          uv run black --check lexilux/ tests/ examples/
+          uv run ruff format --check lexilux/ tests/ examples/
 
   build:
     runs-on: ubuntu-latest
