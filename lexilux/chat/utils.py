@@ -68,9 +68,7 @@ def normalize_messages(
             else:
                 raise ValueError(f"Invalid message type: {type(msg)}. Expected str or dict.")
     else:
-        raise ValueError(
-            f"Invalid messages type: {type(messages)}. Expected str, list, or tuple."
-        )
+        raise ValueError(f"Invalid messages type: {type(messages)}. Expected str, list, or tuple.")
 
     return result
 
@@ -122,4 +120,3 @@ def normalize_finish_reason(finish_reason: Any) -> str | None:
         return finish_reason if finish_reason else None
     # For any other type (int, bool, list, etc.), return None defensively
     return None
-

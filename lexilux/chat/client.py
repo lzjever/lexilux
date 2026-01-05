@@ -73,6 +73,38 @@ class Chat:
             self.headers.setdefault("Authorization", f"Bearer {self.api_key}")
         self.headers.setdefault("Content-Type", "application/json")
 
+    def _normalize_messages(
+        self,
+        messages: MessagesLike,
+        system: str | None = None,
+    ) -> list[dict[str, str]]:
+        """
+        Normalize messages input to a list of message dictionaries.
+
+        Supports multiple input formats:
+        - str: Converted to [{"role": "user", "content": str}]
+        - List[Dict]: Used as-is
+        - List[str]: Converted to [{"role": "user", "content": str}, ...]
+
+        Args:
+            messages: Messages in various formats.
+            system: Optional system message to prepend.
+
+        Returns:
+            Normalized list of message dictionaries.
+
+        Examples:
+            >>> chat._normalize_messages("hi")
+            [{"role": "user", "content": "hi"}]
+
+            >>> chat._normalize_messages([{"role": "user", "content": "hi"}])
+            [{"role": "user", "content": "hi"}]
+
+            >>> chat._normalize_messages("hi", system="You are helpful")
+            [{"role": "system", "content": "You are helpful"}, {"role": "user", "content": "hi"}]
+        """
+        return normalize_messages(messages, system=system)
+
     def __call__(
         self,
         messages: MessagesLike,
@@ -492,4 +524,3 @@ class Chat:
                 finish_reason=finish_reason,
                 raw=event_data if return_raw_events else {},
             )
-

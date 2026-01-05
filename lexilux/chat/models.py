@@ -167,4 +167,3 @@ class ChatStreamChunk(ResultBase):
     def __repr__(self) -> str:
         """Return string representation."""
         return f"ChatStreamChunk(delta={self.delta!r}, done={self.done}, finish_reason={self.finish_reason!r}, usage={self.usage!r})"
-

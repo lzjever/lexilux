@@ -20,6 +20,8 @@ For real API testing with actual endpoints, see ``examples/real_api_test.py``.
 
    basic_chat
    chat_streaming
+   chat_history
+   chat_formatting
    embedding
    rerank
    tokenizer

@@ -157,4 +157,3 @@ class ChatParams:
             result.update(self.extra)
 
         return result
-

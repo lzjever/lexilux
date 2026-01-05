@@ -1,8 +1,12 @@
 # Minimal makefile for Sphinx documentation
 SPHINXOPTS    =
-SPHINXBUILD  = sphinx-build
 SOURCEDIR    = source
 BUILDDIR     = build
+
+# Auto-detect sphinx-build: prefer uv run if available, otherwise use system sphinx-build
+# Check if uv command exists and use it, otherwise fall back to direct sphinx-build
+# Allow override via SPHINXBUILD environment variable
+SPHINXBUILD ?= $(shell command -v uv >/dev/null 2>&1 && echo "uv run sphinx-build" || echo "sphinx-build")
 
 # Put it first so that "make" without argument is like "make help".
 help:

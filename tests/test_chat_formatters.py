@@ -230,7 +230,7 @@ class TestChatHistoryFormatterSave:
         history = ChatHistory()
         history.add_user("Hello")
         history.add_assistant("Hi")
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             temp_path = f.name
         try:
             ChatHistoryFormatter.save(history, temp_path)
@@ -244,7 +244,7 @@ class TestChatHistoryFormatterSave:
         """Test save with auto format detection (.html)"""
         history = ChatHistory()
         history.add_user("Hello")
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
             temp_path = f.name
         try:
             ChatHistoryFormatter.save(history, temp_path)
@@ -258,7 +258,7 @@ class TestChatHistoryFormatterSave:
         """Test save with auto format detection (.txt)"""
         history = ChatHistory()
         history.add_user("Hello")
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             temp_path = f.name
         try:
             ChatHistoryFormatter.save(history, temp_path)
@@ -272,7 +272,7 @@ class TestChatHistoryFormatterSave:
         """Test save with auto format detection (.json)"""
         history = ChatHistory()
         history.add_user("Hello")
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             temp_path = f.name
         try:
             ChatHistoryFormatter.save(history, temp_path)
@@ -286,7 +286,7 @@ class TestChatHistoryFormatterSave:
         """Test save with explicit format"""
         history = ChatHistory()
         history.add_user("Hello")
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.unknown', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".unknown", delete=False) as f:
             temp_path = f.name
         try:
             ChatHistoryFormatter.save(history, temp_path, format="markdown")
@@ -300,7 +300,7 @@ class TestChatHistoryFormatterSave:
         """Test save with formatting options"""
         history = ChatHistory()
         history.add_user("Hello")
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
             temp_path = f.name
         try:
             ChatHistoryFormatter.save(history, temp_path, theme="dark")
@@ -314,7 +314,7 @@ class TestChatHistoryFormatterSave:
         """Test save with unknown format raises error"""
         history = ChatHistory()
         history.add_user("Hello")
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.unknown', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".unknown", delete=False) as f:
             temp_path = f.name
         try:
             with pytest.raises(ValueError, match="Unknown format"):
@@ -375,4 +375,3 @@ class TestChatHistoryFormatterEdgeCases:
             history.add_assistant(f"A{i}")
         text = ChatHistoryFormatter.to_text(history)
         assert isinstance(text, str)
-

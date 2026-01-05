@@ -220,11 +220,13 @@ class TestChatHistorySerialization:
 
     def test_from_json(self):
         """Test from_json deserialization"""
-        json_str = json.dumps({
-            "system": "You are helpful",
-            "messages": [{"role": "user", "content": "Hello"}],
-            "metadata": {},
-        })
+        json_str = json.dumps(
+            {
+                "system": "You are helpful",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "metadata": {},
+            }
+        )
         history = ChatHistory.from_json(json_str)
         assert history.system == "You are helpful"
         assert len(history.messages) == 1
@@ -345,9 +347,7 @@ class TestChatHistoryResultOperations:
 class TestChatHistoryTokenOperations:
     """Test ChatHistory token-related operations"""
 
-    @pytest.mark.skipif(
-        True, reason="Requires tokenizer - will test with mock"
-    )
+    @pytest.mark.skipif(True, reason="Requires tokenizer - will test with mock")
     def test_count_tokens(self):
         """Test count_tokens - placeholder for tokenizer tests"""
         # This will be tested with actual tokenizer in integration tests
@@ -419,4 +419,3 @@ class TestChatHistoryEdgeCases:
         rounds = history._get_rounds()
         # Assistant messages without preceding user are incomplete rounds
         assert len(rounds) >= 1
-

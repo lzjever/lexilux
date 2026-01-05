@@ -73,6 +73,91 @@ Streaming with ChatParams:
    for chunk in chat.stream("Write a short story", params=params):
        print(chunk.delta, end="")
 
+Chat History Management
+-----------------------
+
+Lexilux provides powerful conversation history management with automatic extraction,
+serialization, and formatting capabilities.
+
+**Automatic History Extraction** (Recommended):
+
+.. code-block:: python
+
+   from lexilux import Chat, ChatResult
+   from lexilux.chat import ChatHistory
+
+   chat = Chat(base_url="https://api.example.com/v1", api_key="key", model="gpt-4")
+
+   # Extract history from any Chat call - no manual maintenance needed!
+   result = chat("What is Python?")
+   history = ChatHistory.from_chat_result("What is Python?", result)
+
+   # Continue conversation
+   result2 = chat(history.get_messages() + [{"role": "user", "content": "Tell me more"}])
+   history = ChatHistory.from_chat_result(history.get_messages() + [...], result2)
+
+**Manual History Construction** (Optional):
+
+.. code-block:: python
+
+   history = ChatHistory(system="You are a helpful assistant")
+   history.add_user("What is Python?")
+   result = chat(history.get_messages())
+   history.append_result(result)
+
+**History Serialization**:
+
+.. code-block:: python
+
+   # Save to JSON
+   json_str = history.to_json(indent=2)
+   with open("conversation.json", "w") as f:
+       f.write(json_str)
+
+   # Load from JSON
+   with open("conversation.json", "r") as f:
+       history = ChatHistory.from_json(f.read())
+
+**History Formatting and Export**:
+
+.. code-block:: python
+
+   from lexilux.chat import ChatHistoryFormatter
+
+   # Format as Markdown
+   md = ChatHistoryFormatter.to_markdown(history)
+   print(md)
+
+   # Format as HTML (with themes)
+   html = ChatHistoryFormatter.to_html(history, theme="dark")
+   print(html)
+
+   # Format as plain text (console-friendly)
+   text = ChatHistoryFormatter.to_text(history, width=80)
+   print(text)
+
+   # Save to file (auto-detects format from extension)
+   ChatHistoryFormatter.save(history, "conversation.md")
+   ChatHistoryFormatter.save(history, "conversation.html", theme="minimal")
+   ChatHistoryFormatter.save(history, "conversation.txt", width=100)
+
+**Streaming with History Accumulation**:
+
+.. code-block:: python
+
+   from lexilux.chat import StreamingIterator
+
+   # Streaming automatically accumulates text
+   iterator = chat.stream("Tell me a story")
+   for chunk in iterator:
+       print(chunk.delta, end="")
+       # Access accumulated text at any time
+       current_text = iterator.result.text
+
+   # After streaming, convert to ChatResult and add to history
+   result = iterator.result.to_chat_result()
+   history.append_result(result)
+
 Embedding
 ---------
 

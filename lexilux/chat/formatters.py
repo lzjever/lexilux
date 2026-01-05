@@ -379,4 +379,3 @@ class ChatHistoryFormatter:
 
         # Write to file
         path.write_text(content, encoding="utf-8")
-

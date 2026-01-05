@@ -57,9 +57,7 @@ class ChatHistory:
         self.metadata: dict[str, Any] = {}  # Metadata (timestamps, model, etc.)
 
     @classmethod
-    def from_messages(
-        cls, messages: MessagesLike, system: str | None = None
-    ) -> ChatHistory:
+    def from_messages(cls, messages: MessagesLike, system: str | None = None) -> ChatHistory:
         """
         Automatically build from message list (supports all Chat-supported formats).
 
@@ -84,9 +82,7 @@ class ChatHistory:
         return cls(messages=normalized, system=sys_msg)
 
     @classmethod
-    def from_chat_result(
-        cls, messages: MessagesLike, result: ChatResult
-    ) -> ChatHistory:
+    def from_chat_result(cls, messages: MessagesLike, result: ChatResult) -> ChatHistory:
         """
         Automatically build complete history from Chat call and result.
 
@@ -219,9 +215,7 @@ class ChatHistory:
             total += result.total_tokens or 0
         return total
 
-    def count_tokens_per_round(
-        self, tokenizer: Tokenizer
-    ) -> list[tuple[int, int]]:
+    def count_tokens_per_round(self, tokenizer: Tokenizer) -> list[tuple[int, int]]:
         """
         Count tokens per round.
 
@@ -363,4 +357,3 @@ class ChatHistory:
         if current_round:
             rounds.append(current_round)
         return rounds
-

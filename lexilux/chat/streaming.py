@@ -100,4 +100,3 @@ class StreamingIterator:
     def result(self) -> StreamingResult:
         """Get currently accumulated result (accessible at any time)."""
         return self._result
-
