@@ -8,6 +8,7 @@ import pytest
 import responses
 
 from lexilux import Chat, ChatResult
+from lexilux.chat.utils import normalize_messages
 
 
 class TestChatInit:
@@ -46,14 +47,12 @@ class TestChatNormalizeMessages:
 
     def test_normalize_string(self):
         """Test normalizing a single string"""
-        chat = Chat(base_url="https://api.example.com/v1", model="gpt-4")
-        messages = chat._normalize_messages("Hello")
+        messages = normalize_messages("Hello")
         assert messages == [{"role": "user", "content": "Hello"}]
 
     def test_normalize_string_with_system(self):
         """Test normalizing string with system message"""
-        chat = Chat(base_url="https://api.example.com/v1", model="gpt-4")
-        messages = chat._normalize_messages("Hello", system="You are helpful")
+        messages = normalize_messages("Hello", system="You are helpful")
         assert messages == [
             {"role": "system", "content": "You are helpful"},
             {"role": "user", "content": "Hello"},
@@ -61,8 +60,7 @@ class TestChatNormalizeMessages:
 
     def test_normalize_list_of_strings(self):
         """Test normalizing a list of strings"""
-        chat = Chat(base_url="https://api.example.com/v1", model="gpt-4")
-        messages = chat._normalize_messages(["Hello", "World"])
+        messages = normalize_messages(["Hello", "World"])
         assert messages == [
             {"role": "user", "content": "Hello"},
             {"role": "user", "content": "World"},
@@ -70,8 +68,7 @@ class TestChatNormalizeMessages:
 
     def test_normalize_list_of_dicts(self):
         """Test normalizing a list of message dicts"""
-        chat = Chat(base_url="https://api.example.com/v1", model="gpt-4")
-        messages = chat._normalize_messages(
+        messages = normalize_messages(
             [
                 {"role": "system", "content": "You are helpful"},
                 {"role": "user", "content": "Hello"},
@@ -84,8 +81,7 @@ class TestChatNormalizeMessages:
 
     def test_normalize_mixed_list(self):
         """Test normalizing mixed list (strings and dicts)"""
-        chat = Chat(base_url="https://api.example.com/v1", model="gpt-4")
-        messages = chat._normalize_messages(["Hello", {"role": "assistant", "content": "Hi!"}])
+        messages = normalize_messages(["Hello", {"role": "assistant", "content": "Hi!"}])
         assert messages == [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi!"},
@@ -93,15 +89,13 @@ class TestChatNormalizeMessages:
 
     def test_normalize_invalid_dict(self):
         """Test normalizing invalid message dict"""
-        chat = Chat(base_url="https://api.example.com/v1", model="gpt-4")
         with pytest.raises(ValueError, match="Invalid message dict"):
-            chat._normalize_messages([{"invalid": "dict"}])
+            normalize_messages([{"invalid": "dict"}])
 
     def test_normalize_invalid_type(self):
         """Test normalizing invalid message type"""
-        chat = Chat(base_url="https://api.example.com/v1", model="gpt-4")
         with pytest.raises(ValueError, match="Invalid messages type"):
-            chat._normalize_messages(123)  # type: ignore
+            normalize_messages(123)  # type: ignore
 
 
 class TestChatCall:

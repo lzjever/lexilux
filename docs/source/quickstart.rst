@@ -147,8 +147,8 @@ serialization, and formatting capabilities.
 
    from lexilux.chat import StreamingIterator
 
-   # Streaming automatically accumulates text
-   iterator = chat.stream("Tell me a story")
+   # Wrap stream with StreamingIterator for automatic accumulation
+   iterator = StreamingIterator(chat.stream("Tell me a story"))
    for chunk in iterator:
        print(chunk.delta, end="")
        # Access accumulated text at any time

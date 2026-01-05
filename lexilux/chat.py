@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Iterator, Literal, Sequence, Union
 import requests
 
 from lexilux.chat_params import ChatParams
+from lexilux.chat.utils import normalize_messages
 from lexilux.usage import Json, ResultBase, Usage
 
 if TYPE_CHECKING:
@@ -231,69 +232,6 @@ class Chat:
             self.headers.setdefault("Authorization", f"Bearer {self.api_key}")
         self.headers.setdefault("Content-Type", "application/json")
 
-    def _normalize_messages(
-        self,
-        messages: MessagesLike,
-        system: str | None = None,
-    ) -> list[dict[str, str]]:
-        """
-        Normalize messages input to a list of message dictionaries.
-
-        Supports multiple input formats:
-        - str: Converted to [{"role": "user", "content": str}]
-        - List[Dict]: Used as-is
-        - List[str]: Converted to [{"role": "user", "content": str}, ...]
-
-        Args:
-            messages: Messages in various formats.
-            system: Optional system message to prepend.
-
-        Returns:
-            Normalized list of message dictionaries.
-
-        Examples:
-            >>> chat._normalize_messages("hi")
-            [{"role": "user", "content": "hi"}]
-
-            >>> chat._normalize_messages([{"role": "user", "content": "hi"}])
-            [{"role": "user", "content": "hi"}]
-
-            >>> chat._normalize_messages("hi", system="You are helpful")
-            [{"role": "system", "content": "You are helpful"}, {"role": "user", "content": "hi"}]
-        """
-        result: list[dict[str, str]] = []
-
-        # Add system message if provided
-        if system:
-            result.append({"role": "system", "content": system})
-
-        # Normalize messages
-        if isinstance(messages, str):
-            # Single string -> single user message
-            result.append({"role": "user", "content": messages})
-        elif isinstance(messages, (list, tuple)):
-            # List of messages
-            for msg in messages:
-                if isinstance(msg, str):
-                    # String in list -> user message
-                    result.append({"role": "user", "content": msg})
-                elif isinstance(msg, dict):
-                    # Dict -> use as-is (should have "role" and "content")
-                    if "role" in msg and "content" in msg:
-                        result.append({"role": msg["role"], "content": msg["content"]})
-                    else:
-                        raise ValueError(
-                            f"Invalid message dict: {msg}. Must have 'role' and 'content' keys."
-                        )
-                else:
-                    raise ValueError(f"Invalid message type: {type(msg)}. Expected str or dict.")
-        else:
-            raise ValueError(
-                f"Invalid messages type: {type(messages)}. Expected str, list, or tuple."
-            )
-
-        return result
-
     def _parse_usage(self, response_data: Json) -> Usage:
         """
         Parse usage information from API response.
@@ -416,7 +354,7 @@ class Chat:
             >>> result = chat("Hello", params=params, extra={"custom": "value"})
         """
         # Normalize messages
-        normalized_messages = self._normalize_messages(messages, system=system)
+        normalized_messages = normalize_messages(messages, system=system)
 
         # Prepare request
         model = model or self.model
@@ -602,7 +540,7 @@ class Chat:
             ...     print(chunk.delta, end="")
         """
         # Normalize messages
-        normalized_messages = self._normalize_messages(messages, system=system)
+        normalized_messages = normalize_messages(messages, system=system)
 
         # Prepare request
         model = model or self.model
