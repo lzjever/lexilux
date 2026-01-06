@@ -7,10 +7,11 @@ is stopped due to max_tokens limit.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Iterator, Literal, overload
 
 from lexilux.chat.history import ChatHistory
-from lexilux.chat.models import ChatResult
+from lexilux.chat.models import ChatResult, ChatStreamChunk
+from lexilux.chat.streaming import StreamingIterator, StreamingResult
 from lexilux.usage import Usage
 
 if TYPE_CHECKING:
@@ -69,13 +70,12 @@ class ChatContinue:
         Continue generation request (enhanced version).
 
         Automatically handles continuation when finish_reason == "length", with support
-        for automatic history retrieval, multiple continues, and automatic merging.
+        for multiple continues and automatic merging.
 
         Args:
             chat: Chat client instance.
             last_result: Last result (must have finish_reason == "length").
-            history: Conversation history (optional). If None and chat.auto_history=True,
-                automatically retrieved from chat.get_history().
+            history: Conversation history (required). Must be provided explicitly.
             add_continue_prompt: Whether to add a user continue instruction round.
             continue_prompt: User prompt when add_continue_prompt=True.
             max_continues: Maximum number of continuation attempts. If result is still
@@ -90,24 +90,27 @@ class ChatContinue:
             If auto_merge=False: List of ChatResult instances [last_result, continue_result1, ...].
 
         Raises:
-            ValueError: If last_result.finish_reason != "length" or history is required but not available.
+            ValueError: If last_result.finish_reason != "length" or history is not provided.
 
         Examples:
-            Basic usage (automatic history retrieval):
-            >>> result = chat("Write a long story", max_tokens=50)
+            Basic usage:
+            >>> history = ChatHistory()
+            >>> result = chat("Write a long story", history=history, max_tokens=50)
             >>> if result.finish_reason == "length":
-            ...     full_result = ChatContinue.continue_request(chat, result)
+            ...     full_result = ChatContinue.continue_request(chat, result, history=history)
             ...     print(full_result.text)  # Complete merged text
 
             Multiple continues:
-            >>> result = chat("Very long story", max_tokens=30)
+            >>> history = ChatHistory()
+            >>> result = chat("Very long story", history=history, max_tokens=30)
             >>> if result.finish_reason == "length":
-            ...     full_result = ChatContinue.continue_request(chat, result, max_continues=3)
+            ...     full_result = ChatContinue.continue_request(chat, result, history=history, max_continues=3)
 
             Get all intermediate results:
-            >>> result = chat("Story", max_tokens=50)
+            >>> history = ChatHistory()
+            >>> result = chat("Story", history=history, max_tokens=50)
             >>> if result.finish_reason == "length":
-            ...     all_results = ChatContinue.continue_request(chat, result, auto_merge=False)
+            ...     all_results = ChatContinue.continue_request(chat, result, history=history, auto_merge=False)
             ...     # all_results = [result, continue_result1, continue_result2, ...]
         """
 
@@ -117,20 +120,10 @@ class ChatContinue:
                 f"got '{last_result.finish_reason}'"
             )
 
-        # Auto-retrieve history if not provided
         if history is None:
-            if chat.auto_history:
-                history = chat.get_history()
-                if history is None:
-                    raise ValueError(
-                        "History not available. Either provide history manually "
-                        "or ensure auto_history is enabled and chat was called."
-                    )
-            else:
-                raise ValueError(
-                    "History is required when auto_history=False. "
-                    "Provide history manually or enable auto_history."
-                )
+            raise ValueError(
+                "History is required. Provide history explicitly when calling continue_request."
+            )
 
         all_results = [last_result]
         current_result = last_result
@@ -143,13 +136,10 @@ class ChatContinue:
             if add_continue_prompt:
                 history.add_user(continue_prompt)
 
-            continue_result = chat(history.get_messages(), **params)
+            continue_result = chat(history.get_messages(), history=history, **params)
             all_results.append(continue_result)
             current_result = continue_result
-
-            # Update history (if not using auto_history, manually update)
-            if not chat.auto_history:
-                history.append_result(continue_result)
+            # Note: history is automatically updated by chat() call above
 
         # Check if still truncated after max_continues
         if current_result.finish_reason == "length":
@@ -226,3 +216,154 @@ class ChatContinue:
             finish_reason=finish_reason,
             raw=merged_raw,
         )
+
+    @staticmethod
+    def continue_request_stream(
+        chat: Chat,
+        last_result: ChatResult,
+        *,
+        history: ChatHistory,
+        add_continue_prompt: bool = True,
+        continue_prompt: str = "continue",
+        max_continues: int = 1,
+        **params: Any,
+    ) -> StreamingIterator:
+        """
+        Continue generation with streaming output.
+
+        This is the streaming version of `continue_request()`. It returns a
+        StreamingIterator that yields chunks for all continuation requests.
+
+        Args:
+            chat: Chat client instance.
+            last_result: Last result (must have finish_reason == "length").
+            history: Conversation history (required). Must be provided explicitly.
+            add_continue_prompt: Whether to add a user continue instruction round.
+            continue_prompt: User prompt when add_continue_prompt=True.
+            max_continues: Maximum number of continuation attempts. If result is still
+                truncated after max_continues, returns merged result.
+            **params: Additional parameters to pass to continue requests.
+
+        Returns:
+            StreamingIterator: Iterator that yields ChatStreamChunk objects for
+                all continuation requests. Access accumulated result via iterator.result.
+                The result contains merged text from all continues.
+
+        Raises:
+            ValueError: If last_result.finish_reason != "length" or history is not provided.
+
+        Examples:
+            Basic usage:
+            >>> history = ChatHistory()
+            >>> result = chat("Write a long story", history=history, max_tokens=50)
+            >>> if result.finish_reason == "length":
+            ...     iterator = ChatContinue.continue_request_stream(chat, result, history=history)
+            ...     for chunk in iterator:
+            ...         print(chunk.delta, end="", flush=True)
+            ...     full_result = iterator.result.to_chat_result()
+            ...     print(f"\nComplete story: {len(full_result.text)} chars")
+
+            Multiple continues:
+            >>> history = ChatHistory()
+            >>> result = chat("Very long story", history=history, max_tokens=30)
+            >>> if result.finish_reason == "length":
+            ...     iterator = ChatContinue.continue_request_stream(
+            ...         chat, result, history=history, max_continues=3
+            ...     )
+            ...     for chunk in iterator:
+            ...         print(chunk.delta, end="", flush=True)
+        """
+        if last_result.finish_reason != "length":
+            raise ValueError(
+                f"continue_request_stream requires finish_reason='length', "
+                f"got '{last_result.finish_reason}'"
+            )
+
+        if history is None:
+            raise ValueError(
+                "History is required. Provide history explicitly when calling continue_request_stream."
+            )
+
+        # Create generator that yields chunks and tracks results
+        all_results: list[ChatResult] = [last_result]
+
+        def _continue_chunk_generator() -> Iterator[ChatStreamChunk]:
+            """Generator that yields chunks from all continue requests."""
+            nonlocal all_results
+            current_result = last_result
+            continue_count = 0
+
+            while current_result.finish_reason == "length" and continue_count < max_continues:
+                continue_count += 1
+
+                # Add continue prompt if needed
+                if add_continue_prompt:
+                    history.add_user(continue_prompt)
+
+                # Stream continue request
+                continue_iterator = chat.stream(
+                    history.get_messages(), history=history, **params
+                )
+
+                # Yield all chunks from this continue request
+                for chunk in continue_iterator:
+                    yield chunk
+
+                # Get continue result for next iteration
+                continue_result = continue_iterator.result.to_chat_result()
+                all_results.append(continue_result)
+                current_result = continue_result
+                # Note: history is automatically updated by chat.stream() call above
+
+        # Create StreamingIterator with custom result that merges all continues
+        class MergedContinueIterator(StreamingIterator):
+            """Iterator that merges results from all continue requests."""
+
+            def __init__(
+                self,
+                chunk_gen: Iterator[ChatStreamChunk],
+                initial_result: ChatResult,
+                all_results_ref: list[ChatResult],
+            ):
+                super().__init__(chunk_gen)
+                self._initial_result = initial_result
+                self._all_results_ref = all_results_ref
+                self._merged_result: StreamingResult | None = None
+
+            def __iter__(self) -> Iterator[ChatStreamChunk]:
+                """Iterate chunks."""
+                # Consume the generator to populate all_results
+                for chunk in self._iterator:
+                    self._result.update(chunk)
+                    yield chunk
+                # After iteration, ensure all_results is populated correctly
+                # Filter out any empty results that might have been added
+                if self._all_results_ref:
+                    # Remove any empty results (text='' and finish_reason=None)
+                    self._all_results_ref[:] = [
+                        r for r in self._all_results_ref
+                        if not (r.text == "" and r.finish_reason is None)
+                    ]
+
+            @property
+            def result(self) -> StreamingResult:
+                """Get merged result from all continues."""
+                if self._merged_result is None:
+                    # Merge all results
+                    if len(self._all_results_ref) > 1:
+                        merged = ChatContinue.merge_results(*self._all_results_ref)
+                        self._merged_result = StreamingResult()
+                        self._merged_result._text = merged.text
+                        self._merged_result._finish_reason = merged.finish_reason
+                        self._merged_result._usage = merged.usage
+                        self._merged_result._done = True
+                    else:
+                        # Only initial result, convert to StreamingResult
+                        self._merged_result = StreamingResult()
+                        self._merged_result._text = self._initial_result.text
+                        self._merged_result._finish_reason = self._initial_result.finish_reason
+                        self._merged_result._usage = self._initial_result.usage
+                        self._merged_result._done = True
+                return self._merged_result
+
+        return MergedContinueIterator(_continue_chunk_generator(), last_result, all_results)

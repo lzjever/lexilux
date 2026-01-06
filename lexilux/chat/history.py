@@ -8,6 +8,7 @@ serialization, token counting, and truncation capabilities.
 from __future__ import annotations
 
 import json
+from collections.abc import MutableSequence, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -109,9 +110,16 @@ class TokenAnalysis:
         }
 
 
-class ChatHistory:
+class ChatHistory(MutableSequence):
     """
-    Conversation history manager (automatic extraction, no manual maintenance required).
+    Conversation history manager.
+
+    Implements MutableSequence protocol, allowing array-like operations:
+    - Index access: history[0]
+    - Slicing: history[1:5] (returns new ChatHistory)
+    - Iteration: for msg in history
+    - Length: len(history)
+    - Membership: msg in history
 
     ChatHistory can be automatically built from messages or Chat results, eliminating
     the need for manual history maintenance.
@@ -130,6 +138,14 @@ class ChatHistory:
         >>> history.add_user("What is Python?")
         >>> result = chat(history.get_messages())
         >>> history.append_result(result)
+
+        # Array-like operations
+        >>> msg = history[0]  # Get first message
+        >>> first_3 = history[:3]  # Get first 3 messages (new ChatHistory)
+        >>> for msg in history:  # Iterate
+        ...     print(msg)
+        >>> len(history)  # Get length
+        >>> msg in history  # Check membership
     """
 
     def __init__(
@@ -243,6 +259,102 @@ class ChatHistory:
     def add_message(self, role: str, content: str) -> None:
         """Add message with specified role."""
         self.messages.append({"role": role, "content": content})
+
+    def add_system(self, content: str) -> None:
+        """Add system message (updates system attribute)."""
+        self.system = content
+
+    def remove_last(self) -> dict[str, str] | None:
+        """
+        Remove and return the last message.
+
+        Returns:
+            The removed message dict, or None if history is empty.
+        """
+        if not self.messages:
+            return None
+        return self.messages.pop()
+
+    def remove_at(self, index: int) -> dict[str, str] | None:
+        """
+        Remove and return message at specified index.
+
+        Args:
+            index: Index of message to remove.
+
+        Returns:
+            The removed message dict, or None if index is out of range.
+        """
+        if 0 <= index < len(self.messages):
+            return self.messages.pop(index)
+        return None
+
+    def replace_at(self, index: int, role: str, content: str) -> None:
+        """
+        Replace message at specified index.
+
+        Args:
+            index: Index of message to replace.
+            role: New role.
+            content: New content.
+
+        Raises:
+            IndexError: If index is out of range.
+        """
+        if not (0 <= index < len(self.messages)):
+            raise IndexError(f"Index {index} out of range for history with {len(self.messages)} messages")
+        self.messages[index] = {"role": role, "content": content}
+
+    def get_user_messages(self) -> list[str]:
+        """
+        Get all user messages.
+
+        Returns:
+            List of user message contents.
+        """
+        return [msg["content"] for msg in self.messages if msg.get("role") == "user"]
+
+    def get_assistant_messages(self) -> list[str]:
+        """
+        Get all assistant messages.
+
+        Returns:
+            List of assistant message contents.
+        """
+        return [msg["content"] for msg in self.messages if msg.get("role") == "assistant"]
+
+    def get_last_message(self) -> dict[str, str] | None:
+        """
+        Get the last message.
+
+        Returns:
+            Last message dict, or None if history is empty.
+        """
+        return self.messages[-1] if self.messages else None
+
+    def get_last_user_message(self) -> str | None:
+        """
+        Get the last user message content.
+
+        Returns:
+            Last user message content, or None if no user messages exist.
+        """
+        for msg in reversed(self.messages):
+            if msg.get("role") == "user":
+                return msg.get("content", "")
+        return None
+
+    def clone(self) -> ChatHistory:
+        """
+        Create a deep copy of this history.
+
+        Returns:
+            New ChatHistory instance with copied messages.
+        """
+        return ChatHistory(
+            messages=[msg.copy() for msg in self.messages],
+            system=self.system,
+        )
 
     def clear(self) -> None:
         """Clear all messages (keep system message)."""
@@ -626,6 +738,116 @@ class ChatHistory:
                 return
         # If no assistant message found, add one
         self.add_assistant(content)
+
+    # MutableSequence protocol implementation
+    def __len__(self) -> int:
+        """Return the number of messages."""
+        return len(self.messages)
+
+    def __getitem__(self, key: int | slice) -> dict[str, str] | ChatHistory:
+        """
+        Get message(s) by index or slice.
+
+        Args:
+            key: Index (int) or slice.
+
+        Returns:
+            Single message dict (index) or new ChatHistory instance (slice).
+
+        Examples:
+            >>> history[0]  # Get first message
+            >>> history[1:3]  # Get messages at index 1-2, returns new ChatHistory
+            >>> history[:5]  # Get first 5 messages
+            >>> history[-3:]  # Get last 3 messages
+        """
+        if isinstance(key, int):
+            return self.messages[key]
+        elif isinstance(key, slice):
+            return ChatHistory(
+                messages=self.messages[key].copy(),
+                system=self.system,
+            )
+        else:
+            raise TypeError(f"Invalid key type: {type(key)}")
+
+    def __setitem__(self, key: int | slice, value: dict[str, str] | Sequence[dict[str, str]]) -> None:
+        """
+        Set message(s) by index or slice.
+
+        Args:
+            key: Index (int) or slice.
+            value: Single message dict (index) or sequence of message dicts (slice).
+
+        Raises:
+            TypeError: If value type is invalid.
+        """
+        if isinstance(key, int):
+            if not isinstance(value, dict):
+                raise TypeError("Value must be a dict")
+            self.messages[key] = value
+        elif isinstance(key, slice):
+            if not isinstance(value, (list, tuple)):
+                raise TypeError("Value must be a list or tuple of dicts")
+            self.messages[key] = list(value)
+        else:
+            raise TypeError(f"Invalid key type: {type(key)}")
+
+    def __delitem__(self, key: int | slice) -> None:
+        """
+        Delete message(s) by index or slice.
+
+        Args:
+            key: Index (int) or slice.
+        """
+        del self.messages[key]
+
+    def insert(self, index: int, value: dict[str, str]) -> None:
+        """
+        Insert message at specified index.
+
+        Args:
+            index: Index to insert at.
+            value: Message dict to insert.
+
+        Raises:
+            TypeError: If value is not a dict.
+        """
+        if not isinstance(value, dict):
+            raise TypeError("Value must be a dict")
+        self.messages.insert(index, value)
+
+    def __iter__(self):
+        """Iterate over messages."""
+        return iter(self.messages)
+
+    def __contains__(self, item) -> bool:
+        """Check if message is in history."""
+        return item in self.messages
+
+    def __add__(self, other: ChatHistory) -> ChatHistory:
+        """
+        Merge two histories (concatenate messages).
+
+        Args:
+            other: Another ChatHistory instance.
+
+        Returns:
+            New ChatHistory instance with merged messages.
+            System message from self is used.
+
+        Examples:
+            >>> history1 = ChatHistory.from_messages("Hello")
+            >>> history2 = ChatHistory.from_messages("How are you?")
+            >>> combined = history1 + history2
+        """
+        return ChatHistory(
+            messages=self.messages + other.messages,
+            system=self.system,  # Use self's system message
+        )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"ChatHistory(messages={len(self.messages)}, system={self.system is not None})"
 
     def _get_rounds(self) -> list[list[dict[str, str]]]:
         """

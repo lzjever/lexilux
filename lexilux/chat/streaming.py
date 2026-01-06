@@ -33,7 +33,9 @@ class StreamingResult:
         self._text += chunk.delta
         if chunk.done:
             self._done = True
-            self._finish_reason = chunk.finish_reason
+            # Only update finish_reason if chunk provides one (don't overwrite with None)
+            if chunk.finish_reason is not None:
+                self._finish_reason = chunk.finish_reason
             if chunk.usage:
                 self._usage = chunk.usage
 
