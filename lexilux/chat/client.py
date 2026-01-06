@@ -989,7 +989,7 @@ class Chat:
         message: str | dict | None = None,
         **params,
     ) -> ChatResult:
-        """
+        r"""
         Make a chat completion request using history.
 
         This is a convenience method. You can also use:
@@ -1024,7 +1024,7 @@ class Chat:
         message: str | dict | None = None,
         **params,
     ) -> StreamingIterator:
-        """
+        r"""
         Make a streaming chat completion request using history.
 
         This is a convenience method. You can also use:
