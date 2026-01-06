@@ -5,6 +5,124 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-07
+
+### 🚀 Major Architecture Overhaul: Explicit History Management
+
+This is a **major version update** with significant architectural changes. The core design philosophy has shifted from implicit to explicit history management, providing better control, predictability, and consistency.
+
+### Changed
+
+#### Breaking Changes
+
+- **Removed `auto_history` parameter**: The `auto_history` parameter has been completely removed from `Chat.__init__()`. History management is now always explicit.
+  - **Migration**: Create a `ChatHistory` instance and pass it explicitly to all methods:
+    ```python
+    # Before (v0.5.x)
+    chat = Chat(..., auto_history=True)
+    result = chat("Hello")
+    history = chat.get_history()
+    
+    # After (v2.0.0)
+    history = ChatHistory()
+    result = chat("Hello", history=history)
+    ```
+
+- **All Chat methods now require explicit `history` parameter**: All methods that interact with history now accept an explicit `history: ChatHistory | None` parameter.
+  - `Chat.__call__(messages, *, history=None, **params)`
+  - `Chat.stream(messages, *, history=None, **params)`
+  - `Chat.complete(messages, *, history: ChatHistory, **params)` (now required)
+  - `Chat.continue_if_needed(result, *, history: ChatHistory, **params)` (now required)
+  - `ChatContinue.continue_request(chat, last_result, *, history: ChatHistory, **params)` (now required)
+  - `ChatContinue.continue_request_stream(chat, last_result, *, history: ChatHistory, **params)` (now required)
+
+- **Removed history management methods from `Chat` class**:
+  - `Chat.get_history()` - Use explicit `history` parameter instead
+  - `Chat.clear_history()` - Use `history.clear()` instead
+  - `Chat.clear_last_assistant_message()` - Use `history.remove_last()` instead
+
+- **Simplified `ChatResult`**: `ChatResult` now only contains the result of a single LLM request, without any merged history information. This makes the API more predictable and easier to understand.
+
+- **Unified Chat interface**: All Chat methods now only accept a single turn's message, with history being managed explicitly. This ensures consistent behavior between streaming and non-streaming modes.
+
+### Added
+
+- **Enhanced `ChatHistory` with `MutableSequence` protocol**: `ChatHistory` now implements Python's `collections.abc.MutableSequence` protocol, enabling array-like operations:
+  - **Indexing**: `history[0]` - Get message by index
+  - **Slicing**: `history[1:5]` - Get slice as new `ChatHistory` instance
+  - **Iteration**: `for msg in history` - Iterate over messages
+  - **Length**: `len(history)` - Get number of messages
+  - **Membership**: `msg in history` - Check if message exists
+  - **Assignment**: `history[0] = new_msg` - Replace message at index
+  - **Deletion**: `del history[0]` - Remove message at index
+  - **Insertion**: `history.insert(0, msg)` - Insert message at index
+
+- **New `ChatHistory` methods**:
+  - `clone()` - Create a deep copy of the history
+  - `__add__(other)` - Merge two `ChatHistory` instances: `history1 + history2`
+  - `add_system(content)` - Explicitly add or update system message
+  - `remove_last()` - Remove the last message
+  - `remove_at(index)` - Remove message at specific index
+  - `replace_at(index, message)` - Replace message at specific index
+  - `get_user_messages()` - Get all user message contents as a list
+  - `get_assistant_messages()` - Get all assistant message contents as a list
+  - `get_last_message()` - Get the last message dictionary
+  - `get_last_user_message()` - Get the content of the last user message
+
+- **Streaming complete functionality**:
+  - `Chat.complete_stream(messages, *, history: ChatHistory, ...)` - Streaming version of `complete()` that ensures complete responses with real-time chunk streaming
+  - Supports progress callbacks (`on_progress`, `on_continue_start`, `on_continue_end`) for monitoring continuation progress
+
+- **Streaming continue functionality**:
+  - `ChatContinue.continue_request_stream(chat, last_result, *, history: ChatHistory, ...)` - Stream continuation chunks in real-time
+  - Automatically merges results from all continuation requests
+  - Provides access to accumulated result via `iterator.result.to_chat_result()`
+
+- **Convenience methods**:
+  - `Chat.chat_with_history(history, message=None, **params)` - Convenience method for chat with history
+  - `Chat.stream_with_history(history, message=None, **params)` - Convenience method for streaming with history
+
+### Improved
+
+- **Explicit history management**: All history operations are now explicit, making the API more predictable and easier to debug.
+- **Consistency**: Streaming and non-streaming modes now have identical behavior regarding history management.
+- **Type safety**: Better type hints and validation for history parameters.
+- **Error handling**: More precise error messages when history is required but not provided.
+- **Documentation**: Comprehensive documentation updates reflecting the new explicit history management approach.
+
+### Fixed
+
+- **Fixed `finish_reason` propagation in streaming responses**: Corrected issue where `finish_reason` could be incorrectly set to `None` in streaming responses, especially during continuation requests.
+- **Fixed history update timing**: User messages are now added to history before the API request, ensuring they are recorded even if the request fails.
+- **Fixed empty result handling in continuation**: Empty `ChatResult` objects are now properly filtered out during continuation merging.
+- **Fixed docstring formatting**: Resolved reStructuredText formatting issues in docstrings that caused documentation build warnings.
+
+### Removed
+
+- **Removed `auto_history` parameter** from `Chat.__init__()`
+- **Removed `Chat.get_history()` method**
+- **Removed `Chat.clear_history()` method**
+- **Removed `Chat.clear_last_assistant_message()` method**
+- **Removed obsolete test files**: `test_chat_auto_history.py`, `test_chat_new_features.py` (replaced with v2.0 tests)
+- **Removed obsolete documentation**: `auto_history.rst` and related examples
+
+### Documentation
+
+- **Comprehensive documentation updates**: All documentation has been updated to reflect the new explicit history management approach
+- **Migration guide**: Detailed examples showing how to migrate from v0.5.x to v2.0.0
+- **New examples**: Updated all examples to use the new explicit history API
+- **API reference**: Updated API reference documentation for all changed methods
+
+### Testing
+
+- **New comprehensive test suite**: Created new test files for v2.0.0 API:
+  - `test_chat_v2.py` - Tests for `Chat` client's v2.0.0 API
+  - `test_chat_history_v2.py` - Tests for `ChatHistory`'s `MutableSequence` protocol and new methods
+  - `test_chat_continue_v2.py` - Tests for `ChatContinue`'s v2.0.0 API
+  - `test_chat_streaming_continue_v2.py` - Tests for streaming continue edge cases
+  - `test_chat_integration_v2.py` - Integration tests for v2.0.0 API
+- **All tests passing**: Comprehensive test coverage ensuring correctness of the new architecture
+
 ## [0.5.1] - 2026-01-06
 
 ### Changed
