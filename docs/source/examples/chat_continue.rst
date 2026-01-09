@@ -41,7 +41,7 @@ Continue only if needed (v2.0):
 
    result = chat("Long story", history=history, max_tokens=50)
    # Automatically continues if truncated, otherwise returns result unchanged
-   full_result = chat.continue_if_needed(result, history=history, max_continues=3)
+   full_result = chat.complete("Write JSON", max_tokens=100)
 
 Enhanced ChatContinue API (v2.0)
 ---------------------------------

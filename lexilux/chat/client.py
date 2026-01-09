@@ -145,7 +145,7 @@ class Chat:
 
         Returns:
             ChatResult with text and usage. May be truncated if finish_reason == "length".
-            
+
         Examples:
             Basic usage (may be truncated):
             >>> result = chat("Hello", temperature=0.5, max_tokens=100)
@@ -387,7 +387,7 @@ class Chat:
                 done=True chunk, finish_reason will not be available. This indicates
                 a network/connection problem, not a normal completion.
             ValueError: On invalid input or response format.
-            
+
         Examples:
             Basic streaming (may be truncated):
             >>> for chunk in chat.stream("Hello", temperature=0.5):
@@ -589,7 +589,9 @@ class Chat:
             # Add user messages to working history before streaming
             for user_msg in user_messages_to_add:
                 working_history.add_user(user_msg)
-            streaming_iterator = self._wrap_streaming_with_history(streaming_iterator, working_history)
+            streaming_iterator = self._wrap_streaming_with_history(
+                streaming_iterator, working_history
+            )
 
         return streaming_iterator
 

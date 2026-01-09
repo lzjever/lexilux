@@ -19,26 +19,26 @@ def test_basic_continue():
     print("=" * 60)
     print("Test 1: Basic Continue")
     print("=" * 60)
-    
+
     args = parse_args()
     try:
         config = get_chat_config(config_path=args.config)
     except (FileNotFoundError, KeyError):
         print("❌ Config not found. Skipping test.")
         return False
-    
+
     chat = Chat(**config)
     history = ChatHistory()
-    
+
     # Request with small max_tokens
     result = chat(
         "Write a short story about a robot. Make it at least 200 words.",
         history=history,
         max_tokens=30,  # Small to force truncation
     )
-    
+
     print(f"Initial: finish_reason={result.finish_reason}, length={len(result.text)}")
-    
+
     if result.finish_reason == "length":
         print("✅ Truncated as expected, continuing...")
         full_result = ChatContinue.continue_request(
@@ -47,8 +47,10 @@ def test_basic_continue():
             history=history,
             max_continues=1,
         )
-        print(f"After continue: finish_reason={full_result.finish_reason}, length={len(full_result.text)}")
-        
+        print(
+            f"After continue: finish_reason={full_result.finish_reason}, length={len(full_result.text)}"
+        )
+
         if full_result.finish_reason != "length":
             print("✅ Successfully completed after continue")
             return True
@@ -65,24 +67,24 @@ def test_error_handling():
     print("\n" + "=" * 60)
     print("Test 2: Error Handling")
     print("=" * 60)
-    
+
     args = parse_args()
     try:
         config = get_chat_config(config_path=args.config)
     except (FileNotFoundError, KeyError):
         print("❌ Config not found. Skipping test.")
         return False
-    
+
     chat = Chat(**config)
     history = ChatHistory()
-    
+
     # Test: Try to continue non-truncated result
     result = chat(
         "Say hello.",
         history=history,
         max_tokens=100,  # Large enough
     )
-    
+
     if result.finish_reason != "length":
         try:
             ChatContinue.continue_request(chat, result, history=history)
@@ -99,18 +101,18 @@ def test_error_handling():
 def main():
     """Run quick tests."""
     print("\nContinue Chat Quick Test\n")
-    
+
     results = []
     results.append(("Basic Continue", test_basic_continue()))
     results.append(("Error Handling", test_error_handling()))
-    
+
     print("\n" + "=" * 60)
     print("Test Summary")
     print("=" * 60)
     for name, passed in results:
         status = "✅ PASS" if passed else "❌ FAIL"
         print(f"{name}: {status}")
-    
+
     all_passed = all(r[1] for r in results)
     return 0 if all_passed else 1
 

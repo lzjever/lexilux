@@ -11,9 +11,8 @@ When a chat completion is stopped due to ``max_tokens`` limit (``finish_reason =
 you may want to continue the generation. Lexilux provides multiple ways to handle this:
 
 1. **Chat.complete()** - Recommended for most cases, ensures complete response
-2. **Chat.continue_if_needed()** - Conditionally continue if truncated
-3. **ChatContinue.continue_request()** - Advanced control with full flexibility
-4. **Streaming versions** - ``complete_stream()`` and ``continue_if_needed_stream()``
+2. **ChatContinue.continue_request()** - Advanced control with full flexibility
+3. **Streaming versions** - ``complete_stream()`` and ``continue_request_stream()``
 
 Key Features
 ------------
@@ -47,7 +46,8 @@ The simplest and most recommended way to ensure complete responses:
    history = ChatHistory()
 
    # Automatically handles truncation, returns complete result
-   result = chat.complete("Write a long JSON response", history=history, max_tokens=100)
+   # History is optional for single-turn conversations
+   result = chat.complete("Write a long JSON response", max_tokens=100)
    json_data = json.loads(result.text)  # Guaranteed complete
 
    # With error handling
@@ -65,25 +65,33 @@ Key Features of complete():
 * Raises ``ChatIncompleteResponseError`` if still truncated (if ``ensure_complete=True``)
 * Requires explicit ``history`` parameter (v2.0)
 
-Conditional Continue: Chat.continue_if_needed()
-------------------------------------------------
+Customizable Continue Strategy (v2.1)
+--------------------------------------
 
-Continue only if the result is truncated:
+The ``complete()`` method now supports extensive customization options:
 
 .. code-block:: python
 
-   from lexilux import Chat, ChatHistory
+   from lexilux import Chat
 
    chat = Chat(...)
-   history = ChatHistory()
 
-   result = chat("Long story", history=history, max_tokens=50)
-   
-   # Only continues if result.finish_reason == "length"
-   # Requires explicit history parameter
-   full_result = chat.continue_if_needed(result, history=history, max_continues=3)
-   
-   # If result.finish_reason != "length", returns result unchanged
+   # Custom continue prompt function
+   def smart_prompt(count, max_count, current_text, original_prompt):
+       return f"Please continue (attempt {count}/{max_count})"
+
+   # Progress tracking
+   def on_progress(count, max_count, current, all_results):
+       print(f"🔄 Continuing {count}/{max_count}...")
+
+   result = chat.complete(
+       "Write a long JSON",
+       max_tokens=100,
+       continue_prompt=smart_prompt,
+       on_progress=on_progress,
+       continue_delay=(1.0, 2.0),  # Random delay 1-2 seconds
+       on_error="return_partial",  # Return partial on error
+   )
 
 Advanced Control: ChatContinue.continue_request()
 ---------------------------------------------------
@@ -196,8 +204,8 @@ Stream continuation only if needed:
    history = ChatHistory()
    result = chat("Long story", history=history, max_tokens=50)
    
-   # Stream continue if truncated, otherwise returns done chunk
-   iterator = chat.continue_if_needed_stream(result, history=history)
+   # Use complete_stream for automatic continuation
+   iterator = chat.complete_stream("Long story", max_tokens=50)
    
    for chunk in iterator:
        print(chunk.delta, end="", flush=True)
@@ -262,18 +270,23 @@ Use ``chat.complete()`` for scenarios requiring complete responses:
    # Long-form content
    result = chat.complete("Write a comprehensive guide", history=history, max_tokens=200)
 
-Pattern 2: Conditional Continue
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Pattern 2: Customizable Continue Strategy (v2.1)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Use ``chat.continue_if_needed()`` when you want to continue only if needed:
+Use ``chat.complete()`` with customization options:
 
 .. code-block:: python
 
-   history = ChatHistory()
-   
-   result = chat("Response", history=history, max_tokens=100)
-   # Automatically continues if truncated, otherwise returns result unchanged
-   full_result = chat.continue_if_needed(result, history=history, max_continues=3)
+   def on_progress(count, max_count, current, all_results):
+       print(f"🔄 Continuing {count}/{max_count}...")
+
+   # Single-turn conversation (no history needed)
+   result = chat.complete(
+       "Write JSON",
+       max_tokens=100,
+       on_progress=on_progress,
+       continue_delay=(1.0, 2.0),
+   )
 
 Pattern 3: Advanced Control
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -304,7 +317,7 @@ Use streaming versions for real-time continuation:
    result = chat("Long story", history=history, max_tokens=50)
    
    if result.finish_reason == "length":
-       iterator = chat.continue_if_needed_stream(result, history=history)
+       iterator = chat.complete_stream("Long story", max_tokens=50)
        
        for chunk in iterator:
            print(chunk.delta, end="", flush=True)

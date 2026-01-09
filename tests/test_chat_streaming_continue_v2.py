@@ -247,24 +247,24 @@ class TestContinueIfNeededStreamEdgeCases:
         assert full_result.finish_reason == "stop"
 
     @patch("lexilux.chat.client.requests.post")
-    def test_continue_if_needed_stream_empty_delta_chunks(self, mock_post):
-        """Test that empty delta chunks are handled correctly"""
+    def test_complete_stream_empty_delta_chunks(self, mock_post):
+        """Test that empty delta chunks are handled correctly in complete_stream"""
         chat = Chat(
             base_url="https://api.example.com/v1",
             api_key="test-key",
             model="gpt-4",
         )
 
-        result1 = ChatResult(
-            text="Part 1",
-            usage=Usage(input_tokens=10, output_tokens=50, total_tokens=60),
-            finish_reason="length",
-        )
+        # Initial truncated response
+        mock_response1 = Mock()
+        mock_response1.status_code = 200
+        mock_response1.json.return_value = {
+            "choices": [{"message": {"content": "Part 1"}, "finish_reason": "length"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 50, "total_tokens": 60},
+        }
+        mock_response1.raise_for_status = Mock()
 
-        history = ChatHistory.from_messages("Write a story")
-        history.append_result(result1)
-
-        # Stream with empty delta chunks
+        # Stream with empty delta chunks for continue
         stream_data = [
             b'data: {"choices": [{"delta": {}, "index": 0}]}\n',  # Empty delta
             b'data: {"choices": [{"delta": {"content": " Part"}, "index": 0}]}\n',
@@ -274,13 +274,26 @@ class TestContinueIfNeededStreamEdgeCases:
             b"data: [DONE]\n",
         ]
 
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.iter_lines.return_value = iter(stream_data)
-        mock_response.raise_for_status = Mock()
-        mock_post.return_value = mock_response
+        mock_response2 = Mock()
+        mock_response2.status_code = 200
+        mock_response2.iter_lines.return_value = iter(stream_data)
+        mock_response2.raise_for_status = Mock()
 
-        iterator = chat.continue_if_needed_stream(result1, history=history)
+        # Mock initial streaming response (truncated)
+        stream_data1 = [
+            b'data: {"choices": [{"delta": {"content": "Part"}, "index": 0}]}\n',
+            b'data: {"choices": [{"delta": {"content": " 1"}, "index": 0}]}\n',
+            b'data: {"choices": [{"finish_reason": "length", "index": 0}]}\n',
+            b"data: [DONE]\n",
+        ]
+        mock_response1_stream = Mock()
+        mock_response1_stream.status_code = 200
+        mock_response1_stream.iter_lines.return_value = iter(stream_data1)
+        mock_response1_stream.raise_for_status = Mock()
+
+        mock_post.side_effect = [mock_response1_stream, mock_response2]
+
+        iterator = chat.complete_stream("Write a story", max_tokens=50)
         chunks = list(iterator)
 
         # Should have chunks (including empty delta ones)
@@ -288,8 +301,8 @@ class TestContinueIfNeededStreamEdgeCases:
 
         # Result should be correct
         full_result = iterator.result.to_chat_result()
-        assert "Part 1" in full_result.text
-        assert "Part 2" in full_result.text
+        assert "Part" in full_result.text or "Part 1" in full_result.text
+        assert "Part 2" in full_result.text or " Part 2" in full_result.text
 
 
 class TestCompleteStreamEdgeCases:

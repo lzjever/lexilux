@@ -378,7 +378,7 @@ class TestChatContinueContinueRequestStream:
         # Working history is cloned internally
         assert len(history.messages) == initial_count
         assert history.messages == initial_messages
-        
+
         # Verify result contains merged text
         final_result = iterator.result.to_chat_result()
         assert "Part 1" in final_result.text

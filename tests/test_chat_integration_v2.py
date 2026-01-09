@@ -52,23 +52,22 @@ class TestChatV2Integration:
         result1 = chat("Hello", history=history)
         assert result1.text == "Hello! How can I help?"
 
+        # Manually update history for multi-turn conversation (history is immutable)
+        history.add_user("Hello")
+        history.append_result(result1)
+
         result2 = chat("What is Python?", history=history)
         assert result2.text == "Python is a programming language."
 
-        # History should contain both turns
-        assert len(history.messages) == 4
+        # Original history should contain manually added messages
+        assert len(history.messages) == 2  # Hello + response
         assert history.messages[0]["content"] == "Hello"
         assert history.messages[1]["content"] == "Hello! How can I help?"
-        assert history.messages[2]["content"] == "What is Python?"
-        assert history.messages[3]["content"] == "Python is a programming language."
 
-        # Second request should include history (user message is added before request,
-        # so at request time, history has: Hello + response + What is Python?)
+        # Second request should include history (working history is cloned internally)
         second_call_payload = mock_post.call_args_list[1].kwargs["json"]
         messages = second_call_payload["messages"]
-        assert (
-            len(messages) == 3
-        )  # Hello + response + What is Python? (assistant response added after)
+        assert len(messages) == 3  # Hello + response + What is Python?
         assert messages[0]["content"] == "Hello"
         assert messages[1]["content"] == "Hello! How can I help?"
         assert messages[2]["content"] == "What is Python?"
@@ -97,15 +96,16 @@ class TestChatV2Integration:
         mock_post.return_value = mock_response
 
         history = ChatHistory()
+        original_count = len(history.messages)
         iterator = chat.stream("Say hello", history=history)
         list(iterator)
 
-        # History should be updated
-        assert len(history.messages) == 2
-        assert history.messages[0]["role"] == "user"
-        assert history.messages[0]["content"] == "Say hello"
-        assert history.messages[1]["role"] == "assistant"
-        assert history.messages[1]["content"] == "Hello world!"
+        # Original history should NOT be modified (immutable)
+        assert len(history.messages) == original_count
+
+        # Verify result is correct
+        result = iterator.result.to_chat_result()
+        assert result.text == "Hello world!"
 
     @patch("lexilux.chat.client.requests.post")
     def test_complete_with_continue(self, mock_post):
@@ -137,6 +137,7 @@ class TestChatV2Integration:
         mock_post.side_effect = [mock_response1, mock_response2]
 
         history = ChatHistory()
+        original_count = len(history.messages)
         result = chat.complete("Write a story", history=history, max_tokens=50)
 
         # Should be complete
@@ -144,8 +145,8 @@ class TestChatV2Integration:
         assert "Part 1" in result.text
         assert "Part 2" in result.text
 
-        # History should be updated with both parts
-        assert len(history.messages) >= 2
+        # Original history should NOT be modified (immutable)
+        assert len(history.messages) == original_count
 
     @patch("lexilux.chat.client.requests.post")
     def test_complete_stream_with_continue(self, mock_post):
@@ -214,8 +215,15 @@ class TestChatV2Integration:
         mock_post.return_value = mock_response
 
         history = ChatHistory()
-        chat("Hello", history=history)
-        chat("How are you?", history=history)
+        result1 = chat("Hello", history=history)
+        # Manually update history for multi-turn (history is immutable)
+        history.add_user("Hello")
+        history.append_result(result1)
+
+        result2 = chat("How are you?", history=history)
+        # Manually update history
+        history.add_user("How are you?")
+        history.append_result(result2)
 
         # Test MutableSequence operations
         assert len(history) == 4
@@ -263,7 +271,10 @@ class TestChatV2Integration:
         mock_post.return_value = mock_response
 
         history1 = ChatHistory()
-        chat("Hello", history=history1)
+        result1 = chat("Hello", history=history1)
+        # Manually update history (immutable)
+        history1.add_user("Hello")
+        history1.append_result(result1)
 
         # Clone history
         history2 = history1.clone()
@@ -277,7 +288,10 @@ class TestChatV2Integration:
 
         # Merge histories
         history3 = ChatHistory()
-        chat("How are you?", history=history3)
+        result2 = chat("How are you?", history=history3)
+        # Manually update history
+        history3.add_user("How are you?")
+        history3.append_result(result2)
 
         combined = history1 + history3
         assert isinstance(combined, ChatHistory)
@@ -316,8 +330,10 @@ class TestChatV2Integration:
         result1 = chat("Write a story", history=history, max_tokens=50)
         assert result1.finish_reason == "length"
 
-        # Continue with explicit history
-        full_result = chat.continue_if_needed(result1, history=history)
+        # Continue using ChatContinue (continue_if_needed removed)
+        from lexilux.chat.continue_ import ChatContinue
+
+        full_result = ChatContinue.continue_request(chat, result1, history=history)
         assert full_result.finish_reason == "stop"
         assert "Part 1" in full_result.text
         assert "Part 2" in full_result.text
@@ -344,8 +360,14 @@ class TestChatV2Integration:
         history1 = ChatHistory()
         history2 = ChatHistory()
 
-        chat("Hello", history=history1)
-        chat("Hi", history=history2)
+        result1 = chat("Hello", history=history1)
+        result2 = chat("Hi", history=history2)
+
+        # Manually update histories (immutable)
+        history1.add_user("Hello")
+        history1.append_result(result1)
+        history2.add_user("Hi")
+        history2.append_result(result2)
 
         # Histories should be independent
         assert len(history1) == 2
@@ -354,7 +376,9 @@ class TestChatV2Integration:
         assert history2[0]["content"] == "Hi"
 
         # Continue conversation in history1
-        chat("How are you?", history=history1)
+        result3 = chat("How are you?", history=history1)
+        history1.add_user("How are you?")
+        history1.append_result(result3)
         assert len(history1) == 4
         assert len(history2) == 2  # history2 unchanged
 
@@ -377,8 +401,15 @@ class TestChatV2Integration:
         mock_post.return_value = mock_response
 
         history = ChatHistory()
-        chat("Hello", history=history)
-        chat("How are you?", history=history)
+        result1 = chat("Hello", history=history)
+        # Manually update history (immutable)
+        history.add_user("Hello")
+        history.append_result(result1)
+
+        result2 = chat("How are you?", history=history)
+        # Manually update history
+        history.add_user("How are you?")
+        history.append_result(result2)
 
         # Query methods
         user_messages = history.get_user_messages()

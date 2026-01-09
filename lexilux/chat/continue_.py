@@ -71,7 +71,9 @@ class ChatContinue:
             Continue prompt string.
         """
         if callable(continue_prompt):
-            return continue_prompt(continue_count, max_continues, current_text, original_prompt or "")
+            return continue_prompt(
+                continue_count, max_continues, current_text, original_prompt or ""
+            )
         return continue_prompt
 
     @staticmethod

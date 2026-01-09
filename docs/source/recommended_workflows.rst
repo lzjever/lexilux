@@ -62,7 +62,7 @@ When you need guaranteed complete responses (e.g., JSON extraction):
 
    # Method 2: Conditional continue
    result = chat("Extract data as JSON", history=history, max_tokens=100)
-   full_result = chat.continue_if_needed(result, history=history, max_continues=3)
+   full_result = chat.complete("Write JSON", max_tokens=100)
    json_data = json.loads(full_result.text)
 
 **Key Points**:

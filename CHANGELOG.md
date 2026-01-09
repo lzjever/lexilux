@@ -5,6 +5,104 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-XX
+
+### 🎯 API Improvements: History Immutability & Customizable Continue Strategy
+
+This minor version update introduces important API improvements focusing on immutability, clarity, and customization capabilities.
+
+### Changed
+
+- **History Immutability**: All methods that receive a `history` parameter now create a clone internally and never modify the original history object. This ensures:
+  - No unexpected side effects
+  - Thread-safe operations (multiple threads can use the same history)
+  - Functional programming principles
+  - Better predictability
+
+- **`chat.complete()` and `chat.complete_stream()` history parameter**: Now **optional** instead of required. If `None`, a new `ChatHistory` instance is created internally. This simplifies single-turn complete requests:
+  ```python
+  # Before (v2.0.0)
+  history = ChatHistory()
+  result = chat.complete("Write JSON", history=history)
+  
+  # After (v2.1.0)
+  result = chat.complete("Write JSON")  # No history needed for single-turn
+  ```
+
+- **API Clarity**: Updated docstrings to clearly distinguish between:
+  - `chat()` / `chat.stream()` → Single response (may be truncated)
+  - `chat.complete()` / `chat.complete_stream()` → Complete response (guaranteed)
+
+### Added
+
+- **Customizable Continue Strategy**: Enhanced `chat.complete()` and `ChatContinue.continue_request()` with extensive customization options:
+  - **Custom continue prompt**: Support for function-based prompts: `continue_prompt: str | Callable`
+  - **Progress tracking**: `on_progress` callback for monitoring continuation progress
+  - **Request delay control**: `continue_delay` parameter (fixed or random range)
+  - **Error handling strategies**: `on_error` and `on_error_callback` for flexible error handling
+  - **Helper method**: `ChatContinue.needs_continue(result)` to check if continuation is needed
+
+- **Enhanced `ChatContinue.continue_request()` and `continue_request_stream()`**:
+  - Support for all customization options (progress, delay, error handling)
+  - History immutability (clones internally)
+  - Better error handling and recovery
+
+### Removed
+
+- **`Chat.continue_if_needed()`**: Removed in favor of `chat.complete()` which provides the same functionality with better API clarity.
+- **`Chat.continue_if_needed_stream()`**: Removed in favor of `chat.complete_stream()`.
+
+### Migration Guide
+
+#### Using `continue_if_needed()` → Use `complete()` instead
+
+```python
+# Before (v2.0.0)
+history = ChatHistory()
+result = chat("Write JSON", history=history, max_tokens=100)
+if result.finish_reason == "length":
+    full_result = chat.continue_if_needed(result, history=history)
+
+# After (v2.1.0)
+result = chat.complete("Write JSON", max_tokens=100)  # Automatically handles truncation
+```
+
+#### History Immutability
+
+```python
+# Before (v2.0.0) - history was modified
+history = ChatHistory()
+result = chat("Hello", history=history)
+# history now contains: [user: "Hello", assistant: result.text]
+
+# After (v2.1.0) - history is immutable, manual update needed for multi-turn
+history = ChatHistory()
+result = chat("Hello", history=history)
+# history is unchanged, manually update if needed:
+history.add_user("Hello")
+history.append_result(result)
+```
+
+#### Custom Continue Strategy
+
+```python
+# New in v2.1.0: Customizable continue behavior
+def on_progress(count, max_count, current, all_results):
+    print(f"🔄 Continuing {count}/{max_count}...")
+
+def smart_prompt(count, max_count, current_text, original_prompt):
+    return f"Please continue (attempt {count}/{max_count})"
+
+result = chat.complete(
+    "Write a long JSON",
+    max_tokens=100,
+    continue_prompt=smart_prompt,
+    on_progress=on_progress,
+    continue_delay=(1.0, 2.0),  # Random delay 1-2 seconds
+    on_error="return_partial",  # Return partial on error
+)
+```
+
 ## [2.0.0] - 2026-01-07
 
 ### 🚀 Major Architecture Overhaul: Explicit History Management
