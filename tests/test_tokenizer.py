@@ -2,6 +2,7 @@
 Tokenizer API client test cases
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -47,6 +48,68 @@ class TestTokenizerInit:
             # But should raise on first use
             with pytest.raises(ImportError, match="transformers library is required"):
                 tokenizer("test")
+
+    def test_init_with_tilde_expansion(self):
+        """Test Tokenizer initialization with ~ in cache_dir expands to home directory"""
+        home = str(Path.home())
+
+        # Test with just "~"
+        tokenizer = Tokenizer("test-model", cache_dir="~")
+        assert tokenizer.cache_dir == home
+
+        # Test with "~/.cache/lexilux/tokenizer"
+        expected_path = str(Path.home() / ".cache" / "lexilux" / "tokenizer")
+        tokenizer = Tokenizer("test-model", cache_dir="~/.cache/lexilux/tokenizer")
+        assert tokenizer.cache_dir == expected_path
+
+        # Test that regular paths still work
+        tokenizer = Tokenizer("test-model", cache_dir="/custom/cache")
+        assert tokenizer.cache_dir == "/custom/cache"
+
+        # Test that None still works
+        tokenizer = Tokenizer("test-model", cache_dir=None)
+        assert tokenizer.cache_dir is None
+
+    @patch("huggingface_hub.list_repo_files")
+    def test_list_tokenizer_files(self, mock_list_files):
+        """Test list_tokenizer_files method"""
+        # Mock the list_repo_files to return some files
+        mock_list_files.return_value = [
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "vocab.json",
+            "merges.txt",
+            "special_tokens_map.json",
+            "config.json",
+            "model.safetensors",  # Should be excluded
+            "pytorch_model.bin",  # Should be excluded
+            "README.md",  # Should be excluded
+        ]
+
+        files = Tokenizer.list_tokenizer_files("test-model")
+
+        # Should only return tokenizer-related files
+        assert "tokenizer.json" in files
+        assert "tokenizer_config.json" in files
+        assert "vocab.json" in files
+        assert "merges.txt" in files
+        assert "special_tokens_map.json" in files
+        assert "config.json" in files
+        assert "model.safetensors" not in files
+        assert "pytorch_model.bin" not in files
+        assert "README.md" not in files
+
+        # Verify list_repo_files was called correctly
+        mock_list_files.assert_called_once_with(
+            repo_id="test-model",
+            revision=None,
+        )
+
+    def test_list_tokenizer_files_without_huggingface_hub(self):
+        """Test list_tokenizer_files raises ImportError when huggingface_hub is not available"""
+        with patch.dict("sys.modules", {"huggingface_hub": None}):
+            with pytest.raises(ImportError, match="huggingface_hub library is required"):
+                Tokenizer.list_tokenizer_files("test-model")
 
 
 class TestTokenizerModes:

@@ -10,10 +10,20 @@ from lexilux import Tokenizer
 
 def main():
     """Main function"""
+    # First, let's see what tokenizer files are needed for this model
+    print("Listing tokenizer files for the model...")
+    try:
+        tokenizer_files = Tokenizer.list_tokenizer_files("deepseek-ai/DeepSeek-V3.2")
+        print(f"Tokenizer files needed: {len(tokenizer_files)}")
+        for file in tokenizer_files:
+            print(f"  - {file}")
+        print()
+    except Exception as e:
+        print(f"Could not list files: {e}\n")
+
     # Initialize tokenizer (offline mode)
     tokenizer = Tokenizer(
-        "Qwen/Qwen2.5-7B-Instruct",
-        offline=True,
+        "deepseek-ai/DeepSeek-V3.2", offline=False, cache_dir="~/.cache/lexilux/tokenizer"
     )
 
     # Single text

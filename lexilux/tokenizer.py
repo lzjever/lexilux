@@ -92,6 +92,7 @@ class Tokenizer:
         Args:
             model: HuggingFace model identifier (e.g., "Qwen/Qwen2.5-7B-Instruct").
             cache_dir: Directory to cache models (defaults to HuggingFace cache).
+                      Supports "~" for home directory expansion.
             offline: If True, only use local cache (fail if not found).
                      If False, prioritize local cache, download if not found.
             revision: Model revision/branch/tag (optional).
@@ -103,7 +104,8 @@ class Tokenizer:
             ImportError: If transformers is not installed and require_transformers=True.
         """
         self.model = model
-        self.cache_dir = cache_dir
+        # Expand "~" to home directory if cache_dir is provided
+        self.cache_dir = str(Path(cache_dir).expanduser()) if cache_dir else None
         self.offline = offline
         self.revision = revision
         self.trust_remote_code = trust_remote_code
@@ -125,6 +127,73 @@ class Tokenizer:
                     "Install it with: pip install lexilux[tokenizer] (or lexilux[token]) or pip install transformers"
                 )
             # If require_transformers=False, we'll check again on first use
+
+    @staticmethod
+    def list_tokenizer_files(
+        model: str,
+        *,
+        revision: str | None = None,
+    ) -> list[str]:
+        """
+        List tokenizer-related files for a given model.
+
+        This method queries the HuggingFace Hub to identify which files
+        are needed for tokenization, without downloading them.
+
+        Args:
+            model: HuggingFace model identifier (e.g., "Qwen/Qwen2.5-7B-Instruct").
+            revision: Model revision/branch/tag (optional).
+
+        Returns:
+            List of file paths that are tokenizer-related.
+
+        Raises:
+            ImportError: If huggingface_hub is not installed.
+            Exception: If unable to list files from HuggingFace Hub.
+
+        Example:
+            >>> files = Tokenizer.list_tokenizer_files("Qwen/Qwen2.5-7B-Instruct")
+            >>> print(files)
+            ['tokenizer.json', 'tokenizer_config.json', 'vocab.json', 'merges.txt', ...]
+        """
+        try:
+            from huggingface_hub import list_repo_files
+        except ImportError:
+            raise ImportError(
+                "huggingface_hub library is required to list tokenizer files. "
+                "Install it with: pip install huggingface-hub"
+            )
+
+        # List all files in the repository
+        all_files = list_repo_files(
+            repo_id=model,
+            revision=revision,
+        )
+
+        # Common tokenizer file patterns
+        tokenizer_patterns = [
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "vocab.json",
+            "merges.txt",
+            "special_tokens_map.json",
+            "added_tokens.json",
+            "preprocessor_config.json",
+            "config.json",  # Model config (may contain tokenizer info)
+        ]
+
+        # Filter files that match tokenizer patterns
+        tokenizer_files = []
+        for file in all_files:
+            filename = Path(file).name
+            # Check if file matches any tokenizer pattern
+            if any(pattern in filename or filename == pattern for pattern in tokenizer_patterns):
+                tokenizer_files.append(file)
+            # Also include files in tokenizer subdirectory if it exists
+            elif file.startswith("tokenizer/"):
+                tokenizer_files.append(file)
+
+        return sorted(tokenizer_files)
 
     def _ensure_model_downloaded(self) -> str:
         """
@@ -181,15 +250,71 @@ class Tokenizer:
         if cached_snapshot_path:
             return str(cached_snapshot_path)
 
-        # Download model if not cached
+        # Download only tokenizer files (not model weights)
+        # Use list_tokenizer_files to identify which files to download
         try:
+            from huggingface_hub import hf_hub_download
+
+            # Get list of tokenizer files for this model
+            tokenizer_files = self.list_tokenizer_files(
+                self.model,
+                revision=self.revision,
+            )
+
+            if not tokenizer_files:
+                # Fallback: if no tokenizer files found, let AutoTokenizer handle it
+                return self.model
+
+            # Download each tokenizer file to the cache directory
+            # hf_hub_download will place files in the standard HuggingFace cache structure
+            # under the specified cache_dir, which AutoTokenizer can then find
+            for file in tokenizer_files:
+                try:
+                    hf_hub_download(
+                        repo_id=self.model,
+                        filename=file,
+                        cache_dir=str(cache_path),
+                        revision=self.revision,
+                        local_files_only=False,
+                    )
+                except Exception as e:
+                    # Log warning but continue with other files
+                    # Some files might not exist for all models (e.g., merges.txt for WordPiece)
+                    import warnings
+
+                    warnings.warn(
+                        f"Failed to download {file}: {e}. Continuing with other files.",
+                        UserWarning,
+                    )
+
+            # Return the model ID - AutoTokenizer will find the files in the HuggingFace cache
+            # The files are now cached in the standard HuggingFace cache structure
+            return self.model
+
+        except ImportError:
+            # If huggingface_hub functions are not available, fall back to snapshot_download
+            from huggingface_hub import snapshot_download
+
             downloaded_path = snapshot_download(
                 repo_id=self.model,
                 cache_dir=str(cache_path),
                 revision=self.revision,
-                local_files_only=False,  # Allow network access for downloading
+                local_files_only=False,
+                ignore_patterns=[
+                    "*.safetensors",
+                    "*.bin",
+                    "*.pt",
+                    "*.pth",
+                    "*.h5",
+                    "*.ckpt",
+                    "*.pb",
+                    "*.onnx",
+                    "model*.safetensors",
+                    "pytorch_model*.bin",
+                    "tf_model*.h5",
+                    "flax_model*.msgpack",
+                ],
             )
-            # snapshot_download returns the snapshot directory path
             return downloaded_path
         except Exception as e:
             # If download failed, raise error
