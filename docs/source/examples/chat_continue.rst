@@ -172,9 +172,9 @@ Track progress during continuation:
 
    chat = Chat(...)
 
-   def on_progress(count, max_count, current, all_results):
+   def on_progress(count, max_count, current_result, all_results):
        print(f"🔄 Continuing {count}/{max_count}...")
-       print(f"   Current: {len(current.text)} chars")
+       print(f"   Current: {len(current_result.text)} chars")
        print(f"   Total parts: {len(all_results)}")
 
    # Single-turn (no history needed)
@@ -201,8 +201,8 @@ Track progress during continuation:
    print(f"Part 1: {len(result1.text)} chars, {result1.usage.total_tokens} tokens")
 
    if result1.finish_reason == "length":
-       def on_progress(count, max_count, current, all_results):
-           print(f"Part {count+1}: {len(current.text)} chars")
+       def on_progress(count, max_count, current_result, all_results):
+           print(f"Part {count+1}: {len(current_result.text)} chars")
 
        all_results = ChatContinue.continue_request(
            chat, result1, history=history, auto_merge=False, max_continues=3,

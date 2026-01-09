@@ -121,9 +121,9 @@ The ``complete()`` method now supports extensive customization options:
 
 .. code-block:: python
 
-   def on_progress(count, max_count, current, all_results):
+   def on_progress(count, max_count, current_result, all_results):
        print(f"🔄 Continuing {count}/{max_count}...")
-       print(f"   Current length: {len(current.text)} chars")
+       print(f"   Current length: {len(current_result.text)} chars")
        print(f"   Total parts: {len(all_results)}")
 
    result = chat.complete(
@@ -225,8 +225,9 @@ For advanced use cases requiring full control:
 
 .. code-block:: python
 
-   def on_progress(count, max_count, current, all_results):
+   def on_progress(count, max_count, current_result, all_results):
        print(f"Continue {count}/{max_count}")
+       print(f"   Current length: {len(current_result.text)} chars")
 
    def custom_prompt(count, max_count, current_text, original_prompt):
        return f"Continue from: {current_text[-50:]}..."
@@ -248,11 +249,15 @@ Key Parameters:
 * ``max_continues``: Maximum number of continuation attempts (default: 1)
 * ``auto_merge``: If ``True``, automatically merge results (default: ``True``)
 * ``add_continue_prompt``: Whether to add a user continue message (default: ``True``)
-* ``continue_prompt``: User prompt for continuation (default: "continue", can be callable)
-* ``on_progress``: Progress callback function
+* ``continue_prompt``: User prompt for continuation (default: "continue"). Can be a string or
+  a callable with signature: ``(count: int, max_count: int, current_text: str, original_prompt: str) -> str``
+* ``on_progress``: Progress callback function with signature:
+  ``(count: int, max_count: int, current_result: ChatResult, all_results: list[ChatResult]) -> None``
 * ``continue_delay``: Delay between continues (float or tuple for random)
 * ``on_error``: Error strategy ("raise" or "return_partial")
-* ``on_error_callback``: Custom error callback function
+* ``on_error_callback``: Custom error callback function with signature:
+  ``(error: Exception, partial_result: ChatResult) -> dict``.
+  Should return ``{"action": "raise" | "return_partial" | "retry", "result": ChatResult}``
 
 Return Types:
 ~~~~~~~~~~~~~
@@ -322,8 +327,9 @@ Stream complete response (handles truncation automatically):
 
 .. code-block:: python
 
-   def on_progress(count, max_count, current, all_results):
+   def on_progress(count, max_count, current_result, all_results):
        print(f"\n🔄 Continuing {count}/{max_count}...")
+       print(f"   Current length: {len(current_result.text)} chars")
 
    iterator = chat.complete_stream(
        "Write JSON",
@@ -372,8 +378,9 @@ Stream continuation chunks in real-time (for manual control):
 
 .. code-block:: python
 
-   def on_progress(count, max_count, current, all_results):
+   def on_progress(count, max_count, current_result, all_results):
        print(f"\n🔄 Continue {count}/{max_count}")
+       print(f"   Current length: {len(current_result.text)} chars")
 
    iterator = ChatContinue.continue_request_stream(
        chat,
@@ -463,8 +470,9 @@ Use ``chat.complete()`` with customization options:
 
 .. code-block:: python
 
-   def on_progress(count, max_count, current, all_results):
+   def on_progress(count, max_count, current_result, all_results):
        print(f"🔄 Continuing {count}/{max_count}...")
+       print(f"   Current length: {len(current_result.text)} chars")
 
    def smart_prompt(count, max_count, current_text, original_prompt):
        return f"Please continue (attempt {count}/{max_count})"

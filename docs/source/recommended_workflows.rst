@@ -508,9 +508,9 @@ Track progress during long streaming responses:
 
 .. code-block:: python
 
-   def on_progress(count, max_count, current, all_results):
+   def on_progress(count, max_count, current_result, all_results):
        print(f"\n🔄 Continuing {count}/{max_count}...")
-       print(f"   Current: {len(current.text)} chars")
+       print(f"   Current: {len(current_result.text)} chars")
        print(f"   Total parts: {len(all_results)}")
 
    iterator = chat.complete_stream(
