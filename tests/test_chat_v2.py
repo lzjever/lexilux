@@ -161,6 +161,8 @@ class TestChatWithExplicitHistory:
     @patch("lexilux._base.requests.Session.post")
     def test_call_with_history_immutability_on_error(self, mock_post):
         """Test that original history is not modified even if request fails (immutable)"""
+        from lexilux import LexiluxError
+
         chat = Chat(
             base_url="https://api.example.com/v1",
             api_key="test-key",
@@ -168,12 +170,14 @@ class TestChatWithExplicitHistory:
         )
 
         mock_response = Mock()
-        mock_response.raise_for_status.side_effect = requests.RequestException("Network error")
+        mock_response.ok = False
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
         mock_post.return_value = mock_response
 
         history = ChatHistory()
         original_count = len(history.messages)
-        with pytest.raises(requests.RequestException):
+        with pytest.raises(LexiluxError):
             chat("Hello", history=history)
 
         # Original history should NOT be modified (immutable)
