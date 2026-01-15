@@ -21,6 +21,8 @@
 - 🎣 **Connection Pooling**: HTTP connection pooling for better performance under high concurrency
 - 🛡️ **Exception Hierarchy**: Comprehensive exception system with error codes and retryable flags
 - 📝 **Request Logging**: Built-in logging for debugging and monitoring
+- 🔧 **Function Calling**: OpenAI-compatible function/tool calling support with helper utilities
+- 🖼️ **Multimodal Support**: Vision capabilities with image inputs (URL and base64)
 
 ## 📦 Installation
 
@@ -120,6 +122,97 @@ except RateLimitError as e:
     print(f"Rate limited: {e.message} (retryable: {e.retryable})")
 except LexiluxError as e:
     print(f"Error: {e.code} - {e.message}")
+```
+
+### Function Calling
+
+```python
+from lexilux import Chat, FunctionTool, execute_tool_calls, create_conversation_history
+
+# Define a function tool
+get_weather_tool = FunctionTool(
+    name="get_weather",
+    description="Get current weather for a location",
+    parameters={
+        "type": "object",
+        "properties": {
+            "location": {
+                "type": "string",
+                "description": "City name, e.g. Paris"
+            },
+            "units": {
+                "type": "string",
+                "enum": ["celsius", "fahrenheit"],
+                "description": "Temperature units"
+            }
+        },
+        "required": ["location"]
+    }
+)
+
+chat = Chat(base_url="...", api_key="...", model="gpt-4")
+
+# Make request with tools
+messages = [{"role": "user", "content": "What's the weather in Paris?"}]
+result = chat(messages, tools=[get_weather_tool])
+
+# Check if model wants to call functions
+if result.has_tool_calls:
+    for tool_call in result.tool_calls:
+        print(f"Function: {tool_call.name}")
+        print(f"Arguments: {tool_call.get_arguments()}")
+
+    # Execute functions (you implement the actual functions)
+    def get_weather(location: str, units: str = "celsius") -> str:
+        # Your implementation here
+        return f"Weather in {location}: 22°{units}"
+
+    tool_responses = execute_tool_calls(
+        result,
+        {"get_weather": get_weather}
+    )
+
+    # Send back results to get final answer
+    history = create_conversation_history(messages, result, tool_responses)
+    final_result = chat(history, tools=[get_weather_tool])
+    print(final_result.text)
+```
+
+### Multimodal (Vision)
+
+```python
+from lexilux import Chat
+
+chat = Chat(base_url="...", api_key="...", model="gpt-4-vision-preview")
+
+# Text + Image URL
+messages = [{
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "What's in this image?"},
+        {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+    ]
+}]
+
+result = chat(messages)
+print(result.text)
+
+# With base64 encoded image
+import base64
+
+with open("image.jpg", "rb") as f:
+    image_data = base64.b64encode(f.read()).decode("utf-8")
+
+messages = [{
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "Describe this image"},
+        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+    ]
+}]
+
+result = chat(messages)
+print(result.text)
 ```
 
 ### Embedding

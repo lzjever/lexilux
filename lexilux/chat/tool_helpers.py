@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from lexilux.chat.models import ChatResult, ToolCall
+from lexilux.chat.models import ChatResult
 
 
 def execute_tool_calls(

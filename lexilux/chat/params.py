@@ -7,7 +7,7 @@ with support for standard parameters and custom extensions.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence
 
 if TYPE_CHECKING:
@@ -137,8 +137,8 @@ class ChatParams:
     n: int = 1
 
     # Tool calling parameters
-    tools: list["Tool"] | None = None
-    tool_choice: str | "ToolChoice" | None = None
+    tools: list[Tool] | None = None
+    tool_choice: str | ToolChoice | None = None
     parallel_tool_calls: bool | None = None
 
     # Extra parameters

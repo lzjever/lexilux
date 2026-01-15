@@ -5,13 +5,13 @@ Provides Chat client, result models, parameter configuration, and tool support f
 """
 
 from lexilux.chat.client import Chat
-from lexilux.chat.continue_ import ChatContinue
 from lexilux.chat.content_blocks import (
     ContentBlock,
     ImageContentBlock,
     ImageUrlDetail,
     TextContentBlock,
 )
+from lexilux.chat.continue_ import ChatContinue
 from lexilux.chat.exceptions import ChatIncompleteResponseError, ChatStreamInterruptedError
 from lexilux.chat.formatters import ChatHistoryFormatter
 from lexilux.chat.history import (
@@ -22,10 +22,21 @@ from lexilux.chat.history import (
     merge_histories,
     search_content,
 )
-from lexilux.chat.models import ChatResult, ChatStreamChunk, MessageLike, MessagesLike, Role, ToolCall
+from lexilux.chat.models import (
+    ChatResult,
+    ChatStreamChunk,
+    MessageLike,
+    MessagesLike,
+    Role,
+    ToolCall,
+)
 from lexilux.chat.params import ChatParams
 from lexilux.chat.streaming import StreamingIterator, StreamingResult
-from lexilux.chat.tool_helpers import ToolCallHelper, create_conversation_history, execute_tool_calls
+from lexilux.chat.tool_helpers import (
+    ToolCallHelper,
+    create_conversation_history,
+    execute_tool_calls,
+)
 from lexilux.chat.tools import FunctionTool, Tool, ToolChoice
 from lexilux.chat.utils import normalize_messages
 

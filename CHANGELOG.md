@@ -256,6 +256,19 @@ chat = Chat(
 ## [Unreleased]
 
 ### Added
+- **Function Calling Support**: OpenAI-compatible function/tool calling support
+  - `FunctionTool` dataclass for defining tools with JSON Schema parameters
+  - `ToolChoice` for controlling when the model uses tools (auto, required, or specific function)
+  - `ToolCall` in `ChatResult` and `ChatStreamChunk` for capturing tool calls from models
+  - Helper utilities: `execute_tool_calls()` and `create_conversation_history()` for managing tool execution workflows
+  - `ToolCallHelper` class for high-level tool calling workflow management
+  - Full support in `Chat.__call__()` and `Chat.stream()` methods
+- **Multimodal Support**: Vision capabilities with image inputs
+  - Support for image URLs and base64-encoded images in message content
+  - `ContentBlock` types (`TextContentBlock`, `ImageContentBlock`) for type-safe multimodal content
+  - `ImageUrlDetail` for controlling image detail level (auto, low, high)
+  - `normalize_messages()` enhanced to validate multimodal content structure
+  - Message content can be `str` or `list[ContentBlock]` for flexible input
 - **Connection Pooling**: All API clients now use connection pooling for better performance under high concurrency
   - Configurable via `pool_connections` and `pool_maxsize` parameters
   - Reduces connection overhead for repeated requests
@@ -299,6 +312,17 @@ chat = Chat(
 - **Updated Examples**: `error_handling_demo.py` updated to use new exception hierarchy
 
 ### Changed
+- **ChatParams**: Extended with tool calling parameters
+  - `tools: list[Tool] | None` - List of tools available to the model
+  - `tool_choice: str | ToolChoice | None` - Controls when tools are used
+  - `parallel_tool_calls: bool | None` - Enable parallel function calling
+- **ChatResult**: Now includes tool_calls field for capturing function calls from models
+  - `has_tool_calls` property for checking if result contains tool calls
+- **ChatStreamChunk**: Now includes tool_calls field for streaming tool call data
+  - `has_tool_calls` property for checking if chunk contains tool call data
+- **normalize_messages()**: Enhanced to support multimodal content validation
+  - Accepts `str` or `list[ContentBlock]` for message content
+  - Validates content block structure for multimodal inputs
 - **Chat**: Now inherits from `BaseAPIClient` for consistent HTTP behavior
   - All HTTP requests now use connection pooling
   - Network errors raise custom exceptions instead of raw requests exceptions
