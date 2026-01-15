@@ -7,7 +7,14 @@ supporting text, images, and tool calls in a unified structure.
 
 from __future__ import annotations
 
-from typing import Literal, NotRequired, TypedDict, Union
+import sys
+from typing import Literal, TypedDict, Union
+
+# Conditionally import NotRequired for Python 3.11+
+if sys.version_info >= (3, 11):
+    from typing import NotRequired
+else:
+    from typing_extensions import NotRequired
 
 
 class TextContentBlock(TypedDict):
