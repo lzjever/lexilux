@@ -29,17 +29,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `InvalidRequestError` - Alias for ValidationError
   - `ConfigurationError` - Client configuration issues (not retryable)
   - `NetworkError` - Base class for network issues
+- **Logging Support**: Request logging for debugging and monitoring
+  - Logs request start, completion, timing, and errors
+  - Uses appropriate log levels (DEBUG, INFO, WARNING, ERROR)
+  - Enable with: `import logging; logging.basicConfig(level=logging.INFO)`
 - **BaseAPIClient**: New base class providing common HTTP functionality to all clients
   - Session management with connection pooling
   - Retry logic with exponential backoff
   - Configurable timeouts (connect/read)
   - Authentication handling
   - Error response parsing and exception mapping
+  - Request logging and timing
+- **Documentation**:
+  - `CONTRIBUTING.md` - Comprehensive contribution guidelines with code style, testing, and PR templates
+  - `docs/source/troubleshooting.rst` - Troubleshooting guide for common issues
+  - `TESTING.md` - Testing documentation with coverage goals and guidelines
 - **Security Scanning**: CI workflow with pip-audit and bandit for vulnerability detection
 - **Multi-Version Testing**: CI now tests across Python 3.8-3.14 in separate jobs
 - **Pre-commit Hooks**: Code quality checks before commits (ruff lint and format)
 - **Coverage Threshold**: Minimum 60% code coverage enforced in CI
-- **TESTING.md**: Testing documentation with coverage goals and guidelines
+- **Updated Examples**: `error_handling_demo.py` updated to use new exception hierarchy
 
 ### Changed
 - **Chat**: Now inherits from `BaseAPIClient` for consistent HTTP behavior
