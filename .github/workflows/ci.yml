@@ -8,26 +8,31 @@ on:
 
 jobs:
   test:
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Set up Python 3.14
+
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
-      
+          python-version: ${{ matrix.python-version }}
+
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
           version: "latest"
-      
+
       - name: Install dependencies
         run: |
           uv sync --group docs --all-extras
-      
+
       - name: Run tests
         run: |
           uv run pytest tests/ \
@@ -36,29 +41,52 @@ jobs:
             --cov-report=term-missing \
             --cov-report=html \
             -v
-      
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.14'
         with:
           file: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
-      
+
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && matrix.python-version == '3.14'
         with:
           name: coverage-report
           path: htmlcov/
           retention-days: 7
           if-no-files-found: ignore
-      
+
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv sync --group docs --all-extras
+
       - name: Run linting
         run: |
           uv run ruff check lexilux/ tests/ examples/
-      
+
       - name: Check formatting
         run: |
           uv run ruff format --check lexilux/ tests/ examples/

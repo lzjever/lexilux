@@ -1,0 +1,61 @@
+name: Security
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run security scan daily at 00:00 UTC
+    - cron: '0 0 * * *'
+
+jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras
+
+      - name: Install pip-audit
+        run: |
+          uv pip install pip-audit
+
+      - name: Run pip-audit
+        run: |
+          uv run pip-audit --desc --no-deps
+        continue-on-error: true
+
+      - name: Install bandit
+        run: |
+          uv pip install bandit[toml]
+
+      - name: Run bandit security linter
+        run: |
+          uv run bandit -r lexilux/ -f json -o bandit-report.json
+        continue-on-error: true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+          retention-days: 30
+          if-no-files-found: ignore
