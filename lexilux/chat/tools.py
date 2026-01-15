@@ -20,11 +20,11 @@ class FunctionTool:
     Represents a function that the model can call during chat completion.
 
     Attributes:
-        type: Tool type, always "function".
         name: Function name (must be unique and match a callable function).
         description: Description of when and how to use the function.
         parameters: JSON Schema defining the function's input arguments.
         strict: Whether to enforce strict schema adherence (default: False).
+        type: Tool type, always "function".
 
     Examples:
         >>> tool = FunctionTool(
@@ -42,11 +42,11 @@ class FunctionTool:
         ...     }
         ... )
     """
-    type: Literal["function"] = "function"
     name: str
     description: str
     parameters: dict[str, Any] = field(default_factory=dict)
     strict: bool = False
+    type: Literal["function"] = "function"
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -111,7 +111,7 @@ class ToolChoice:
         ...     tools=[FunctionTool(name="get_weather", ...)]
         ... )
     """
-    type: Literal["auto", "required", "function", "allowed_tools"] = "auto"
+    type: Literal["auto", "required", "function", "allowed_tools"]
     name: str | None = None
     tools: list[Tool] | None = None
 

@@ -27,6 +27,7 @@ from lexilux.chat.params import ChatParams
 from lexilux.chat.streaming import StreamingIterator, StreamingResult
 from lexilux.chat.tool_helpers import ToolCallHelper, create_conversation_history, execute_tool_calls
 from lexilux.chat.tools import FunctionTool, Tool, ToolChoice
+from lexilux.chat.utils import normalize_messages
 
 __all__ = [
     # Main classes
@@ -57,12 +58,13 @@ __all__ = [
     "ToolCallHelper",
     "execute_tool_calls",
     "create_conversation_history",
-    # Exceptions
-    "ChatStreamInterruptedError",
-    "ChatIncompleteResponseError",
     # Utility functions
+    "normalize_messages",
     "merge_histories",
     "filter_by_role",
     "search_content",
     "get_statistics",
+    # Exceptions
+    "ChatStreamInterruptedError",
+    "ChatIncompleteResponseError",
 ]
