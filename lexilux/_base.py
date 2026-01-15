@@ -7,15 +7,20 @@ Provides common functionality:
 - Configurable timeouts
 - Authentication handling
 - Unified error handling
+- Logging for debugging and monitoring
 """
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+logger = logging.getLogger(__name__)
 
 from lexilux.exceptions import (
     APIError,
@@ -254,6 +259,11 @@ class BaseAPIClient:
             ValidationError: On invalid input.
         """
         url = f"{self.base_url}/{endpoint}"
+        start_time = time.time()
+
+        logger.debug("Making POST request to %s", url)
+        logger.debug("Request timeout: %s", self.timeout)
+
         try:
             response = self.session.post(
                 url,
@@ -263,17 +273,32 @@ class BaseAPIClient:
                 proxies=self.proxies,
             )
         except requests.exceptions.Timeout as e:
+            elapsed = time.time() - start_time
+            logger.error("Request timeout after %.2fs: %s", elapsed, url)
             raise LexiluxTimeoutError(f"Request timeout: {e}") from e
         except requests.exceptions.ConnectionError as e:
+            elapsed = time.time() - start_time
+            logger.error("Connection failed after %.2fs: %s", elapsed, url)
             raise LexiluxConnectionError(f"Connection failed: {e}") from e
         except requests.exceptions.RequestException as e:
+            elapsed = time.time() - start_time
+            logger.error("Request failed after %.2fs: %s - %s", elapsed, url, e)
             # Generic requests error
             raise APIError(f"Request failed: {e}") from e
 
+        elapsed = time.time() - start_time
+
         # Handle HTTP error status codes
         if not response.ok:
+            logger.warning(
+                "Request failed with status %d after %.2fs: %s",
+                response.status_code,
+                elapsed,
+                url,
+            )
             self._handle_response_error(response)
 
+        logger.info("Request completed in %.2fs with status %d: %s", elapsed, response.status_code, url)
         return response
 
     def _make_streaming_request(
@@ -300,6 +325,11 @@ class BaseAPIClient:
             ValidationError: On invalid input.
         """
         url = f"{self.base_url}/{endpoint}"
+        start_time = time.time()
+
+        logger.debug("Making streaming POST request to %s", url)
+        logger.debug("Request timeout: %s", self.timeout)
+
         try:
             response = self.session.post(
                 url,
@@ -310,17 +340,32 @@ class BaseAPIClient:
                 stream=True,
             )
         except requests.exceptions.Timeout as e:
+            elapsed = time.time() - start_time
+            logger.error("Streaming request timeout after %.2fs: %s", elapsed, url)
             raise LexiluxTimeoutError(f"Request timeout: {e}") from e
         except requests.exceptions.ConnectionError as e:
+            elapsed = time.time() - start_time
+            logger.error("Streaming connection failed after %.2fs: %s", elapsed, url)
             raise LexiluxConnectionError(f"Connection failed: {e}") from e
         except requests.exceptions.RequestException as e:
+            elapsed = time.time() - start_time
+            logger.error("Streaming request failed after %.2fs: %s - %s", elapsed, url, e)
             # Generic requests error
             raise APIError(f"Request failed: {e}") from e
 
+        elapsed = time.time() - start_time
+
         # Handle HTTP error status codes
         if not response.ok:
+            logger.warning(
+                "Streaming request failed with status %d after %.2fs: %s",
+                response.status_code,
+                elapsed,
+                url,
+            )
             self._handle_response_error(response)
 
+        logger.info("Streaming request initiated in %.2fs with status %d: %s", elapsed, response.status_code, url)
         return response
 
     def close(self):
