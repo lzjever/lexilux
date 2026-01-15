@@ -8,8 +8,15 @@ of specific functions.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Dict, List, Literal, Union
+
+# Use typing_extensions for newer syntax on older Python versions
+if sys.version_info >= (3, 10):
+    from typing import Optional
+else:
+    from typing_extensions import Optional
 
 
 @dataclass
@@ -38,11 +45,11 @@ class FunctionTool:
 
     name: str
     description: str
-    parameters: dict[str, Any] = field(default_factory=dict)
+    parameters: Dict[str, Any] = field(default_factory=dict)
     strict: bool = False
     type: Literal["function"] = "function"
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """
         Convert to API request format.
 
@@ -54,7 +61,7 @@ class FunctionTool:
             >>> tool.to_dict()
             {'type': 'function', 'function': {'name': 'get_weather', 'description': '...', 'parameters': {}, 'strict': False}}
         """
-        function_dict: dict[str, Any] = {
+        function_dict: Dict[str, Any] = {
             "name": self.name,
             "description": self.description,
         }
@@ -139,4 +146,4 @@ class ToolChoice:
 
 
 # Type alias for tool choice parameter
-ToolChoiceParam = str | ToolChoice | None
+ToolChoiceParam = Union[str, ToolChoice, None]
