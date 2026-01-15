@@ -22,11 +22,38 @@ from lexilux.chat import (
 )
 from lexilux.embed import Embed, EmbedResult
 from lexilux.embed_params import EmbedParams
+from lexilux.exceptions import (
+    APIError,
+    AuthenticationError,
+    ConfigurationError,
+    ConnectionError,
+    InvalidRequestError,
+    LexiluxError,
+    NetworkError,
+    NotFoundError,
+    RateLimitError,
+    ServerError,
+    TimeoutError,
+    ValidationError,
+)
 from lexilux.rerank import Rerank, RerankResult
 from lexilux.tokenizer import Tokenizer, TokenizeResult
 from lexilux.usage import ResultBase, Usage
 
 __all__ = [
+    # Exceptions
+    "LexiluxError",
+    "APIError",
+    "AuthenticationError",
+    "RateLimitError",
+    "InvalidRequestError",
+    "NotFoundError",
+    "ServerError",
+    "NetworkError",
+    "TimeoutError",
+    "ConnectionError",
+    "ValidationError",
+    "ConfigurationError",
     # Usage
     "Usage",
     "ResultBase",

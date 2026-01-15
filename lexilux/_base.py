@@ -6,6 +6,7 @@ Provides common functionality:
 - Retry logic for failed requests
 - Configurable timeouts
 - Authentication handling
+- Unified error handling
 """
 
 from __future__ import annotations
@@ -14,6 +15,17 @@ import requests
 from requests.adapters import HTTPAdapter
 from typing import TYPE_CHECKING, Any
 from urllib3.util.retry import Retry
+
+from lexilux.exceptions import (
+    APIError,
+    AuthenticationError,
+    ConnectionError as LexiluxConnectionError,
+    NotFoundError,
+    RateLimitError,
+    ServerError,
+    TimeoutError as LexiluxTimeoutError,
+    ValidationError,
+)
 
 if TYPE_CHECKING:
     pass
@@ -159,6 +171,60 @@ class BaseAPIClient:
 
         return headers
 
+    def _handle_response_error(self, response: requests.Response) -> None:
+        """
+        Handle HTTP error responses and raise appropriate Lexilux exceptions.
+
+        Args:
+            response: The error response from the API.
+
+        Raises:
+            AuthenticationError: For 401 status codes.
+            RateLimitError: For 429 status codes.
+            NotFoundError: For 404 status codes.
+            InvalidRequestError: For 400 status codes.
+            ServerError: For 5xx status codes.
+            APIError: For other error status codes.
+        """
+        status_code = response.status_code
+
+        # Try to extract error message from response body
+        error_message = f"HTTP {status_code}"
+        try:
+            error_data = response.json()
+            if isinstance(error_data, dict):
+                # OpenAI-style error
+                if "error" in error_data:
+                    error_info = error_data["error"]
+                    if isinstance(error_info, dict):
+                        error_message = error_info.get("message", error_message)
+                    else:
+                        error_message = str(error_info)
+                else:
+                    error_message = error_data.get("message", error_message)
+        except (ValueError, KeyError):
+            # Not JSON or no error field, use default message
+            pass
+
+        # Map status codes to specific exceptions
+        if status_code == 401:
+            raise AuthenticationError(error_message)
+        elif status_code == 429:
+            raise RateLimitError(error_message)
+        elif status_code == 404:
+            raise NotFoundError(error_message)
+        elif status_code == 400:
+            raise ValidationError(error_message)
+        elif 500 <= status_code < 600:
+            raise ServerError(error_message)
+        else:
+            raise APIError(
+                message=error_message,
+                status_code=status_code,
+                code="http_error",
+                retryable=False,
+            )
+
     def _make_request(
         self,
         endpoint: str,
@@ -175,17 +241,34 @@ class BaseAPIClient:
             requests.Response object.
 
         Raises:
-            requests.RequestException: On network or HTTP errors.
+            LexiluxTimeoutError: On timeout.
+            LexiluxConnectionError: On connection failure.
+            AuthenticationError: On authentication failure.
+            RateLimitError: On rate limit exceeded.
+            APIError: On other API errors.
+            ValidationError: On invalid input.
         """
         url = f"{self.base_url}/{endpoint}"
-        response = self.session.post(
-            url,
-            json=payload,
-            timeout=self.timeout,
-            headers=self.headers,
-            proxies=self.proxies,
-        )
-        response.raise_for_status()
+        try:
+            response = self.session.post(
+                url,
+                json=payload,
+                timeout=self.timeout,
+                headers=self.headers,
+                proxies=self.proxies,
+            )
+        except requests.exceptions.Timeout as e:
+            raise LexiluxTimeoutError(f"Request timeout: {e}") from e
+        except requests.exceptions.ConnectionError as e:
+            raise LexiluxConnectionError(f"Connection failed: {e}") from e
+        except requests.exceptions.RequestException as e:
+            # Generic requests error
+            raise APIError(f"Request failed: {e}") from e
+
+        # Handle HTTP error status codes
+        if not response.ok:
+            self._handle_response_error(response)
+
         return response
 
     def _make_streaming_request(
@@ -204,18 +287,35 @@ class BaseAPIClient:
             requests.Response object with stream=True.
 
         Raises:
-            requests.RequestException: On network or HTTP errors.
+            LexiluxTimeoutError: On timeout.
+            LexiluxConnectionError: On connection failure.
+            AuthenticationError: On authentication failure.
+            RateLimitError: On rate limit exceeded.
+            APIError: On other API errors.
+            ValidationError: On invalid input.
         """
         url = f"{self.base_url}/{endpoint}"
-        response = self.session.post(
-            url,
-            json=payload,
-            timeout=self.timeout,
-            headers=self.headers,
-            proxies=self.proxies,
-            stream=True,
-        )
-        response.raise_for_status()
+        try:
+            response = self.session.post(
+                url,
+                json=payload,
+                timeout=self.timeout,
+                headers=self.headers,
+                proxies=self.proxies,
+                stream=True,
+            )
+        except requests.exceptions.Timeout as e:
+            raise LexiluxTimeoutError(f"Request timeout: {e}") from e
+        except requests.exceptions.ConnectionError as e:
+            raise LexiluxConnectionError(f"Connection failed: {e}") from e
+        except requests.exceptions.RequestException as e:
+            # Generic requests error
+            raise APIError(f"Request failed: {e}") from e
+
+        # Handle HTTP error status codes
+        if not response.ok:
+            self._handle_response_error(response)
+
         return response
 
     def close(self):
