@@ -14,18 +14,15 @@ print("=" * 60)
 
 try:
     from lexilux import (
-        LexiluxError,
-        APIError,
         AuthenticationError,
-        RateLimitError,
-        TimeoutError,
         ConnectionError,
-        ValidationError,
-        NotFoundError,
-        ServerError,
-        InvalidRequestError,
-        ConfigurationError,
+        LexiluxError,
         NetworkError,
+        NotFoundError,
+        RateLimitError,
+        ServerError,
+        TimeoutError,
+        ValidationError,
     )
 
     # Verify inheritance
@@ -53,9 +50,11 @@ try:
     assert timeout_err.retryable is True
 
     print("✅ Exception hierarchy works correctly")
-    print(f"   - All exceptions inherit from LexiluxError")
+    print("   - All exceptions inherit from LexiluxError")
     print(f"   - Error codes: {', '.join([e.code for e in [auth_err, rate_err, timeout_err]])}")
-    print(f"   - Retryable flags: Auth={auth_err.retryable}, RateLimit={rate_err.retryable}, Timeout={timeout_err.retryable}")
+    print(
+        f"   - Retryable flags: Auth={auth_err.retryable}, RateLimit={rate_err.retryable}, Timeout={timeout_err.retryable}"
+    )
 except Exception as e:
     print(f"❌ Exception hierarchy test failed: {e}")
     sys.exit(1)
@@ -92,9 +91,9 @@ try:
     assert chat.timeout_s == 30
 
     print("✅ BaseAPIClient and connection pooling work correctly")
-    print(f"   - Chat inherits from BaseAPIClient")
-    print(f"   - Connection pool configured: pool_maxsize=20")
-    print(f"   - Timeout configured: (connect=5s, read=30s)")
+    print("   - Chat inherits from BaseAPIClient")
+    print("   - Connection pool configured: pool_maxsize=20")
+    print("   - Timeout configured: (connect=5s, read=30s)")
     print(f"   - Backward compatibility: timeout_s={chat.timeout_s}")
 except Exception as e:
     print(f"❌ BaseAPIClient test failed: {e}")
@@ -121,9 +120,9 @@ try:
     assert len(history2.messages) == 1
 
     print("✅ ChatHistory deep copy protection works")
-    print(f"   - External dict modifications don't affect history")
-    print(f"   - External list additions don't affect history")
-    print(f"   - Deep copy on initialization prevents state pollution")
+    print("   - External dict modifications don't affect history")
+    print("   - External list additions don't affect history")
+    print("   - Deep copy on initialization prevents state pollution")
 except Exception as e:
     print(f"❌ ChatHistory deep copy test failed: {e}")
     sys.exit(1)
@@ -134,7 +133,7 @@ print("Test 4: Verifying Backward Compatibility")
 print("=" * 60)
 
 try:
-    from lexilux import Chat, ChatResult, ChatStreamChunk
+    from lexilux import Chat
 
     # Old-style initialization still works
     chat = Chat(
@@ -161,9 +160,9 @@ try:
     assert chat2.timeout == (5, 30)
 
     print("✅ Backward compatibility maintained")
-    print(f"   - Old API (timeout_s=60.0) still works")
-    print(f"   - New API (connect_timeout_s, read_timeout_s) works")
-    print(f"   - timeout_s property provides backward compat")
+    print("   - Old API (timeout_s=60.0) still works")
+    print("   - New API (connect_timeout_s, read_timeout_s) works")
+    print("   - timeout_s property provides backward compat")
 except Exception as e:
     print(f"❌ Backward compatibility test failed: {e}")
     sys.exit(1)
@@ -177,8 +176,8 @@ try:
     from lexilux import Chat
     from lexilux.exceptions import (
         ConnectionError,
-        TimeoutError,
         LexiluxError,
+        TimeoutError,
     )
 
     # Create chat with very short timeout to test timeout exception
@@ -193,9 +192,9 @@ try:
     assert chat.timeout == 0.0001
 
     print("✅ Error handling infrastructure in place")
-    print(f"   - Custom exceptions can be imported from lexilux")
-    print(f"   - Timeout configuration works")
-    print(f"   - All exceptions have code and retryable properties")
+    print("   - Custom exceptions can be imported from lexilux")
+    print("   - Timeout configuration works")
+    print("   - All exceptions have code and retryable properties")
 except Exception as e:
     print(f"❌ Error handling test failed: {e}")
     sys.exit(1)

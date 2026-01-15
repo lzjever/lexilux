@@ -12,6 +12,8 @@ from lexilux import (
     LexiluxError,
     RateLimitError,
     TimeoutError,
+)
+from lexilux import (
     ConnectionError as LexiluxConnectionError,
 )
 
@@ -162,14 +164,15 @@ def demo_error_code_inspection():
     print("Demo: Error Code and Retryable Flag Inspection")
     print("=" * 70)
 
-    chat = Chat(
+    # Example client configuration (not used in this demo)
+    _ = Chat(
         base_url="https://api.example.com/v1",
         api_key="your-api-key",
         model="gpt-4",
     )
 
-    # Test with retry enabled
-    chat_with_retry = Chat(
+    # Example: Create chat with retry enabled
+    _ = Chat(
         base_url="https://api.example.com/v1",
         api_key="your-api-key",
         max_retries=3,  # Automatically retry retryable errors
@@ -210,7 +213,7 @@ def demo_retry_logic_with_retryable_flag():
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            result = chat("Hello, world!")
+            _ = chat("Hello, world!")
             print(f"✓ Success on attempt {attempt + 1}")
             break
         except LexiluxError as e:
@@ -218,12 +221,12 @@ def demo_retry_logic_with_retryable_flag():
 
             if e.retryable and attempt < max_retries - 1:
                 # Retry retryable errors
-                wait_time = 2 ** attempt  # Exponential backoff
+                wait_time = 2**attempt  # Exponential backoff
                 print(f"  → Retrying in {wait_time}s...")
                 time.sleep(wait_time)
             else:
                 # Don't retry non-retryable errors or on last attempt
-                print(f"  → Not retryable or max retries reached")
+                print("  → Not retryable or max retries reached")
                 raise
 
 

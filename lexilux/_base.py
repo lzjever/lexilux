@@ -20,8 +20,6 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-logger = logging.getLogger(__name__)
-
 from lexilux.exceptions import (
     APIError,
     AuthenticationError,
@@ -39,6 +37,8 @@ from lexilux.exceptions import (
 
 if TYPE_CHECKING:
     pass
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAPIClient:
@@ -298,7 +298,9 @@ class BaseAPIClient:
             )
             self._handle_response_error(response)
 
-        logger.info("Request completed in %.2fs with status %d: %s", elapsed, response.status_code, url)
+        logger.info(
+            "Request completed in %.2fs with status %d: %s", elapsed, response.status_code, url
+        )
         return response
 
     def _make_streaming_request(
@@ -365,7 +367,12 @@ class BaseAPIClient:
             )
             self._handle_response_error(response)
 
-        logger.info("Streaming request initiated in %.2fs with status %d: %s", elapsed, response.status_code, url)
+        logger.info(
+            "Streaming request initiated in %.2fs with status %d: %s",
+            elapsed,
+            response.status_code,
+            url,
+        )
         return response
 
     def close(self):
