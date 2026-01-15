@@ -6,13 +6,13 @@ Defines ChatResult, ChatStreamChunk, and type aliases for chat completions.
 
 from __future__ import annotations
 
-from typing import Literal, Sequence, Union
+from typing import Dict, Literal, Sequence, Union
 
 from lexilux.usage import Json, ResultBase, Usage
 
 # Type aliases
 Role = Literal["system", "user", "assistant", "tool"]
-MessageLike = Union[str, dict[str, str]]
+MessageLike = Union[str, Dict[str, str]]
 MessagesLike = Union[str, Sequence[MessageLike]]
 
 
