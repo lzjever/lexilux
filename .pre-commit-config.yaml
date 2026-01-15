@@ -1,0 +1,51 @@
+# Pre-commit hooks for Lexilux
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check
+        language: system
+        types: [python]
+        files: ^(lexilux|tests|examples)/.*\.py$
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --check
+        language: system
+        types: [python]
+        files: ^(lexilux|tests|examples)/.*\.py$
+
+      - id: trailing-whitespace
+        name: trim trailing whitespace
+        entry: trailing-whitespace-fixer
+        language: system
+        types: [text]
+
+      - id: end-of-file-fixer
+        name: fix end of files
+        entry: end-of-file-fixer
+        language: system
+        types: [text]
+
+      - id: check-yaml
+        name: check YAML syntax
+        entry: uv run python -m yamlfmt
+        language: system
+        files: \.(yaml|yml)$
+        args: [--check]
+
+# Default pre-commit hooks (optional, can be enabled as needed)
+#  - repo: https://github.com/pre-commit/pre-commit-hooks
+#    rev: v4.5.0
+#    hooks:
+#      - id: trailing-whitespace
+#      - id: end-of-file-fixer
+#      - id: check-yaml
+#      - id: check-added-large-files
+#      - id: check-merge-conflict
+#      - id: check-toml
+#      - id: debug-statements

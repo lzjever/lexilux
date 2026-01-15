@@ -1,4 +1,4 @@
-.PHONY: help clean install dev-install test test-cov test-integration lint format format-check check build sdist wheel docs html clean-docs upload upload-test check-package setup-venv
+.PHONY: help clean install dev-install test test-cov test-integration lint format format-check check build sdist wheel docs html clean-docs upload upload-test check-package setup-venv pre-commit-install pre-commit-run pre-commit-update
 
 # Use uv if available, otherwise fall back to pip
 UV := $(shell command -v uv 2>/dev/null)
@@ -20,6 +20,11 @@ help:
 	@echo "  setup-venv    - Create virtual environment and install dependencies only (no package install)"
 	@echo "                  Use for: CI/CD, code review, or when you don't need to import the package"
 	@echo "  install       - Install the package (after setup-venv or standalone)"
+	@echo ""
+	@echo "Pre-commit:"
+	@echo "  pre-commit-install - Install pre-commit hooks"
+	@echo "  pre-commit-run     - Run all pre-commit hooks manually"
+	@echo "  pre-commit-update  - Update pre-commit hooks to latest versions"
 	@echo ""
 	@echo "Testing:"
 	@echo "  test          - Run all unit tests (excludes integration tests)"
@@ -190,3 +195,31 @@ clean:
 
 clean-docs:
 	cd docs && make clean
+
+pre-commit-install:
+	@echo "Installing pre-commit hooks..."
+	@if [ -n "$(UV)" ]; then \
+		uv sync --group dev; \
+		uv run pre-commit install; \
+	else \
+		$(PIP_CMD) install pre-commit; \
+		pre-commit install; \
+	fi
+	@echo "✅ Pre-commit hooks installed!"
+
+pre-commit-run:
+	@echo "Running all pre-commit hooks..."
+	@if [ -n "$(UV)" ]; then \
+		uv run pre-commit run --all-files; \
+	else \
+		pre-commit run --all-files; \
+	fi
+
+pre-commit-update:
+	@echo "Updating pre-commit hooks..."
+	@if [ -n "$(UV)" ]; then \
+		uv run pre-commit autoupdate; \
+	else \
+		pre-commit autoupdate; \
+	fi
+	@echo "✅ Pre-commit hooks updated!"
