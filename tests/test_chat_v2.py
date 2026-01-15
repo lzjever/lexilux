@@ -14,7 +14,6 @@ v2.0 API changes:
 from unittest.mock import Mock, patch
 
 import pytest
-import requests
 
 from lexilux import Chat, ChatHistory
 from lexilux.chat.exceptions import ChatIncompleteResponseError

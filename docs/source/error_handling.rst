@@ -142,8 +142,8 @@ Exception Hierarchy:
 
 Common Exceptions:
 
-``AuthenticationError```
-~~~~~~~~~~~~~~~~~~~~~
+``AuthenticationError``
+~~~~~~~~~~~~~~~~~~~~~~~
 
 Authentication/authorization failures (HTTP 401).
 
@@ -160,8 +160,8 @@ Authentication/authorization failures (HTTP 401).
        print(f"Check your API key")
        # Don't retry - won't work without valid key
 
-``RateLimitError```
-~~~~~~~~~~~~~~~~
+``RateLimitError``
+~~~~~~~~~~~~~~~~~~~
 
 Rate limit exceeded (HTTP 429).
 
@@ -178,8 +178,8 @@ Rate limit exceeded (HTTP 429).
        print(f"Wait and retry, or upgrade your plan")
        # Can retry after waiting
 
-``TimeoutError```
-~~~~~~~~~~~~~~
+``TimeoutError``
+~~~~~~~~~~~~~~~~~
 
 Request timed out.
 
@@ -200,8 +200,8 @@ Request timed out.
        print(f"Request timeout: {e.message}")
        # Can retry with longer timeout
 
-``ConnectionError```
-~~~~~~~~~~~~~~~~~
+``ConnectionError``
+~~~~~~~~~~~~~~~~~~~~
 
 Failed to establish connection.
 
@@ -221,8 +221,8 @@ Failed to establish connection.
        print(f"Connection failed: {e.message}")
        print(f"Check your network connection")
 
-``ServerError```
-~~~~~~~~~~~~~
+``ServerError``
+~~~~~~~~~~~~~~~
 
 Internal server errors (HTTP 5xx).
 
@@ -242,8 +242,8 @@ Internal server errors (HTTP 5xx).
        print(f"Server error: {e.message}")
        # Server might be temporarily unavailable
 
-``ValidationError```
-~~~~~~~~~~~~~~~~~
+``ValidationError``
+~~~~~~~~~~~~~~~~~~~
 
 Invalid input (HTTP 400).
 
@@ -259,8 +259,8 @@ Invalid input (HTTP 400).
        print(f"Invalid input: {e.message}")
        # Fix the input and retry
 
-``NotFoundError```
-~~~~~~~~~~~~~~~
+``NotFoundError``
+~~~~~~~~~~~~~~~~~
 
 Resource not found (HTTP 404).
 
@@ -277,7 +277,7 @@ Resource not found (HTTP 404).
        # Check the model name and endpoint
 
 Automatic Retry Logic
---------------------
+---------------------
 
 .. versionadded:: 2.2.0
 
