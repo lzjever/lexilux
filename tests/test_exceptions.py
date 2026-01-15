@@ -1,9 +1,7 @@
 """Test unified exception handling."""
 
-import pytest
-import requests
-
 from lexilux import Chat, LexiluxError
+from lexilux._base import BaseAPIClient
 from lexilux.exceptions import (
     APIError,
     AuthenticationError,
@@ -15,7 +13,6 @@ from lexilux.exceptions import (
     TimeoutError,
     ValidationError,
 )
-from lexilux._base import BaseAPIClient
 
 
 class TestExceptions:

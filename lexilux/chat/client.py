@@ -11,8 +11,6 @@ import json
 from collections.abc import Callable
 from typing import Any, Iterator, Sequence
 
-import requests
-
 from lexilux._base import BaseAPIClient
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike

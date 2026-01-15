@@ -11,20 +11,25 @@ Provides common functionality:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import requests
 from requests.adapters import HTTPAdapter
-from typing import TYPE_CHECKING, Any
 from urllib3.util.retry import Retry
 
 from lexilux.exceptions import (
     APIError,
     AuthenticationError,
-    ConnectionError as LexiluxConnectionError,
     NotFoundError,
     RateLimitError,
     ServerError,
-    TimeoutError as LexiluxTimeoutError,
     ValidationError,
+)
+from lexilux.exceptions import (
+    ConnectionError as LexiluxConnectionError,
+)
+from lexilux.exceptions import (
+    TimeoutError as LexiluxTimeoutError,
 )
 
 if TYPE_CHECKING:

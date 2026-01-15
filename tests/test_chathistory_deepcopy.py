@@ -1,7 +1,5 @@
 """Test ChatHistory deep copy protection."""
 
-import pytest
-
 from lexilux.chat.history import ChatHistory
 
 
@@ -17,7 +15,9 @@ def test_chat_history_deep_copy_protection():
     original_msg["content"] = "hacked"
 
     # ChatHistory internal state should not be affected
-    assert history.messages[0]["content"] == "hello", "External modification affected internal state"
+    assert history.messages[0]["content"] == "hello", (
+        "External modification affected internal state"
+    )
     assert len(history.messages) == 1
 
 
