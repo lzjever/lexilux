@@ -1,20 +1,25 @@
 #!/usr/bin/env python
 """
-Error Handling Demo
+Error Handling Demo (Updated for Lexilux v2.1+)
 
-Demonstrates how to distinguish between network errors and normal API completions.
-Shows how to handle exceptions and check finish_reason appropriately.
+Demonstrates how to handle errors using the new Lexilux exception hierarchy.
+Shows how to use custom exceptions with error codes and retryable flags.
 """
 
-import requests
-
-from lexilux import Chat
+from lexilux import (
+    AuthenticationError,
+    Chat,
+    LexiluxError,
+    RateLimitError,
+    TimeoutError,
+    ConnectionError as LexiluxConnectionError,
+)
 
 
 def demo_non_streaming_error_handling():
-    """Demonstrate error handling for non-streaming requests"""
+    """Demonstrate error handling for non-streaming requests with new exceptions"""
     print("=" * 70)
-    print("Demo: Non-Streaming Error Handling")
+    print("Demo: Non-Streaming Error Handling (New Exceptions)")
     print("=" * 70)
 
     chat = Chat(
@@ -40,36 +45,51 @@ def demo_non_streaming_error_handling():
         elif result.finish_reason is None:
             print("  → Unknown reason (API didn't provide finish_reason)")
 
-    except requests.ConnectionError as e:
-        print(f"✗ Connection Error: {e}")
+    except LexiluxConnectionError as e:
+        # Connection failed
+        print(f"✗ Connection Error: {e.message}")
+        print(f"  Error code: {e.code}")
+        print(f"  Retryable: {e.retryable}")
         print("  → Network problem: Could not connect to server")
-        print("  → No finish_reason available (connection failed)")
+        if e.retryable:
+            print("  → Suggestion: Retry the request")
 
-    except requests.Timeout as e:
-        print(f"✗ Timeout Error: {e}")
-        print("  → Network problem: Request timed out")
-        print("  → No finish_reason available (request didn't complete)")
+    except TimeoutError as e:
+        # Request timeout
+        print(f"✗ Timeout Error: {e.message}")
+        print(f"  Error code: {e.code}")
+        print(f"  Retryable: {e.retryable}")
+        print("  → Request took too long to complete")
+        print("  → Suggestion: Increase timeout_s or retry")
 
-    except requests.HTTPError as e:
-        print(f"✗ HTTP Error: {e}")
-        print("  → Server returned error status code")
-        print("  → No finish_reason available (request failed)")
+    except AuthenticationError as e:
+        # Authentication failed (401)
+        print(f"✗ Authentication Error: {e.message}")
+        print(f"  Error code: {e.code}")
+        print(f"  Retryable: {e.retryable}")
+        print("  → API key is invalid or expired")
+        print("  → Suggestion: Check your API key")
 
-    except requests.RequestException as e:
-        print(f"✗ Request Exception: {e}")
-        print("  → Network/HTTP problem occurred")
-        print("  → No finish_reason available (request failed)")
+    except RateLimitError as e:
+        # Rate limit exceeded (429)
+        print(f"✗ Rate Limit Error: {e.message}")
+        print(f"  Error code: {e.code}")
+        print(f"  Retryable: {e.retryable}")
+        print("  → Too many requests")
+        print("  → Suggestion: Wait and retry, or upgrade your plan")
 
-    except Exception as e:
-        print(f"✗ Unexpected Error: {e}")
-        print("  → Unexpected error occurred")
-        print("  → No finish_reason available")
+    except LexiluxError as e:
+        # Catch-all for any other Lexilux errors
+        print(f"✗ API Error: {e.message}")
+        print(f"  Error code: {e.code}")
+        print(f"  Retryable: {e.retryable}")
+        print("  → An API error occurred")
 
 
 def demo_streaming_error_handling():
-    """Demonstrate error handling for streaming requests"""
+    """Demonstrate error handling for streaming requests with new exceptions"""
     print("\n" + "=" * 70)
-    print("Demo: Streaming Error Handling")
+    print("Demo: Streaming Error Handling (New Exceptions)")
     print("=" * 70)
 
     chat = Chat(
@@ -117,47 +137,29 @@ def demo_streaming_error_handling():
             print("⚠ Stream ended without completion signal")
             print("  → This shouldn't happen in normal operation")
 
-    except requests.ConnectionError as e:
-        print(f"\n✗ Connection Error during streaming: {e}")
-        print("  → Network problem: Connection lost during stream")
+    except LexiluxConnectionError as e:
+        print(f"\n✗ Connection Error during streaming: {e.message}")
+        print(f"  Error code: {e.code}")
+        print(f"  Retryable: {e.retryable}")
         if completed:
             print(f"  → Completion occurred before error: finish_reason = {finish_reason}")
         else:
             print("  → No completion received - stream was interrupted")
-            print("  → No finish_reason available")
 
-    except requests.Timeout as e:
-        print(f"\n✗ Timeout Error during streaming: {e}")
-        print("  → Network problem: Stream timed out")
+    except TimeoutError as e:
+        print(f"\n✗ Timeout Error during streaming: {e.message}")
+        print(f"  Error code: {e.code}")
+        print(f"  Retryable: {e.retryable}")
         if completed:
             print(f"  → Completion occurred before timeout: finish_reason = {finish_reason}")
         else:
             print("  → No completion received - stream timed out")
-            print("  → No finish_reason available")
-
-    except requests.RequestException as e:
-        print(f"\n✗ Request Exception during streaming: {e}")
-        print("  → Network/HTTP problem occurred during stream")
-        if completed:
-            print(f"  → Completion occurred before error: finish_reason = {finish_reason}")
-        else:
-            print("  → No completion received - stream was interrupted")
-            print("  → No finish_reason available")
-
-    except Exception as e:
-        print(f"\n✗ Unexpected Error: {e}")
-        print("  → Unexpected error occurred")
-        if completed:
-            print(f"  → Completion occurred before error: finish_reason = {finish_reason}")
-        else:
-            print("  → No completion received")
-            print("  → No finish_reason available")
 
 
-def demo_detecting_completion_vs_interruption():
-    """Demonstrate how to detect if completion occurred or stream was interrupted"""
+def demo_error_code_inspection():
+    """Demonstrate error code and retryable flag inspection"""
     print("\n" + "=" * 70)
-    print("Demo: Detecting Completion vs Interruption")
+    print("Demo: Error Code and Retryable Flag Inspection")
     print("=" * 70)
 
     chat = Chat(
@@ -166,67 +168,89 @@ def demo_detecting_completion_vs_interruption():
         model="gpt-4",
     )
 
-    def check_stream_completion(chunks):
-        """Helper function to check if stream completed successfully"""
-        done_chunks = [c for c in chunks if c.done]
-        if not done_chunks:
-            return False, None
+    # Test with retry enabled
+    chat_with_retry = Chat(
+        base_url="https://api.example.com/v1",
+        api_key="your-api-key",
+        max_retries=3,  # Automatically retry retryable errors
+    )
 
-        # Find chunk with finish_reason
-        final_chunk = next(
-            (c for c in done_chunks if c.finish_reason is not None),
-            done_chunks[-1],
-        )
-        return True, final_chunk.finish_reason
+    print("\nExample Error Codes and Meanings:")
+    print("-" * 50)
+    error_examples = [
+        (AuthenticationError, "authentication_failed", False, "Invalid API key"),
+        (RateLimitError, "rate_limit_exceeded", True, "Too many requests"),
+        (TimeoutError, "timeout", True, "Request timeout"),
+        (LexiluxConnectionError, "connection_failed", True, "Network failure"),
+    ]
 
-    chunks = []
-    try:
-        for chunk in chat.stream("Say hello", max_tokens=10):
-            print(chunk.delta, end="", flush=True)
-            chunks.append(chunk)
+    for exc_class, code, retryable, description in error_examples:
+        exc = exc_class(description)
+        print(f"  {exc.__class__.__name__}:")
+        print(f"    Code: {exc.code}")
+        print(f"    Retryable: {exc.retryable}")
+        print(f"    Description: {description}")
+        print()
 
-        # Check completion status
-        completed, finish_reason = check_stream_completion(chunks)
-        if completed:
-            print("\n✓ Stream completed successfully")
-            print(f"  Finish reason: {finish_reason}")
-        else:
-            print("\n⚠ Stream ended without completion signal")
 
-    except requests.RequestException as e:
-        # Check if we got completion before error
-        completed, finish_reason = check_stream_completion(chunks)
-        if completed:
-            print("\n✓ Completion occurred before network error")
-            print(f"  Finish reason: {finish_reason}")
-            print(f"  Error: {e}")
-        else:
-            print("\n✗ Stream interrupted - no completion received")
-            print(f"  Error: {e}")
-            print("  No finish_reason available")
+def demo_retry_logic_with_retryable_flag():
+    """Demonstrate using retryable flag for custom retry logic"""
+    print("\n" + "=" * 70)
+    print("Demo: Custom Retry Logic Using Retryable Flag")
+    print("=" * 70)
+
+    import time
+
+    chat = Chat(
+        base_url="https://api.example.com/v1",
+        api_key="your-api-key",
+        model="gpt-4",
+    )
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            result = chat("Hello, world!")
+            print(f"✓ Success on attempt {attempt + 1}")
+            break
+        except LexiluxError as e:
+            print(f"  Attempt {attempt + 1} failed: {e.code} - {e.message}")
+
+            if e.retryable and attempt < max_retries - 1:
+                # Retry retryable errors
+                wait_time = 2 ** attempt  # Exponential backoff
+                print(f"  → Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                # Don't retry non-retryable errors or on last attempt
+                print(f"  → Not retryable or max retries reached")
+                raise
 
 
 def main():
     """Main function"""
     print("\n" + "=" * 70)
-    print("Error Handling Demo")
+    print("Error Handling Demo (Lexilux v2.1+)")
     print("=" * 70)
-    print("\nThis demo shows how to distinguish between:")
-    print("  1. Network errors (no finish_reason available)")
-    print("  2. Normal completions (finish_reason indicates why it stopped)")
+    print("\nThis demo shows how to use the new Lexilux exception hierarchy:")
+    print("  1. Specific exception types for different errors")
+    print("  2. Error codes for programmatic handling")
+    print("  3. Retryable flag for automatic retry logic")
     print("\n" + "=" * 70)
 
     demo_non_streaming_error_handling()
     demo_streaming_error_handling()
-    demo_detecting_completion_vs_interruption()
+    demo_error_code_inspection()
+    demo_retry_logic_with_retryable_flag()
 
     print("\n" + "=" * 70)
     print("Key Takeaways:")
     print("=" * 70)
-    print("1. finish_reason is ONLY available when API successfully returns a response")
-    print("2. Network errors raise exceptions - no finish_reason is available")
-    print("3. For streaming, check if done=True chunk was received before error")
-    print("4. Always use try-except blocks to handle network errors gracefully")
+    print("1. Use specific exceptions (AuthenticationError, RateLimitError, etc.)")
+    print("2. Check error.code for programmatic error handling")
+    print("3. Check error.retryable before implementing retry logic")
+    print("4. Enable max_retries for automatic retry on retryable errors")
+    print("5. LexiluxError is the base exception for all Lexilux errors")
     print("=" * 70)
 
 
