@@ -5,8 +5,8 @@ These tests require real API calls and are marked with @pytest.mark.integration.
 They test function calling, tool execution, multimodal vision inputs, and streaming with tools.
 """
 
-import json
-import os
+import base64
+import io
 
 import pytest
 
@@ -18,13 +18,6 @@ from lexilux.chat.tool_helpers import (
     execute_tool_calls,
 )
 
-# Load test endpoints
-test_endpoints_file = os.path.join(os.path.dirname(__file__), "test_endpoints.json")
-with open(test_endpoints_file) as f:
-    TEST_ENDPOINTS = json.load(f)
-
-# Use DeepSeek for testing (has valid API key)
-CHAT_CONFIG = TEST_ENDPOINTS.get("completion", TEST_ENDPOINTS.get("claude"))
 pytestmark = pytest.mark.integration
 
 
@@ -130,12 +123,14 @@ def test_function_calling_basic_tool_definition():
     assert "location" in tool_dict["function"]["parameters"]["properties"]
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_simple_tool_use():
+@pytest.mark.skip_if_no_config
+def test_function_calling_simple_tool_use(test_config, has_real_api_config):
     """Test simple function calling with one tool."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     # Define tool
     weather_tool = FunctionTool(
@@ -175,12 +170,14 @@ def test_function_calling_simple_tool_use():
     assert args["location"] == "Paris"
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_with_execution():
+@pytest.mark.skip_if_no_config
+def test_function_calling_with_execution(test_config, has_real_api_config):
     """Test complete function calling workflow: request -> execute -> final response."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     # Define tools
     tools_dict = {
@@ -233,16 +230,18 @@ def test_function_calling_with_execution():
     assert "Paris" in final_result.text or "weather" in final_result.text.lower()
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_tool_choice_required():
+@pytest.mark.skip_if_no_config
+def test_function_calling_tool_choice_required(test_config, has_real_api_config):
     """Test tool_choice='required' to force tool calling."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     weather_tool = FunctionTool(
         name="get_weather",
-        description="Get current weather",
+        description="Get weather",
         parameters={
             "type": "object",
             "properties": {"location": {"type": "string"}},
@@ -258,12 +257,14 @@ def test_function_calling_tool_choice_required():
     assert result.has_tool_calls, "Model should call tool when tool_choice='required'"
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_tool_choice_specific():
+@pytest.mark.skip_if_no_config
+def test_function_calling_tool_choice_specific(test_config, has_real_api_config):
     """Test tool_choice with specific function name."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     tools = [
         FunctionTool(
@@ -289,12 +290,14 @@ def test_function_calling_tool_choice_specific():
     assert "get_weather" in tool_names
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_parallel():
+@pytest.mark.skip_if_no_config
+def test_function_calling_parallel(test_config, has_real_api_config):
     """Test parallel function calling (multiple tools in one request)."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     tools = [
         FunctionTool(
@@ -326,12 +329,14 @@ def test_function_calling_parallel():
             assert isinstance(args, dict)
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_complex_parameters():
+@pytest.mark.skip_if_no_config
+def test_function_calling_complex_parameters(test_config, has_real_api_config):
     """Test function calling with complex JSON Schema parameters."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     # Tool with complex schema
     search_tool = FunctionTool(
@@ -377,12 +382,14 @@ def test_function_calling_complex_parameters():
 # ============================================================================
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_streaming():
+@pytest.mark.skip_if_no_config
+def test_function_calling_streaming(test_config, has_real_api_config):
     """Test function calling with streaming response."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -415,12 +422,14 @@ def test_function_calling_streaming():
     assert tool_calls_found, "Should have tool calls in stream"
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_streaming_with_execution():
+@pytest.mark.skip_if_no_config
+def test_function_calling_streaming_with_execution(test_config, has_real_api_config):
     """Test complete workflow with streaming: tool call -> execute -> stream final response."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -480,12 +489,14 @@ def test_function_calling_streaming_with_execution():
 # ============================================================================
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_tool_call_helper_continue_conversation():
+@pytest.mark.skip_if_no_config
+def test_tool_call_helper_continue_conversation(test_config, has_real_api_config):
     """Test ToolCallHelper for simplified workflow."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     # Create helper
     helper = ToolCallHelper(
@@ -528,12 +539,14 @@ def test_tool_call_helper_continue_conversation():
 # ============================================================================
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_multimodal_image_url():
+@pytest.mark.skip_if_no_config
+def test_multimodal_image_url(test_config, has_real_api_config):
     """Test multimodal with image URL."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     # Message with text + image URL
     messages = [
@@ -560,19 +573,16 @@ def test_multimodal_image_url():
     print(f"Image description: {result.text[:200]}")
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_multimodal_base64_image():
+@pytest.mark.skip_if_no_config
+def test_multimodal_base64_image(test_config, has_real_api_config):
     """Test multimodal with base64 encoded image."""
-    import base64
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
 
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
-    # Create a simple 1x1 red pixel PNG image for testing
-    # This is a minimal valid PNG
-    import io
-
+    # Create a simple test image
     from PIL import Image
 
     # Create a simple test image
@@ -603,12 +613,14 @@ def test_multimodal_base64_image():
     print(f"Image analysis: {result.text[:200]}")
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_multimodal_multiple_images():
+@pytest.mark.skip_if_no_config
+def test_multimodal_multiple_images(test_config, has_real_api_config):
     """Test multimodal with multiple images."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     # Use two different public images
     messages = [
@@ -640,12 +652,14 @@ def test_multimodal_multiple_images():
     print(f"Comparison: {result.text[:300]}")
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_multimodal_with_image_detail_low():
+@pytest.mark.skip_if_no_config
+def test_multimodal_with_image_detail_low(test_config, has_real_api_config):
     """Test multimodal with low detail setting."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     messages = [
         {
@@ -670,12 +684,14 @@ def test_multimodal_with_image_detail_low():
     print(f"Low detail description: {result.text[:200]}")
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_multimodal_with_image_detail_high():
+@pytest.mark.skip_if_no_config
+def test_multimodal_with_image_detail_high(test_config, has_real_api_config):
     """Test multimodal with high detail setting."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     messages = [
         {
@@ -706,12 +722,14 @@ def test_multimodal_with_image_detail_high():
 # ============================================================================
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_no_tool_needed():
+@pytest.mark.skip_if_no_config
+def test_function_calling_no_tool_needed(test_config, has_real_api_config):
     """Test that model doesn't call tools when not needed."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -730,12 +748,14 @@ def test_function_calling_no_tool_needed():
     # This is acceptable behavior
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_execution_error_handling():
+@pytest.mark.skip_if_no_config
+def test_function_calling_execution_error_handling(test_config, has_real_api_config):
     """Test error handling when tool execution fails."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     # Tool that will fail
     def failing_tool(location: str) -> str:
@@ -759,12 +779,14 @@ def test_function_calling_execution_error_handling():
         assert "Error" in tool_responses[0]["content"]
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_missing_required_parameter():
+@pytest.mark.skip_if_no_config
+def test_function_calling_missing_required_parameter(test_config, has_real_api_config):
     """Test tool call with missing required parameter."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -786,12 +808,14 @@ def test_function_calling_missing_required_parameter():
     # Both are acceptable behaviors
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_with_system_message():
+@pytest.mark.skip_if_no_config
+def test_function_calling_with_system_message(test_config, has_real_api_config):
     """Test function calling with system message."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -816,12 +840,14 @@ def test_function_calling_with_system_message():
 # ============================================================================
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_multi_turn_conversation():
+@pytest.mark.skip_if_no_config
+def test_function_calling_multi_turn_conversation(test_config, has_real_api_config):
     """Test multi-turn conversation with function calling."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     tools = [
         FunctionTool(
@@ -864,12 +890,14 @@ def test_function_calling_multi_turn_conversation():
             assert final_result2.text is not None
 
 
-@pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
-def test_function_calling_with_chained_tools():
+@pytest.mark.skip_if_no_config
+def test_function_calling_with_chained_tools(test_config, has_real_api_config):
     """Test workflow where output of one tool informs another."""
-    chat = Chat(
-        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
-    )
+    if not has_real_api_config or "completion" not in test_config:
+        pytest.skip("No real API config available")
+
+    config = test_config["completion"]
+    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
 
     # Define tools that might be chained
     tools = [
