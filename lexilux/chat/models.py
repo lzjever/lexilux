@@ -26,12 +26,6 @@ class ToolCall:
     When the model decides to call a function, it returns one or more
     ToolCall objects that specify which function to call and with what arguments.
 
-    Attributes:
-        id: Unique identifier for this tool call.
-        call_id: Call reference ID (used when submitting tool outputs).
-        name: Name of the function being called.
-        arguments: JSON string containing function arguments.
-
     Examples:
         >>> tool_call = ToolCall(
         ...     id="call_abc123",

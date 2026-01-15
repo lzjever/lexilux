@@ -75,11 +75,13 @@ def execute_tool_calls(
             output = f"Error executing {tool_call.name}: {e}"
 
         # Create tool response message
-        messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call.call_id,
-            "content": str(output),
-        })
+        messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call.call_id,
+                "content": str(output),
+            }
+        )
 
     return messages
 

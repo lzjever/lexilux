@@ -23,6 +23,7 @@ class TextContentBlock(TypedDict):
     Examples:
         >>> block: TextContentBlock = {"type": "text", "text": "Hello, world!"}
     """
+
     type: Literal["text"]
     text: str
 
@@ -47,6 +48,7 @@ class ImageUrlDetail(TypedDict):
         ...     "detail": "high"
         ... }
     """
+
     url: str
     detail: NotRequired[Literal["auto", "low", "high"]]
 
@@ -74,6 +76,7 @@ class ImageContentBlock(TypedDict):
         ...     }
         ... }
     """
+
     type: Literal["image_url"]
     image_url: ImageUrlDetail
 
@@ -100,6 +103,7 @@ class ToolCallBlock(TypedDict):
         ...     "arguments": '{"location": "Paris", "units": "celsius"}'
         ... }
     """
+
     type: Literal["tool_call"]
     id: str
     call_id: str

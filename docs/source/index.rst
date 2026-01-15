@@ -14,25 +14,33 @@ Lexilux is a unified LLM API client library that makes calling Chat, Embedding, 
    .. grid-item-card::
       :link: introduction
       :link-type: doc
-      
+
       **Getting Started**
-      
+
       Learn the basics and key concepts of Lexilux.
 
    .. grid-item-card::
       :link: quickstart
       :link-type: doc
-      
+
       **Quick Start**
-      
+
       Get up and running with Lexilux in minutes.
+
+   .. grid-item-card::
+      :link: function_calling
+      :link-type: doc
+
+      **Function Calling**
+
+      Learn how to use OpenAI-compatible function calling with tools.
 
    .. grid-item-card::
       :link: api_reference/index
       :link-type: doc
-      
+
       **API Reference**
-      
+
       Complete API documentation for all classes and methods.
 
    .. grid-item-card::
@@ -59,6 +67,7 @@ Lexilux is a unified LLM API client library that makes calling Chat, Embedding, 
    introduction
    installation
    quickstart
+   function_calling
    recommended_workflows
    error_handling
    troubleshooting

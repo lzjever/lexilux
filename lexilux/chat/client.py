@@ -657,7 +657,7 @@ class Chat(BaseAPIClient):
                             # Build tool call from streaming delta
                             # Note: In streaming, tool calls come incrementally
                             # index is used to identify which tool call this chunk belongs to
-                            tool_call_index = tc.get("index", 0)
+                            tc.get("index", 0)
 
                             # For streaming, we accumulate tool call data
                             # The id might be in a separate chunk

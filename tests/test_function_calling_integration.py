@@ -7,13 +7,16 @@ They test function calling, tool execution, multimodal vision inputs, and stream
 
 import json
 import os
-from typing import Any
 
 import pytest
 
 from lexilux import Chat, FunctionTool, ToolChoice
 from lexilux.chat.models import ToolCall
-from lexilux.chat.tool_helpers import ToolCallHelper, create_conversation_history, execute_tool_calls
+from lexilux.chat.tool_helpers import (
+    ToolCallHelper,
+    create_conversation_history,
+    execute_tool_calls,
+)
 
 # Load test endpoints
 test_endpoints_file = os.path.join(os.path.dirname(__file__), "test_endpoints.json")
@@ -29,6 +32,7 @@ pytestmark = pytest.mark.integration
 # Test Functions (Tools) for Function Calling
 # ============================================================================
 
+
 def get_weather(location: str, units: str = "celsius") -> str:
     """Get current weather for a location.
 
@@ -43,6 +47,7 @@ def get_weather(location: str, units: str = "celsius") -> str:
     temp = 22 if units == "celsius" else 72
     return f"Weather in {location}: {temp}°{units[0].upper()}, sunny"
 
+
 def get_time(timezone: str) -> str:
     """Get current time for a timezone.
 
@@ -52,9 +57,10 @@ def get_time(timezone: str) -> str:
     Returns:
         Current time string
     """
-    from datetime import datetime
+
     # Simulate time data
     return f"Current time in {timezone}: 2026-01-15 14:30:00"
+
 
 def calculate(expression: str) -> str:
     """Calculate a mathematical expression.
@@ -70,6 +76,7 @@ def calculate(expression: str) -> str:
         return f"Result: {result}"
     except Exception as e:
         return f"Error: {e}"
+
 
 def search_web(query: str, num_results: int = 5) -> str:
     """Search the web for information.
@@ -93,6 +100,7 @@ def search_web(query: str, num_results: int = 5) -> str:
 # Basic Function Calling Tests
 # ============================================================================
 
+
 def test_function_calling_basic_tool_definition():
     """Test basic FunctionTool definition and to_dict conversion."""
     tool = FunctionTool(
@@ -101,18 +109,15 @@ def test_function_calling_basic_tool_definition():
         parameters={
             "type": "object",
             "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "City name, e.g. Paris"
-                },
+                "location": {"type": "string", "description": "City name, e.g. Paris"},
                 "units": {
                     "type": "string",
                     "enum": ["celsius", "fahrenheit"],
-                    "description": "Temperature units"
-                }
+                    "description": "Temperature units",
+                },
             },
-            "required": ["location"]
-        }
+            "required": ["location"],
+        },
     )
 
     tool_dict = tool.to_dict()
@@ -129,9 +134,7 @@ def test_function_calling_basic_tool_definition():
 def test_function_calling_simple_tool_use():
     """Test simple function calling with one tool."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     # Define tool
@@ -141,18 +144,15 @@ def test_function_calling_simple_tool_use():
         parameters={
             "type": "object",
             "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "City name"
-                },
+                "location": {"type": "string", "description": "City name"},
                 "units": {
                     "type": "string",
                     "enum": ["celsius", "fahrenheit"],
-                    "description": "Temperature units"
-                }
+                    "description": "Temperature units",
+                },
             },
-            "required": ["location"]
-        }
+            "required": ["location"],
+        },
     )
 
     # Make request with tool
@@ -179,9 +179,7 @@ def test_function_calling_simple_tool_use():
 def test_function_calling_with_execution():
     """Test complete function calling workflow: request -> execute -> final response."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     # Define tools
@@ -198,22 +196,20 @@ def test_function_calling_with_execution():
                 "type": "object",
                 "properties": {
                     "location": {"type": "string", "description": "City name"},
-                    "units": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+                    "units": {"type": "string", "enum": ["celsius", "fahrenheit"]},
                 },
-                "required": ["location"]
-            }
+                "required": ["location"],
+            },
         ),
         FunctionTool(
             name="get_time",
             description="Get current time for a timezone",
             parameters={
                 "type": "object",
-                "properties": {
-                    "timezone": {"type": "string", "description": "Timezone name"}
-                },
-                "required": ["timezone"]
-            }
-        )
+                "properties": {"timezone": {"type": "string", "description": "Timezone name"}},
+                "required": ["timezone"],
+            },
+        ),
     ]
 
     # Initial request
@@ -241,9 +237,7 @@ def test_function_calling_with_execution():
 def test_function_calling_tool_choice_required():
     """Test tool_choice='required' to force tool calling."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     weather_tool = FunctionTool(
@@ -251,11 +245,9 @@ def test_function_calling_tool_choice_required():
         description="Get current weather",
         parameters={
             "type": "object",
-            "properties": {
-                "location": {"type": "string"}
-            },
-            "required": ["location"]
-        }
+            "properties": {"location": {"type": "string"}},
+            "required": ["location"],
+        },
     )
 
     # Force tool usage
@@ -270,22 +262,20 @@ def test_function_calling_tool_choice_required():
 def test_function_calling_tool_choice_specific():
     """Test tool_choice with specific function name."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     tools = [
         FunctionTool(
             name="get_weather",
             description="Get weather",
-            parameters={"type": "object", "properties": {"location": {"type": "string"}}}
+            parameters={"type": "object", "properties": {"location": {"type": "string"}}},
         ),
         FunctionTool(
             name="get_time",
             description="Get time",
-            parameters={"type": "object", "properties": {"timezone": {"type": "string"}}}
-        )
+            parameters={"type": "object", "properties": {"timezone": {"type": "string"}}},
+        ),
     ]
 
     # Force specific tool
@@ -303,22 +293,20 @@ def test_function_calling_tool_choice_specific():
 def test_function_calling_parallel():
     """Test parallel function calling (multiple tools in one request)."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     tools = [
         FunctionTool(
             name="get_weather",
             description="Get weather",
-            parameters={"type": "object", "properties": {"location": {"type": "string"}}}
+            parameters={"type": "object", "properties": {"location": {"type": "string"}}},
         ),
         FunctionTool(
             name="get_time",
             description="Get time",
-            parameters={"type": "object", "properties": {"timezone": {"type": "string"}}}
-        )
+            parameters={"type": "object", "properties": {"timezone": {"type": "string"}}},
+        ),
     ]
 
     # Ask for multiple things that might trigger parallel tool calls
@@ -342,9 +330,7 @@ def test_function_calling_parallel():
 def test_function_calling_complex_parameters():
     """Test function calling with complex JSON Schema parameters."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     # Tool with complex schema
@@ -358,25 +344,22 @@ def test_function_calling_complex_parameters():
                     "type": "string",
                     "description": "Search query",
                     "minLength": 1,
-                    "maxLength": 100
+                    "maxLength": 100,
                 },
                 "num_results": {
                     "type": "integer",
                     "description": "Number of results",
                     "minimum": 1,
                     "maximum": 10,
-                    "default": 5
+                    "default": 5,
                 },
                 "filters": {
                     "type": "object",
-                    "properties": {
-                        "date_range": {"type": "string"},
-                        "site": {"type": "string"}
-                    }
-                }
+                    "properties": {"date_range": {"type": "string"}, "site": {"type": "string"}},
+                },
             },
-            "required": ["query"]
-        }
+            "required": ["query"],
+        },
     )
 
     messages = [{"role": "user", "content": "Search for recent Python tutorials"}]
@@ -393,13 +376,12 @@ def test_function_calling_complex_parameters():
 # Streaming with Function Calling Tests
 # ============================================================================
 
+
 @pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
 def test_function_calling_streaming():
     """Test function calling with streaming response."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     weather_tool = FunctionTool(
@@ -408,8 +390,8 @@ def test_function_calling_streaming():
         parameters={
             "type": "object",
             "properties": {"location": {"type": "string"}},
-            "required": ["location"]
-        }
+            "required": ["location"],
+        },
     )
 
     messages = [{"role": "user", "content": "What's the weather in Tokyo?"}]
@@ -437,9 +419,7 @@ def test_function_calling_streaming():
 def test_function_calling_streaming_with_execution():
     """Test complete workflow with streaming: tool call -> execute -> stream final response."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     weather_tool = FunctionTool(
@@ -448,8 +428,8 @@ def test_function_calling_streaming_with_execution():
         parameters={
             "type": "object",
             "properties": {"location": {"type": "string"}},
-            "required": ["location"]
-        }
+            "required": ["location"],
+        },
     )
 
     # Initial streaming request
@@ -468,7 +448,7 @@ def test_function_calling_streaming_with_execution():
     assert len(tool_calls) > 0, "Should have tool calls from stream"
 
     # Execute tool
-    tool_result = ToolCall(functions={"get_weather": get_weather})
+    ToolCall(functions={"get_weather": get_weather})
     # Create a mock ChatResult from streaming chunks
     from lexilux.chat.models import ChatResult
     from lexilux.usage import Usage
@@ -477,9 +457,7 @@ def test_function_calling_streaming_with_execution():
     text = "".join(c.delta for c in all_chunks if c.has_content)
 
     mock_result = ChatResult(
-        text=text,
-        usage=Usage(input_tokens=10, output_tokens=20),
-        tool_calls=tool_calls
+        text=text, usage=Usage(input_tokens=10, output_tokens=20), tool_calls=tool_calls
     )
 
     # Execute tool
@@ -501,33 +479,34 @@ def test_function_calling_streaming_with_execution():
 # ToolCallHelper Tests
 # ============================================================================
 
+
 @pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
 def test_tool_call_helper_continue_conversation():
     """Test ToolCallHelper for simplified workflow."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     # Create helper
-    helper = ToolCallHelper(functions={
-        "get_weather": get_weather,
-        "calculate": calculate,
-    })
+    helper = ToolCallHelper(
+        functions={
+            "get_weather": get_weather,
+            "calculate": calculate,
+        }
+    )
 
     # Define tools
     tools = [
         FunctionTool(
             name="get_weather",
             description="Get weather",
-            parameters={"type": "object", "properties": {"location": {"type": "string"}}}
+            parameters={"type": "object", "properties": {"location": {"type": "string"}}},
         ),
         FunctionTool(
             name="calculate",
             description="Calculate math expression",
-            parameters={"type": "object", "properties": {"expression": {"type": "string"}}}
-        )
+            parameters={"type": "object", "properties": {"expression": {"type": "string"}}},
+        ),
     ]
 
     # Make request
@@ -537,10 +516,7 @@ def test_tool_call_helper_continue_conversation():
     # Use helper to continue
     if result.has_tool_calls:
         final_result = helper.continue_conversation(
-            chat=chat,
-            messages=messages,
-            tool_result=result,
-            tools=tools
+            chat=chat, messages=messages, tool_result=result, tools=tools
         )
 
         assert final_result.text is not None
@@ -551,28 +527,29 @@ def test_tool_call_helper_continue_conversation():
 # Multimodal/Vision Tests
 # ============================================================================
 
+
 @pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
 def test_multimodal_image_url():
     """Test multimodal with image URL."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     # Message with text + image URL
-    messages = [{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "What's in this image?"},
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
-                }
-            }
-        ]
-    }]
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "What's in this image?"},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+                    },
+                },
+            ],
+        }
+    ]
 
     result = chat(messages)
 
@@ -589,37 +566,33 @@ def test_multimodal_base64_image():
     import base64
 
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     # Create a simple 1x1 red pixel PNG image for testing
     # This is a minimal valid PNG
     import io
+
     from PIL import Image
 
     # Create a simple test image
-    img = Image.new('RGB', (100, 100), color='red')
+    img = Image.new("RGB", (100, 100), color="red")
 
     # Convert to base64
     buffer = io.BytesIO()
-    img.save(buffer, format='PNG')
-    image_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    img.save(buffer, format="PNG")
+    image_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
     # Message with base64 image
-    messages = [{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "What color is this image?"},
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/png;base64,{image_data}"
-                }
-            }
-        ]
-    }]
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "What color is this image?"},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}},
+            ],
+        }
+    ]
 
     result = chat(messages)
 
@@ -634,30 +607,30 @@ def test_multimodal_base64_image():
 def test_multimodal_multiple_images():
     """Test multimodal with multiple images."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     # Use two different public images
-    messages = [{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "Compare these two images. What's different?"},
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Lion_crossing_Savuti.jpg/2560px-Lion_crossing_Savuti.jpg"
-                }
-            },
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
-                }
-            }
-        ]
-    }]
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Compare these two images. What's different?"},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Lion_crossing_Savuti.jpg/2560px-Lion_crossing_Savuti.jpg"
+                    },
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+                    },
+                },
+            ],
+        }
+    ]
 
     result = chat(messages)
 
@@ -671,24 +644,24 @@ def test_multimodal_multiple_images():
 def test_multimodal_with_image_detail_low():
     """Test multimodal with low detail setting."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
-    messages = [{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "Briefly describe this image"},
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
-                    "detail": "low"
-                }
-            }
-        ]
-    }]
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Briefly describe this image"},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+                        "detail": "low",
+                    },
+                },
+            ],
+        }
+    ]
 
     result = chat(messages)
 
@@ -701,24 +674,24 @@ def test_multimodal_with_image_detail_low():
 def test_multimodal_with_image_detail_high():
     """Test multimodal with high detail setting."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
-    messages = [{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "Describe this image in detail"},
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
-                    "detail": "high"
-                }
-            }
-        ]
-    }]
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Describe this image in detail"},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+                        "detail": "high",
+                    },
+                },
+            ],
+        }
+    ]
 
     result = chat(messages)
 
@@ -732,19 +705,18 @@ def test_multimodal_with_image_detail_high():
 # Edge Cases and Error Handling
 # ============================================================================
 
+
 @pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
 def test_function_calling_no_tool_needed():
     """Test that model doesn't call tools when not needed."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     weather_tool = FunctionTool(
         name="get_weather",
         description="Get weather",
-        parameters={"type": "object", "properties": {"location": {"type": "string"}}}
+        parameters={"type": "object", "properties": {"location": {"type": "string"}}},
     )
 
     # Simple greeting that doesn't need tools
@@ -762,9 +734,7 @@ def test_function_calling_no_tool_needed():
 def test_function_calling_execution_error_handling():
     """Test error handling when tool execution fails."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     # Tool that will fail
@@ -774,7 +744,7 @@ def test_function_calling_execution_error_handling():
     weather_tool = FunctionTool(
         name="get_weather",
         description="Get weather",
-        parameters={"type": "object", "properties": {"location": {"type": "string"}}}
+        parameters={"type": "object", "properties": {"location": {"type": "string"}}},
     )
 
     messages = [{"role": "user", "content": "What's the weather in Paris?"}]
@@ -793,9 +763,7 @@ def test_function_calling_execution_error_handling():
 def test_function_calling_missing_required_parameter():
     """Test tool call with missing required parameter."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     weather_tool = FunctionTool(
@@ -803,17 +771,14 @@ def test_function_calling_missing_required_parameter():
         description="Get weather",
         parameters={
             "type": "object",
-            "properties": {
-                "location": {"type": "string"},
-                "units": {"type": "string"}
-            },
-            "required": ["location"]
-        }
+            "properties": {"location": {"type": "string"}, "units": {"type": "string"}},
+            "required": ["location"],
+        },
     )
 
     # Ask vague question
     messages = [{"role": "user", "content": "What's the weather like?"}]
-    result = chat(messages, tools=[weather_tool])
+    chat(messages, tools=[weather_tool])
 
     # Model should either:
     # 1. Not call tool and ask for location
@@ -825,15 +790,13 @@ def test_function_calling_missing_required_parameter():
 def test_function_calling_with_system_message():
     """Test function calling with system message."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     weather_tool = FunctionTool(
         name="get_weather",
         description="Get weather",
-        parameters={"type": "object", "properties": {"location": {"type": "string"}}}
+        parameters={"type": "object", "properties": {"location": {"type": "string"}}},
     )
 
     # Request with system message
@@ -841,7 +804,7 @@ def test_function_calling_with_system_message():
     result = chat(
         messages,
         system="You are a helpful weather assistant. Always use the get_weather tool when asked about weather.",
-        tools=[weather_tool]
+        tools=[weather_tool],
     )
 
     # Should call tool with system message influence
@@ -852,26 +815,25 @@ def test_function_calling_with_system_message():
 # Complex Workflow Tests
 # ============================================================================
 
+
 @pytest.mark.skipif(not CHAT_CONFIG, reason="Chat API not configured")
 def test_function_calling_multi_turn_conversation():
     """Test multi-turn conversation with function calling."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     tools = [
         FunctionTool(
             name="get_weather",
             description="Get weather",
-            parameters={"type": "object", "properties": {"location": {"type": "string"}}}
+            parameters={"type": "object", "properties": {"location": {"type": "string"}}},
         ),
         FunctionTool(
             name="calculate",
             description="Calculate",
-            parameters={"type": "object", "properties": {"expression": {"type": "string"}}}
-        )
+            parameters={"type": "object", "properties": {"expression": {"type": "string"}}},
+        ),
     ]
 
     functions = {
@@ -906,9 +868,7 @@ def test_function_calling_multi_turn_conversation():
 def test_function_calling_with_chained_tools():
     """Test workflow where output of one tool informs another."""
     chat = Chat(
-        base_url=CHAT_CONFIG["api_base"],
-        api_key=CHAT_CONFIG["api_key"],
-        model=CHAT_CONFIG["model"]
+        base_url=CHAT_CONFIG["api_base"], api_key=CHAT_CONFIG["api_key"], model=CHAT_CONFIG["model"]
     )
 
     # Define tools that might be chained
@@ -916,13 +876,13 @@ def test_function_calling_with_chained_tools():
         FunctionTool(
             name="search",
             description="Search for information",
-            parameters={"type": "object", "properties": {"query": {"type": "string"}}}
+            parameters={"type": "object", "properties": {"query": {"type": "string"}}},
         ),
         FunctionTool(
             name="calculate",
             description="Calculate mathematical expression",
-            parameters={"type": "object", "properties": {"expression": {"type": "string"}}}
-        )
+            parameters={"type": "object", "properties": {"expression": {"type": "string"}}},
+        ),
     ]
 
     functions = {
@@ -931,7 +891,12 @@ def test_function_calling_with_chained_tools():
     }
 
     # Question that might require multiple tools
-    messages = [{"role": "user", "content": "Search for the population of Paris, then calculate what it would be if it grew by 10%"}]
+    messages = [
+        {
+            "role": "user",
+            "content": "Search for the population of Paris, then calculate what it would be if it grew by 10%",
+        }
+    ]
     result = chat(messages, tools=tools)
 
     # Execute any tools called

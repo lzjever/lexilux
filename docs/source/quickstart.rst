@@ -326,6 +326,98 @@ Advanced control:
 .. note::
    For detailed guide on token analysis, see :doc:`token_analysis`.
 
+**Function Calling**:
+
+.. code-block:: python
+
+   from lexilux import Chat, FunctionTool, execute_tool_calls, create_conversation_history
+
+   # Define a tool
+   get_weather_tool = FunctionTool(
+       name="get_weather",
+       description="Get current weather for a location",
+       parameters={
+           "type": "object",
+           "properties": {
+               "location": {"type": "string", "description": "City name"},
+               "units": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+           },
+           "required": ["location"]
+       }
+   )
+
+   # Define function implementation
+   def get_weather(location: str, units: str = "celsius") -> str:
+       return f"Weather in {location}: 22°{units}"
+
+   # Make request with tool
+   chat = Chat(base_url="...", api_key="...", model="gpt-4")
+   messages = [{"role": "user", "content": "What's the weather in Paris?"}]
+   result = chat(messages, tools=[get_weather_tool])
+
+   # Check if model wants to call functions
+   if result.has_tool_calls:
+       # Execute functions
+       tool_responses = execute_tool_calls(
+           result,
+           {"get_weather": get_weather}
+       )
+
+       # Send back results to get final answer
+       history = create_conversation_history(messages, result, tool_responses)
+       final_result = chat(history, tools=[get_weather_tool])
+       print(final_result.text)
+
+.. note::
+   For detailed guide on function calling, see :doc:`function_calling`.
+
+**Multimodal (Vision)**:
+
+.. code-block:: python
+
+   # Text + Image URL
+   messages = [{
+       "role": "user",
+       "content": [
+           {"type": "text", "text": "What's in this image?"},
+           {
+               "type": "image_url",
+               "image_url": {
+                   "url": "https://example.com/image.jpg"
+               }
+           }
+       ]
+   }]
+
+   result = chat(messages)
+   print(result.text)
+
+   # With base64 encoded image
+   import base64
+
+   with open("image.jpg", "rb") as f:
+       image_data = base64.b64encode(f.read()).decode("utf-8")
+
+   messages = [{
+       "role": "user",
+       "content": [
+           {"type": "text", "text": "Describe this image"},
+           {
+               "type": "image_url",
+               "image_url": {
+                   "url": f"data:image/jpeg;base64,{image_data}",
+                   "detail": "high"  # "auto", "low", or "high"
+               }
+           }
+       ]
+   }]
+
+   result = chat(messages)
+   print(result.text)
+
+.. note::
+   Multimodal support requires models with vision capabilities (e.g., GPT-4-Vision, Claude 3.5 Sonnet).
+
 Embedding
 ---------
 
@@ -405,6 +497,7 @@ Tokenizer
 Next Steps
 ----------
 
+* :doc:`function_calling` - Guide on function calling with tools
 * :doc:`api_reference/index` - Complete API reference
 * :doc:`examples/index` - More examples
 

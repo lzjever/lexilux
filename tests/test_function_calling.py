@@ -7,14 +7,12 @@ Tests the new tool calling and multimodal content features.
 import pytest
 
 from lexilux.chat import (
-    ContentBlock,
     FunctionTool,
     ImageContentBlock,
-    ImageUrlDetail,
     TextContentBlock,
     ToolCall,
-    ToolChoice,
     ToolCallHelper,
+    ToolChoice,
     create_conversation_history,
     execute_tool_calls,
     normalize_messages,
@@ -37,7 +35,7 @@ class TestContentBlocks:
         """Test ImageContentBlock structure."""
         block: ImageContentBlock = {
             "type": "image_url",
-            "image_url": {"url": "https://example.com/image.jpg"}
+            "image_url": {"url": "https://example.com/image.jpg"},
         }
         assert block["type"] == "image_url"
         assert block["image_url"]["url"] == "https://example.com/image.jpg"
@@ -46,10 +44,7 @@ class TestContentBlocks:
         """Test ImageContentBlock with detail parameter."""
         block: ImageContentBlock = {
             "type": "image_url",
-            "image_url": {
-                "url": "https://example.com/image.jpg",
-                "detail": "high"
-            }
+            "image_url": {"url": "https://example.com/image.jpg", "detail": "high"},
         }
         assert block["image_url"]["detail"] == "high"
 
@@ -60,10 +55,7 @@ class TestToolCall:
     def test_tool_call_creation(self):
         """Test creating a ToolCall."""
         tc = ToolCall(
-            id="call_123",
-            call_id="call_123",
-            name="get_weather",
-            arguments='{"location": "Paris"}'
+            id="call_123", call_id="call_123", name="get_weather", arguments='{"location": "Paris"}'
         )
         assert tc.id == "call_123"
         assert tc.call_id == "call_123"
@@ -76,7 +68,7 @@ class TestToolCall:
             id="call_123",
             call_id="call_123",
             name="get_weather",
-            arguments='{"location": "Paris", "units": "celsius"}'
+            arguments='{"location": "Paris", "units": "celsius"}',
         )
         args = tc.get_arguments()
         assert args == {"location": "Paris", "units": "celsius"}
@@ -84,10 +76,7 @@ class TestToolCall:
     def test_tool_call_to_dict(self):
         """Test converting ToolCall to API format."""
         tc = ToolCall(
-            id="call_123",
-            call_id="call_123",
-            name="get_weather",
-            arguments='{"location": "Paris"}'
+            id="call_123", call_id="call_123", name="get_weather", arguments='{"location": "Paris"}'
         )
         result = tc.to_dict()
         assert result["id"] == "call_123"
@@ -106,11 +95,9 @@ class TestFunctionTool:
             description="Get current weather",
             parameters={
                 "type": "object",
-                "properties": {
-                    "location": {"type": "string"}
-                },
-                "required": ["location"]
-            }
+                "properties": {"location": {"type": "string"}},
+                "required": ["location"],
+            },
         )
         assert tool.name == "get_weather"
         assert tool.type == "function"
@@ -120,7 +107,7 @@ class TestFunctionTool:
         tool = FunctionTool(
             name="get_weather",
             description="Get current weather",
-            parameters={"type": "object", "properties": {}}
+            parameters={"type": "object", "properties": {}},
         )
         result = tool.to_dict()
         assert result["type"] == "function"
@@ -133,7 +120,7 @@ class TestFunctionTool:
             name="get_weather",
             description="Get current weather",
             parameters={"type": "object", "properties": {}},
-            strict=True
+            strict=True,
         )
         result = tool.to_dict()
         assert result["function"]["strict"] is True
@@ -168,7 +155,7 @@ class TestChatParams:
         tool = FunctionTool(
             name="get_weather",
             description="Get weather",
-            parameters={"type": "object", "properties": {}}
+            parameters={"type": "object", "properties": {}},
         )
         params = ChatParams(tools=[tool])
         result = params.to_dict()
@@ -197,16 +184,9 @@ class TestChatResult:
     def test_chat_result_with_tool_calls(self):
         """Test ChatResult with tool_calls."""
         tool_call = ToolCall(
-            id="call_1",
-            call_id="call_1",
-            name="get_weather",
-            arguments='{"location": "Paris"}'
+            id="call_1", call_id="call_1", name="get_weather", arguments='{"location": "Paris"}'
         )
-        result = ChatResult(
-            text="",
-            usage=Usage(),
-            tool_calls=[tool_call]
-        )
+        result = ChatResult(text="", usage=Usage(), tool_calls=[tool_call])
         assert result.has_tool_calls is True
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0].name == "get_weather"
@@ -229,12 +209,7 @@ class TestChatStreamChunk:
     def test_stream_chunk_with_tool_calls(self):
         """Test ChatStreamChunk with tool_calls."""
         tc = ToolCall(id="1", call_id="1", name="test", arguments="{}")
-        chunk = ChatStreamChunk(
-            delta="",
-            usage=Usage(),
-            done=False,
-            tool_calls=[tc]
-        )
+        chunk = ChatStreamChunk(delta="", usage=Usage(), done=False, tool_calls=[tc])
         assert chunk.has_tool_calls is True
         assert chunk.has_content is False
 
@@ -261,13 +236,15 @@ class TestNormalizeMessages:
 
     def test_normalize_multimodal_content(self):
         """Test normalizing multimodal content."""
-        messages = [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "What's in this image?"},
-                {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
-            ]
-        }]
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What's in this image?"},
+                    {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}},
+                ],
+            }
+        ]
         result = normalize_messages(messages)
         assert len(result) == 1
         assert isinstance(result[0]["content"], list)
@@ -276,10 +253,12 @@ class TestNormalizeMessages:
     def test_normalize_validates_content_blocks(self):
         """Test that content blocks are validated."""
         # Missing type field
-        messages = [{
-            "role": "user",
-            "content": [{"text": "Hello"}]  # Missing "type"
-        }]
+        messages = [
+            {
+                "role": "user",
+                "content": [{"text": "Hello"}],  # Missing "type"
+            }
+        ]
         with pytest.raises(ValueError, match="must have a 'type' key"):
             normalize_messages(messages)
 
@@ -291,9 +270,9 @@ class TestNormalizeMessages:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": "Second message"},
-                    {"type": "image_url", "image_url": {"url": "https://example.com/img.jpg"}}
-                ]
-            }
+                    {"type": "image_url", "image_url": {"url": "https://example.com/img.jpg"}},
+                ],
+            },
         ]
         result = normalize_messages(messages)
         assert len(result) == 2
@@ -306,21 +285,15 @@ class TestToolHelpers:
 
     def test_execute_tool_calls(self):
         """Test executing tool calls."""
+
         def get_weather(location: str) -> str:
             return f"Weather in {location}: 22°C"
 
         tool_call = ToolCall(
-            id="call_1",
-            call_id="call_1",
-            name="get_weather",
-            arguments='{"location": "Paris"}'
+            id="call_1", call_id="call_1", name="get_weather", arguments='{"location": "Paris"}'
         )
 
-        result = ChatResult(
-            text="",
-            usage=Usage(),
-            tool_calls=[tool_call]
-        )
+        result = ChatResult(text="", usage=Usage(), tool_calls=[tool_call])
 
         responses = execute_tool_calls(result, {"get_weather": get_weather})
         assert len(responses) == 1
@@ -330,18 +303,9 @@ class TestToolHelpers:
 
     def test_execute_tool_calls_unknown_function(self):
         """Test executing tool calls with unknown function."""
-        tool_call = ToolCall(
-            id="call_1",
-            call_id="call_1",
-            name="unknown_func",
-            arguments="{}"
-        )
+        tool_call = ToolCall(id="call_1", call_id="call_1", name="unknown_func", arguments="{}")
 
-        result = ChatResult(
-            text="",
-            usage=Usage(),
-            tool_calls=[tool_call]
-        )
+        result = ChatResult(text="", usage=Usage(), tool_calls=[tool_call])
 
         with pytest.raises(ValueError, match="Unknown function"):
             execute_tool_calls(result, {})
@@ -349,31 +313,18 @@ class TestToolHelpers:
     def test_create_conversation_history(self):
         """Test creating complete conversation history."""
         tool_call = ToolCall(
-            id="call_1",
-            call_id="call_1",
-            name="get_weather",
-            arguments='{"location": "Paris"}'
+            id="call_1", call_id="call_1", name="get_weather", arguments='{"location": "Paris"}'
         )
 
         tool_result = ChatResult(
-            text="I'll check the weather for you.",
-            usage=Usage(),
-            tool_calls=[tool_call]
+            text="I'll check the weather for you.", usage=Usage(), tool_calls=[tool_call]
         )
 
-        tool_outputs = [
-            {"role": "tool", "tool_call_id": "call_1", "content": "22°C in Paris"}
-        ]
+        tool_outputs = [{"role": "tool", "tool_call_id": "call_1", "content": "22°C in Paris"}]
 
-        original_messages = [
-            {"role": "user", "content": "What's the weather in Paris?"}
-        ]
+        original_messages = [{"role": "user", "content": "What's the weather in Paris?"}]
 
-        history = create_conversation_history(
-            original_messages,
-            tool_result,
-            tool_outputs
-        )
+        history = create_conversation_history(original_messages, tool_result, tool_outputs)
 
         assert len(history) == 3
         assert history[0]["role"] == "user"
@@ -387,6 +338,7 @@ class TestToolCallHelper:
 
     def test_tool_call_helper_init(self):
         """Test initializing ToolCallHelper."""
+
         def dummy_func() -> str:
             return "result"
 
@@ -395,21 +347,15 @@ class TestToolCallHelper:
 
     def test_tool_call_helper_execute(self):
         """Test ToolCallHelper.execute_tool_calls."""
+
         def get_weather(location: str) -> str:
             return f"Weather in {location}: 22°C"
 
         tool_call = ToolCall(
-            id="call_1",
-            call_id="call_1",
-            name="get_weather",
-            arguments='{"location": "Paris"}'
+            id="call_1", call_id="call_1", name="get_weather", arguments='{"location": "Paris"}'
         )
 
-        result = ChatResult(
-            text="",
-            usage=Usage(),
-            tool_calls=[tool_call]
-        )
+        result = ChatResult(text="", usage=Usage(), tool_calls=[tool_call])
 
         helper = ToolCallHelper({"get_weather": get_weather})
         responses = helper.execute_tool_calls(result)
