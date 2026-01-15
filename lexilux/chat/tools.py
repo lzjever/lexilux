@@ -53,26 +53,28 @@ class FunctionTool:
         Convert to API request format.
 
         Returns:
-            Dictionary in OpenAI tool format.
+            Dictionary in OpenAI tool format with nested 'function' field.
 
         Examples:
             >>> tool = FunctionTool(name="get_weather", description="...", parameters={})
             >>> tool.to_dict()
-            {'type': 'function', 'name': 'get_weather', 'description': '...', 'parameters': {}, 'strict': False}
+            {'type': 'function', 'function': {'name': 'get_weather', 'description': '...', 'parameters': {}, 'strict': False}}
         """
-        result: dict[str, Any] = {
-            "type": self.type,
+        function_dict: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
         }
 
         if self.parameters:
-            result["parameters"] = self.parameters
+            function_dict["parameters"] = self.parameters
 
         if self.strict:
-            result["strict"] = True
+            function_dict["strict"] = True
 
-        return result
+        return {
+            "type": self.type,
+            "function": function_dict,
+        }
 
 
 # Type alias for all tool types

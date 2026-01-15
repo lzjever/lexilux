@@ -639,6 +639,41 @@ class Chat(BaseAPIClient):
                     delta = {}
                 content = delta.get("content") or ""
 
+                # Parse tool_calls from delta (for streaming tool calls)
+                tool_calls_list: list[ToolCall] = []
+                raw_tool_calls = delta.get("tool_calls")
+                if raw_tool_calls:
+                    if not isinstance(raw_tool_calls, list):
+                        raw_tool_calls = []
+                    for tc in raw_tool_calls:
+                        if not isinstance(tc, dict):
+                            continue
+                        try:
+                            # Extract function info
+                            function = tc.get("function", {})
+                            if not isinstance(function, dict):
+                                function = {}
+
+                            # Build tool call from streaming delta
+                            # Note: In streaming, tool calls come incrementally
+                            # index is used to identify which tool call this chunk belongs to
+                            tool_call_index = tc.get("index", 0)
+
+                            # For streaming, we accumulate tool call data
+                            # The id might be in a separate chunk
+                            call_id = tc.get("id", "")
+
+                            tool_call = ToolCall(
+                                id=call_id,
+                                call_id=call_id,
+                                name=str(function.get("name", "")),
+                                arguments=str(function.get("arguments", "{}")),
+                            )
+                            tool_calls_list.append(tool_call)
+                        except (KeyError, TypeError, ValueError):
+                            # Skip invalid tool call entries (defensive)
+                            continue
+
                 # Normalize finish_reason (defensive against invalid implementations)
                 finish_reason = normalize_finish_reason(choice.get("finish_reason"))
                 # done is True when finish_reason is a non-empty string
@@ -669,6 +704,7 @@ class Chat(BaseAPIClient):
                     done=done,
                     usage=usage,
                     finish_reason=finish_reason,
+                    tool_calls=tool_calls_list,
                     raw=event_data if return_raw_events else {},
                 )
 

@@ -103,11 +103,27 @@ def normalize_messages(
                                 "Each block must have a 'type' key."
                             )
 
-                # Message is valid, add it
-                result.append({
+                # Message is valid, add it with all original fields
+                # Preserve special fields like tool_calls, tool_call_id, etc.
+                normalized_msg: dict[str, Any] = {
                     "role": msg["role"],
                     "content": content,
-                })
+                }
+
+                # Preserve tool_calls field for assistant messages
+                if "tool_calls" in msg:
+                    normalized_msg["tool_calls"] = msg["tool_calls"]
+
+                # Preserve tool_call_id field for tool messages
+                if "tool_call_id" in msg:
+                    normalized_msg["tool_call_id"] = msg["tool_call_id"]
+
+                # Preserve any other fields (for extensibility)
+                for key, value in msg.items():
+                    if key not in ("role", "content", "tool_calls", "tool_call_id"):
+                        normalized_msg[key] = value
+
+                result.append(normalized_msg)
             else:
                 raise ValueError(f"Invalid message type: {type(msg)}. Expected str or dict.")
     else:

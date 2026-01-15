@@ -124,8 +124,8 @@ class TestFunctionTool:
         )
         result = tool.to_dict()
         assert result["type"] == "function"
-        assert result["name"] == "get_weather"
-        assert result["description"] == "Get current weather"
+        assert result["function"]["name"] == "get_weather"
+        assert result["function"]["description"] == "Get current weather"
 
     def test_function_tool_with_strict(self):
         """Test FunctionTool with strict mode."""
@@ -136,7 +136,7 @@ class TestFunctionTool:
             strict=True
         )
         result = tool.to_dict()
-        assert result["strict"] is True
+        assert result["function"]["strict"] is True
 
 
 class TestToolChoice:
@@ -174,7 +174,9 @@ class TestChatParams:
         result = params.to_dict()
         assert "tools" in result
         assert len(result["tools"]) == 1
-        assert result["tools"][0]["name"] == "get_weather"
+        # Tools are now in nested format: {"type": "function", "function": {...}}
+        assert result["tools"][0]["type"] == "function"
+        assert result["tools"][0]["function"]["name"] == "get_weather"
 
     def test_chat_params_with_tool_choice(self):
         """Test ChatParams with tool_choice."""
