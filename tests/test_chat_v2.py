@@ -57,7 +57,7 @@ class TestChatInit:
 class TestChatWithExplicitHistory:
     """Test Chat methods with explicit history parameter (v2.0)"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_call_with_history_immutability(self, mock_post):
         """Test that chat() does not modify original history (immutable)"""
         chat = Chat(
@@ -83,7 +83,7 @@ class TestChatWithExplicitHistory:
         assert len(history.messages) == original_count
         assert result.text == "Hello!"
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_call_with_history_prepends_history_messages(self, mock_post):
         """Test that chat() prepends history messages to request"""
         chat = Chat(
@@ -134,7 +134,7 @@ class TestChatWithExplicitHistory:
         # Original history should not be modified by second call
         assert len(history.messages) == 2  # Only manually added messages
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_call_without_history_no_update(self, mock_post):
         """Test that chat() does not update anything when history=None"""
         chat = Chat(
@@ -158,7 +158,7 @@ class TestChatWithExplicitHistory:
         assert result.text == "Hello!"
         # No history to check, but should not crash
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_call_with_history_immutability_on_error(self, mock_post):
         """Test that original history is not modified even if request fails (immutable)"""
         chat = Chat(
@@ -179,7 +179,7 @@ class TestChatWithExplicitHistory:
         # Original history should NOT be modified (immutable)
         assert len(history.messages) == original_count
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_stream_with_history_immutability(self, mock_post):
         """Test that stream() does not modify original history (immutable)"""
         chat = Chat(
@@ -215,7 +215,7 @@ class TestChatWithExplicitHistory:
         result = iterator.result.to_chat_result()
         assert result.text == "Hello world"
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_stream_with_history_immutability_during_iteration(self, mock_post):
         """Test that original history is not modified during streaming iteration (immutable)"""
         chat = Chat(
@@ -250,7 +250,7 @@ class TestChatWithExplicitHistory:
 class TestChatContinue:
     """Test ChatContinue.continue_request() method (v2.1 - history immutability)"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_continues_when_truncated(self, mock_post):
         """Test that ChatContinue.continue_request continues when finish_reason='length'"""
         from lexilux.chat.continue_ import ChatContinue
@@ -296,7 +296,7 @@ class TestChatContinue:
 class TestChatComplete:
     """Test Chat.complete() method (v2.0 - requires explicit history)"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_complete_ensures_complete_response(self, mock_post):
         """Test that complete() ensures complete response"""
         chat = Chat(
@@ -333,7 +333,7 @@ class TestChatComplete:
         assert "Part 1" in result.text
         assert "Part 2" in result.text
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_complete_raises_incomplete_response_when_still_truncated(self, mock_post):
         """Test that complete() raises ChatIncompleteResponseError when still truncated"""
         chat = Chat(
@@ -381,7 +381,7 @@ class TestChatComplete:
 class TestChatStreamingContinue:
     """Test streaming continue methods (v2.0)"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_complete_stream_continues_when_truncated(self, mock_post):
         """Test that continue_if_needed_stream continues when truncated"""
         chat = Chat(
@@ -436,7 +436,7 @@ class TestChatStreamingContinue:
         assert "Part" in full_result.text or "Part 1" in full_result.text
         assert "Part 2" in full_result.text or " Part 2" in full_result.text
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_complete_stream_ensures_complete_response(self, mock_post):
         """Test that complete_stream ensures complete response"""
         chat = Chat(

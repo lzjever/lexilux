@@ -55,6 +55,74 @@ Using ChatParams for structured configuration:
    # You can also override params with direct arguments
    result = chat("Tell me a story", params=params, temperature=0.5)
 
+**Advanced Configuration** (v2.2.0+):
+
+.. code-block:: python
+
+   # Enable automatic retry with exponential backoff
+   chat = Chat(
+       base_url="https://api.example.com/v1",
+       api_key="your-key",
+       model="gpt-4",
+       max_retries=3,  # Automatically retry on transient failures
+   )
+
+   # Separate connection and read timeouts
+   chat = Chat(
+       base_url="https://api.example.com/v1",
+       api_key="your-key",
+       connect_timeout_s=5,  # Connection timeout
+       read_timeout_s=30,     # Read timeout
+   )
+
+   # Configure connection pooling for high concurrency
+   chat = Chat(
+       base_url="https://api.example.com/v1",
+       api_key="your-key",
+       pool_connections=20,  # Increase for high concurrency
+       pool_maxsize=20,
+   )
+
+.. note::
+   Automatic retry is disabled by default. Enable it by setting ``max_retries > 0``.
+   Only retryable errors (network issues, rate limits, server errors) are retried.
+
+**Error Handling** (v2.2.0+):
+
+.. code-block:: python
+
+   from lexilux import Chat, AuthenticationError, RateLimitError, LexiluxError
+
+   chat = Chat(base_url="https://api.example.com/v1", api_key="key")
+
+   try:
+       result = chat("Hello, world!")
+   except AuthenticationError as e:
+       print(f"Auth failed: {e.message}")
+       print(f"Error code: {e.code}")  # "authentication_failed"
+   except RateLimitError as e:
+       print(f"Rate limited: {e.message}")
+       print(f"Can retry: {e.retryable}")  # True
+   except LexiluxError as e:
+       print(f"Error: {e.code} - {e.message}")
+
+.. seealso::
+   :doc:`error_handling` - Comprehensive error handling guide
+
+**Logging** (v2.2.0+):
+
+.. code-block:: python
+
+   import logging
+
+   # Enable logging to see request timing and errors
+   logging.basicConfig(level=logging.INFO)
+
+   from lexilux import Chat
+   chat = Chat(base_url="https://api.example.com/v1", api_key="key")
+   result = chat("Hello")
+   # Logs: "Request completed in 0.52s with status 200: https://..."
+
 Streaming:
 
 .. code-block:: python

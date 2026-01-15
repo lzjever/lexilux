@@ -20,7 +20,7 @@ from lexilux.usage import Usage
 class TestChatContinueContinueRequest:
     """Test ChatContinue.continue_request() method (v2.0 - explicit history)"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_with_explicit_history(self, mock_post):
         """Test continue_request with explicit history"""
         chat = Chat(
@@ -57,7 +57,7 @@ class TestChatContinueContinueRequest:
         assert " and part 2" in continue_result.text
         assert continue_result.finish_reason == "stop"
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_requires_history(self, mock_post):
         """Test that continue_request requires history parameter"""
         chat = Chat(
@@ -76,7 +76,7 @@ class TestChatContinueContinueRequest:
         with pytest.raises(ValueError, match="History is required"):
             ChatContinue.continue_request(chat, result, history=None)
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_requires_length_finish_reason(self, mock_post):
         """Test that continue_request requires finish_reason='length'"""
         chat = Chat(
@@ -96,7 +96,7 @@ class TestChatContinueContinueRequest:
         with pytest.raises(ValueError, match="finish_reason='length'"):
             ChatContinue.continue_request(chat, result, history=history)
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_max_continues(self, mock_post):
         """Test that max_continues allows multiple continuation attempts"""
         chat = Chat(
@@ -148,7 +148,7 @@ class TestChatContinueContinueRequest:
         assert "Part 3" in full_result.text
         assert full_result.finish_reason == "stop"
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_auto_merge_false_returns_list(self, mock_post):
         """Test that auto_merge=False returns list of results"""
         chat = Chat(
@@ -192,7 +192,7 @@ class TestChatContinueContinueRequest:
 class TestChatContinueContinueRequestStream:
     """Test ChatContinue.continue_request_stream() method (v2.0)"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_stream_basic(self, mock_post):
         """Test basic continue_request_stream functionality"""
         chat = Chat(
@@ -236,7 +236,7 @@ class TestChatContinueContinueRequestStream:
         assert "Part 2" in full_result.text
         assert full_result.finish_reason == "stop"
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_stream_requires_history(self, mock_post):
         """Test that continue_request_stream requires history parameter"""
         chat = Chat(
@@ -255,7 +255,7 @@ class TestChatContinueContinueRequestStream:
         with pytest.raises(ValueError, match="History is required"):
             ChatContinue.continue_request_stream(chat, result, history=None)
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_stream_requires_length_finish_reason(self, mock_post):
         """Test that continue_request_stream requires finish_reason='length'"""
         chat = Chat(
@@ -275,7 +275,7 @@ class TestChatContinueContinueRequestStream:
         with pytest.raises(ValueError, match="finish_reason='length'"):
             ChatContinue.continue_request_stream(chat, result, history=history)
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_stream_max_continues(self, mock_post):
         """Test that continue_request_stream handles multiple continues"""
         chat = Chat(
@@ -334,7 +334,7 @@ class TestChatContinueContinueRequestStream:
         assert "Part 3" in full_result.text
         assert full_result.finish_reason == "stop"
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_stream_history_immutability(self, mock_post):
         """Test that continue_request_stream does not modify original history (immutable)"""
         chat = Chat(

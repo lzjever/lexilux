@@ -16,7 +16,7 @@ from lexilux.usage import Usage
 class TestChatContinueContinueRequest:
     """Test ChatContinue.continue_request method"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_with_prompt(self, mock_post):
         """Test continue_request with add_continue_prompt=True"""
         chat = Chat(
@@ -54,7 +54,7 @@ class TestChatContinueContinueRequest:
         # The history should have the continue prompt as a user message
         assert len(history.messages) >= 2  # Original + continue prompt
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_without_prompt(self, mock_post):
         """Test continue_request with add_continue_prompt=False"""
         chat = Chat(
@@ -91,7 +91,7 @@ class TestChatContinueContinueRequest:
         # History should not have additional user message when add_continue_prompt=False
         # Note: This tests the interface contract
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_custom_prompt(self, mock_post):
         """Test continue_request with custom continue_prompt"""
         chat = Chat(
@@ -242,7 +242,7 @@ class TestChatContinueMergeResults:
 class TestChatContinueIntegration:
     """Test ChatContinue integration scenarios"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_workflow(self, mock_post):
         """Test complete continue workflow"""
         chat = Chat(

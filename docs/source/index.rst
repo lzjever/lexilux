@@ -38,10 +38,18 @@ Lexilux is a unified LLM API client library that makes calling Chat, Embedding, 
    .. grid-item-card::
       :link: examples/index
       :link-type: doc
-      
+
       **Examples**
-      
+
       Real-world code examples and use cases.
+
+   .. grid-item-card::
+      :link: troubleshooting
+      :link-type: doc
+
+      **Troubleshooting**
+
+      Guide for diagnosing and fixing common issues.
 
 .. toctree::
    :maxdepth: 2
@@ -53,6 +61,7 @@ Lexilux is a unified LLM API client library that makes calling Chat, Embedding, 
    quickstart
    recommended_workflows
    error_handling
+   troubleshooting
    chat_history
    chat_formatting
    chat_streaming

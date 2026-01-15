@@ -506,15 +506,38 @@ If you're still experiencing issues after trying these solutions:
    - Steps to reproduce
 4. **Enable debug logging** and include logs in your issue
 
-## Common Errors Reference
+Common Errors Reference
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| ``ModuleNotFoundError`` | Package not installed | ``pip install lexilux`` |
-| ``TimeoutError`` | Request timeout | Increase ``timeout_s`` |
-| ``ConnectionError`` | Network failure | Check network, increase ``max_retries`` |
-| ``AuthenticationError`` (401) | Invalid API key | Verify API key |
-| ``RateLimitError`` (429) | Too many requests | Implement backoff, reduce frequency |
-| ``NotFoundError`` (404) | Invalid endpoint | Check ``base_url`` |
-| ``ValidationError`` (400) | Invalid input | Check request parameters |
-| ``ServerError`` (5xx) | Server error | Retry, check service status |
+.. list-table:: Common Errors and Solutions
+   :widths: 30 30 40
+   :header-rows: 1
+
+   * - Error
+     - Cause
+     - Solution
+   * - ``ModuleNotFoundError``
+     - Package not installed
+     - ``pip install lexilux``
+   * - ``TimeoutError``
+     - Request timeout
+     - Increase ``timeout_s``
+   * - ``ConnectionError``
+     - Network failure
+     - Check network, increase ``max_retries``
+   * - ``AuthenticationError`` (401)
+     - Invalid API key
+     - Verify API key
+   * - ``RateLimitError`` (429)
+     - Too many requests
+     - Implement backoff, reduce frequency
+   * - ``NotFoundError`` (404)
+     - Invalid endpoint
+     - Check ``base_url``
+   * - ``ValidationError`` (400)
+     - Invalid input
+     - Check request parameters
+   * - ``ServerError`` (5xx)
+     - Server error
+     - Retry, check service status
+
