@@ -2,6 +2,8 @@
 Usage and ResultBase test cases
 """
 
+from typing import Union
+
 from lexilux.usage import Json, ResultBase, Usage
 
 
@@ -94,7 +96,7 @@ class TestResultBase:
         usage = Usage(total_tokens=10)
 
         class CustomResult(ResultBase):
-            def __init__(self, *, usage: Usage, value: str, raw: Json | None = None):
+            def __init__(self, *, usage: Usage, value: str, raw: Union[Json, None] = None):
                 super().__init__(usage=usage, raw=raw)
                 self.value = value
 

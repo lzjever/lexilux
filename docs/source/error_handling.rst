@@ -1,8 +1,12 @@
 Error Handling and Network Interruptions
 ==========================================
 
-This guide explains how to handle errors and distinguish between network problems
-and normal API completions.
+This guide explains how to handle errors using Lexilux's unified exception system
+and distinguish between network problems and normal API completions.
+
+.. note::
+   As of v2.2.0, Lexilux provides a comprehensive exception hierarchy with error codes
+   and retryable flags. See :ref:`lexilux-exceptions` for details.
 
 Understanding finish_reason
 ---------------------------
@@ -25,7 +29,7 @@ Distinguishing Network Errors from Normal Completion
 For non-streaming requests (``chat()`` method):
 
 **Network Error**:
-- An exception is raised (``requests.RequestException``, ``ConnectionError``, ``TimeoutError``, etc.)
+- A Lexilux exception is raised (``ConnectionError``, ``TimeoutError``, etc.)
 - No ``ChatResult`` is returned
 - No ``finish_reason`` is available
 
@@ -37,8 +41,7 @@ Example:
 
 .. code-block:: python
 
-   from lexilux import Chat
-   import requests
+   from lexilux import Chat, LexiluxError, ConnectionError, TimeoutError
 
    chat = Chat(base_url="https://api.example.com/v1", api_key="key", model="gpt-4")
 
@@ -47,10 +50,16 @@ Example:
        # Success: finish_reason indicates why generation stopped
        print(f"Completed: {result.finish_reason}")
        print(f"Text: {result.text}")
-   except requests.RequestException as e:
+   except ConnectionError as e:
        # Network error: no finish_reason available
-       print(f"Network error: {e}")
-       print("Connection was interrupted - not a normal completion")
+       print(f"Connection failed: {e.message}")
+       print(f"Error code: {e.code}")  # "connection_failed"
+       print(f"Can retry: {e.retryable}")  # True
+   except TimeoutError as e:
+       print(f"Request timeout: {e.message}")
+       print(f"Can retry: {e.retryable}")  # True
+   except LexiluxError as e:
+       print(f"Error: {e.code} - {e.message}")
 
 ### Streaming Requests
 
@@ -73,8 +82,7 @@ Example:
 
 .. code-block:: python
 
-   from lexilux import Chat
-   import requests
+   from lexilux import Chat, ConnectionError, LexiluxError
 
    chat = Chat(base_url="https://api.example.com/v1", api_key="key", model="gpt-4")
 
@@ -83,7 +91,7 @@ Example:
        for chunk in chat.stream("Write a long story"):
            print(chunk.delta, end="", flush=True)
            chunks.append(chunk)
-       
+
        # Check if we received a completion
        done_chunks = [c for c in chunks if c.done]
        if done_chunks:
@@ -91,11 +99,11 @@ Example:
            print(f"\nCompleted: {final_chunk.finish_reason}")
        else:
            print("\nStream ended without completion signal")
-           
-   except requests.RequestException as e:
+
+   except ConnectionError as e:
        # Network error during streaming
-       print(f"\nNetwork error: {e}")
-       
+       print(f"\nConnection lost: {e.message}")
+
        # Check if we got any completion before the error
        done_chunks = [c for c in chunks if c.done]
        if done_chunks:
@@ -104,18 +112,264 @@ Example:
        else:
            print("No completion received - stream was interrupted")
 
-Common Network Exceptions
--------------------------
+.. _lexilux-exceptions:
 
-The following exceptions indicate network/connection problems:
+Lexilux Exception Hierarchy
+----------------------------
 
-- ``requests.ConnectionError``: Failed to establish connection
-- ``requests.TimeoutError``: Request timed out
-- ``requests.HTTPError``: HTTP error response (4xx, 5xx)
-- ``requests.RequestException``: Base class for all request exceptions
+All Lexilux exceptions inherit from ``LexiluxError`` and provide three properties:
 
-When any of these exceptions are raised, ``finish_reason`` is not available because
-the API response was not successfully received.
+- **``code``**: Machine-readable error code (e.g., "authentication_failed")
+- **``message``**: Human-readable error message
+- **``retryable``**: Boolean indicating if the error can be retried
+
+Exception Hierarchy:
+
+.. code-block:: text
+
+   LexiluxError (base class)
+   ├── APIError
+   │   ├── AuthenticationError (401, not retryable)
+   │   ├── RateLimitError (429, retryable)
+   │   ├── TimeoutError (retryable)
+   │   ├── ConnectionError (retryable)
+   │   ├── ValidationError (400, not retryable)
+   │   ├── NotFoundError (404, not retryable)
+   │   └── ServerError (5xx, retryable)
+   ├── InvalidRequestError (alias for ValidationError)
+   ├── ConfigurationError (not retryable)
+   └── NetworkError (base class for network issues)
+
+Common Exceptions:
+
+``AuthenticationError``
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Authentication/authorization failures (HTTP 401).
+
+.. code-block:: python
+
+   from lexilux import Chat, AuthenticationError
+
+   chat = Chat(base_url="https://api.example.com/v1", api_key="invalid-key")
+
+   try:
+       result = chat("Hello")
+   except AuthenticationError as e:
+       print(f"Auth failed: {e.message}")
+       print(f"Check your API key")
+       # Don't retry - won't work without valid key
+
+``RateLimitError``
+~~~~~~~~~~~~~~~~~~~
+
+Rate limit exceeded (HTTP 429).
+
+.. code-block:: python
+
+   from lexilux import Chat, RateLimitError
+
+   chat = Chat(base_url="https://api.example.com/v1", api_key="key")
+
+   try:
+       result = chat("Hello")
+   except RateLimitError as e:
+       print(f"Rate limited: {e.message}")
+       print(f"Wait and retry, or upgrade your plan")
+       # Can retry after waiting
+
+``TimeoutError``
+~~~~~~~~~~~~~~~~~
+
+Request timed out.
+
+.. code-block:: python
+
+   from lexilux import Chat, TimeoutError
+
+   # Increase timeout
+   chat = Chat(
+       base_url="https://api.example.com/v1",
+       api_key="key",
+       timeout_s=120,  # 2 minutes
+   )
+
+   try:
+       result = chat("Write a long response")
+   except TimeoutError as e:
+       print(f"Request timeout: {e.message}")
+       # Can retry with longer timeout
+
+``ConnectionError``
+~~~~~~~~~~~~~~~~~~~~
+
+Failed to establish connection.
+
+.. code-block:: python
+
+   from lexilux import Chat, ConnectionError
+
+   chat = Chat(
+       base_url="https://api.example.com/v1",
+       api_key="key",
+       max_retries=3,  # Enable automatic retry
+   )
+
+   try:
+       result = chat("Hello")
+   except ConnectionError as e:
+       print(f"Connection failed: {e.message}")
+       print(f"Check your network connection")
+
+``ServerError``
+~~~~~~~~~~~~~~~
+
+Internal server errors (HTTP 5xx).
+
+.. code-block:: python
+
+   from lexilux import Chat, ServerError
+
+   chat = Chat(
+       base_url="https://api.example.com/v1",
+       api_key="key",
+       max_retries=3,  # Auto-retry on 5xx errors
+   )
+
+   try:
+       result = chat("Hello")
+   except ServerError as e:
+       print(f"Server error: {e.message}")
+       # Server might be temporarily unavailable
+
+``ValidationError``
+~~~~~~~~~~~~~~~~~~~
+
+Invalid input (HTTP 400).
+
+.. code-block:: python
+
+   from lexilux import Chat, ValidationError
+
+   chat = Chat(base_url="https://api.example.com/v1", api_key="key")
+
+   try:
+       result = chat("Hello", temperature=2.5)  # Invalid: temperature must be 0-2
+   except ValidationError as e:
+       print(f"Invalid input: {e.message}")
+       # Fix the input and retry
+
+``NotFoundError``
+~~~~~~~~~~~~~~~~~
+
+Resource not found (HTTP 404).
+
+.. code-block:: python
+
+   from lexilux import Chat, NotFoundError
+
+   chat = Chat(base_url="https://api.example.com/v1", api_key="key")
+
+   try:
+       result = chat("Hello", model="nonexistent-model")
+   except NotFoundError as e:
+       print(f"Not found: {e.message}")
+       # Check the model name and endpoint
+
+Automatic Retry Logic
+---------------------
+
+.. versionadded:: 2.2.0
+
+Lexilux supports automatic retry with exponential backoff for transient failures:
+
+.. code-block:: python
+
+   from lexilux import Chat
+
+   chat = Chat(
+       base_url="https://api.example.com/v1",
+       api_key="key",
+       max_retries=3,  # Automatically retry retryable errors
+   )
+
+   result = chat("Hello")
+   # Will automatically retry on:
+   # - 429 (rate limit)
+   # - 500, 502, 503, 504 (server errors)
+   # - Timeout
+   # - Connection failures
+
+**Retry Behavior**:
+
+- Exponential backoff: 0.1s, 0.2s, 0.4s...
+- Only retries errors with ``retryable=True``
+- Up to ``max_retries`` attempts
+- Does not retry authentication or validation errors
+
+.. warning::
+   Automatic retry is disabled by default (``max_retries=0``).
+   Enable it if you want automatic recovery from transient failures.
+
+Manual Retry with Retryable Flag
+-----------------------------------
+
+For more control, use the ``retryable`` flag to implement custom retry logic:
+
+.. code-block:: python
+
+   import time
+   from lexilux import Chat, LexiluxError
+
+   chat = Chat(base_url="https://api.example.com/v1", api_key="key")
+
+   max_retries = 5
+   for attempt in range(max_retries):
+       try:
+           result = chat("Hello, world!")
+           break  # Success
+       except LexiluxError as e:
+           if e.retryable and attempt < max_retries - 1:
+               wait_time = 2 ** attempt  # Exponential backoff
+               print(f"Attempt {attempt + 1} failed: {e.code}")
+               print(f"Retrying in {wait_time}s...")
+               time.sleep(wait_time)
+           else:
+               raise  # Non-retryable or max retries reached
+
+.. tip::
+   Check ``error.retryable`` before implementing retry logic.
+   This prevents unnecessary retries on permanent failures (like invalid API keys).
+
+Enabling Logging for Debugging
+-------------------------------
+
+.. versionadded:: 2.2.0
+
+Enable logging to see request timing and errors:
+
+.. code-block:: python
+
+   import logging
+
+   # Enable INFO level logging
+   logging.basicConfig(level=logging.INFO)
+
+   from lexilux import Chat
+   chat = Chat(base_url="https://api.example.com/v1", api_key="key")
+
+   result = chat("Hello")
+   # Logs: "Request completed in 0.52s with status 200: https://..."
+
+Log levels:
+
+- **DEBUG**: Request URL, timeout configuration
+- **INFO**: Request success, timing, status code
+- **WARNING**: HTTP errors (4xx, 5xx)
+- **ERROR**: Timeout, connection failures
+
+.. seealso::
+   :doc:`troubleshooting` - Guide for diagnosing and fixing common issues.
 
 Handling Incomplete Responses
 ------------------------------

@@ -12,7 +12,7 @@ from lexilux import Chat, ChatHistory
 class TestChatV2Integration:
     """Integration tests for v2.0 API with explicit history"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_multi_turn_conversation_with_explicit_history(self, mock_post):
         """Test multi-turn conversation with explicit history management"""
         chat = Chat(
@@ -72,7 +72,7 @@ class TestChatV2Integration:
         assert messages[1]["content"] == "Hello! How can I help?"
         assert messages[2]["content"] == "What is Python?"
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_streaming_with_history_accumulation(self, mock_post):
         """Test streaming with history accumulation"""
         chat = Chat(
@@ -107,7 +107,7 @@ class TestChatV2Integration:
         result = iterator.result.to_chat_result()
         assert result.text == "Hello world!"
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_complete_with_continue(self, mock_post):
         """Test complete() method with automatic continuation"""
         chat = Chat(
@@ -148,7 +148,7 @@ class TestChatV2Integration:
         # Original history should NOT be modified (immutable)
         assert len(history.messages) == original_count
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_complete_stream_with_continue(self, mock_post):
         """Test complete_stream() with automatic continuation"""
         chat = Chat(
@@ -196,7 +196,7 @@ class TestChatV2Integration:
         assert "Part 1" in result.text
         assert "Part 2" in result.text
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_history_mutable_sequence_operations(self, mock_post):
         """Test ChatHistory as MutableSequence in real usage"""
         chat = Chat(
@@ -252,7 +252,7 @@ class TestChatV2Integration:
         del history[0]
         assert len(history) == 3
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_history_clone_and_merge(self, mock_post):
         """Test history cloning and merging"""
         chat = Chat(
@@ -297,7 +297,7 @@ class TestChatV2Integration:
         assert isinstance(combined, ChatHistory)
         assert len(combined) == 4  # 2 from history1 + 2 from history3
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_with_explicit_history(self, mock_post):
         """Test continue functionality with explicit history"""
         chat = Chat(
@@ -338,7 +338,7 @@ class TestChatV2Integration:
         assert "Part 1" in full_result.text
         assert "Part 2" in full_result.text
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_multiple_independent_histories(self, mock_post):
         """Test using multiple independent history objects"""
         chat = Chat(
@@ -382,7 +382,7 @@ class TestChatV2Integration:
         assert len(history1) == 4
         assert len(history2) == 2  # history2 unchanged
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_history_query_methods(self, mock_post):
         """Test history query methods in real usage"""
         chat = Chat(

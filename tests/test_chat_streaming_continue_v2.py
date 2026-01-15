@@ -16,7 +16,7 @@ from lexilux.usage import Usage
 class TestContinueRequestStreamEdgeCases:
     """Test edge cases for continue_request_stream"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_stream_single_continue_complete(self, mock_post):
         """Test that single continue that completes works correctly"""
         chat = Chat(
@@ -59,7 +59,7 @@ class TestContinueRequestStreamEdgeCases:
         assert "Part 2" in full_result.text
         assert full_result.finish_reason == "stop"
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_stream_multiple_continues(self, mock_post):
         """Test that multiple continues work correctly"""
         chat = Chat(
@@ -117,7 +117,7 @@ class TestContinueRequestStreamEdgeCases:
         assert "Part 3" in full_result.text
         assert full_result.finish_reason == "stop"
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_stream_max_continues_reached(self, mock_post):
         """Test that max_continues limit is respected"""
         chat = Chat(
@@ -166,7 +166,7 @@ class TestContinueRequestStreamEdgeCases:
         # Should have made exactly max_continues calls
         assert mock_post.call_count == 2
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_continue_request_stream_usage_merging(self, mock_post):
         """Test that usage is correctly merged from all continues"""
         chat = Chat(
@@ -211,7 +211,7 @@ class TestContinueRequestStreamEdgeCases:
 class TestCompleteStreamEdgeCases:
     """Test edge cases for complete_stream"""
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_complete_stream_no_truncation_needed(self, mock_post):
         """Test complete_stream when no truncation occurs"""
         chat = Chat(
@@ -246,7 +246,7 @@ class TestCompleteStreamEdgeCases:
         assert result.finish_reason == "stop"
         assert "Complete response" in result.text
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_complete_stream_raises_when_still_truncated(self, mock_post):
         """Test that complete_stream raises error when still truncated after max_continues"""
         chat = Chat(
@@ -283,7 +283,7 @@ class TestCompleteStreamEdgeCases:
             # If iteration completes, error should be raised when accessing result
             iterator.result.to_chat_result()
 
-    @patch("lexilux.chat.client.requests.post")
+    @patch("lexilux._base.requests.Session.post")
     def test_complete_stream_ensure_complete_false_allows_partial(self, mock_post):
         """Test that ensure_complete=False allows partial result"""
         chat = Chat(

@@ -11,8 +11,7 @@ import json
 from collections.abc import Callable
 from typing import Any, Iterator, Sequence
 
-import requests
-
+from lexilux._base import BaseAPIClient
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike
 from lexilux.chat.params import ChatParams
@@ -21,7 +20,7 @@ from lexilux.chat.utils import normalize_finish_reason, normalize_messages, pars
 from lexilux.usage import Json, Usage
 
 
-class Chat:
+class Chat(BaseAPIClient):
     """
     Chat API client.
 
@@ -48,6 +47,11 @@ class Chat:
         api_key: str | None = None,
         model: str | None = None,
         timeout_s: float = 60.0,
+        connect_timeout_s: float | None = None,
+        read_timeout_s: float | None = None,
+        max_retries: int = 0,
+        pool_connections: int = 10,
+        pool_maxsize: int = 10,
         headers: dict[str, str] | None = None,
         proxies: dict[str, str] | None = None,
     ):
@@ -58,23 +62,48 @@ class Chat:
             base_url: Base URL for the API (e.g., "https://api.openai.com/v1").
             api_key: API key for authentication (optional if provided in headers).
             model: Default model to use (can be overridden in __call__).
-            timeout_s: Request timeout in seconds.
+            timeout_s: Request timeout in seconds (default for both connect and read).
+            connect_timeout_s: Connection timeout in seconds (overrides timeout_s).
+            read_timeout_s: Read timeout in seconds (overrides timeout_s).
+            max_retries: Maximum number of retries for failed requests (default: 0).
+            pool_connections: Number of connection pools to cache (default: 10).
+            pool_maxsize: Maximum number of connections in pool (default: 10).
             headers: Additional headers to include in requests.
             proxies: Optional proxy configuration dict (e.g., {"http": "http://proxy:port"}).
                     If None, uses environment variables (HTTP_PROXY, HTTPS_PROXY).
                     To disable proxies, pass {}.
-        """
-        self.base_url = base_url.rstrip("/")
-        self.api_key = api_key
-        self.model = model
-        self.timeout_s = timeout_s
-        self.headers = headers or {}
-        self.proxies = proxies  # None means use environment variables
 
-        # Set default headers
-        if self.api_key:
-            self.headers.setdefault("Authorization", f"Bearer {self.api_key}")
-        self.headers.setdefault("Content-Type", "application/json")
+        Note:
+            Connection pooling and retry logic are handled by BaseAPIClient.
+            Set max_retries > 0 to enable automatic retries on transient failures.
+        """
+        # Initialize base client with connection pooling and retry support
+        super().__init__(
+            base_url=base_url,
+            api_key=api_key,
+            timeout_s=timeout_s,
+            connect_timeout_s=connect_timeout_s,
+            read_timeout_s=read_timeout_s,
+            max_retries=max_retries,
+            pool_connections=pool_connections,
+            pool_maxsize=pool_maxsize,
+            headers=headers,
+            proxies=proxies,
+        )
+
+        # Chat-specific attributes
+        self.model = model
+
+    @property
+    def timeout_s(self) -> float:
+        """
+        Backward compatibility property for timeout.
+
+        Returns the timeout value (or read timeout if tuple).
+        """
+        if isinstance(self.timeout, tuple):
+            return self.timeout[1]  # Return read timeout
+        return self.timeout
 
     def __call__(
         self,
@@ -260,16 +289,7 @@ class Chat:
                 working_history.add_user(user_msg)
 
         # Make request (may raise exception)
-        url = f"{self.base_url}/chat/completions"
-        response = requests.post(
-            url,
-            json=payload,
-            headers=self.headers,
-            timeout=self.timeout_s,
-            proxies=self.proxies,
-        )
-        response.raise_for_status()
-
+        response = self._make_request("chat/completions", payload)
         response_data = response.json()
 
         # Parse response
@@ -484,16 +504,7 @@ class Chat:
             payload.update(extra)
 
         # Make streaming request
-        url = f"{self.base_url}/chat/completions"
-        response = requests.post(
-            url,
-            json=payload,
-            headers=self.headers,
-            timeout=self.timeout_s,
-            stream=True,
-            proxies=self.proxies,
-        )
-        response.raise_for_status()
+        response = self._make_streaming_request("chat/completions", payload)
 
         # Create internal chunk generator
         def _chunk_generator() -> Iterator[ChatStreamChunk]:

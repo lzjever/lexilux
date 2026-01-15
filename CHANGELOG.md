@@ -5,6 +5,322 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-01-15
+
+### 🎯 Quality & Infrastructure Improvements
+
+This release focuses on code quality, robustness, and developer experience improvements without breaking changes.
+
+### Added
+
+#### Connection Pooling & Performance
+- **Connection Pooling**: All API clients now use HTTP connection pooling for better performance under high concurrency
+  - Configurable via `pool_connections` and `pool_maxsize` parameters (default: 10 each)
+  - Reduces connection overhead for repeated requests
+  - Improves performance in high-throughput scenarios
+
+#### Automatic Retry Logic
+- **Retry with Exponential Backoff**: Automatic retry for transient failures
+  - Configurable via `max_retries` parameter (default: 0, disabled)
+  - Retries on status codes: 429, 500, 502, 503, 504
+  - Exponential backoff: 0.1s, 0.2s, 0.4s...
+  - Helps recover from temporary network issues
+
+#### Enhanced Timeout Configuration
+- **Separate Timeouts**: Fine-grained timeout control for connection and read phases
+  - `connect_timeout_s`: Connection establishment timeout (default: from `timeout_s`)
+  - `read_timeout_s`: Data read timeout (default: from `timeout_s`)
+  - Legacy `timeout_s` parameter still supported for backward compatibility
+  - Allows different timeouts for connect vs read operations
+
+#### Unified Exception Hierarchy
+- **Custom Exception System**: Complete exception hierarchy with error codes and retryable flags
+  - `LexiluxError` - Base exception class for all Lexilux errors
+  - `AuthenticationError` - Authentication/authorization failures (401, not retryable)
+  - `RateLimitError` - Rate limit exceeded (429, retryable)
+  - `TimeoutError` - Request timeouts (retryable)
+  - `ConnectionError` - Connection failures (retryable)
+  - `ValidationError` - Invalid input (400, not retryable)
+  - `NotFoundError` - Resource not found (404, not retryable)
+  - `ServerError` - Internal server errors (5xx, retryable)
+  - `InvalidRequestError` - Alias for ValidationError
+  - `ConfigurationError` - Client configuration issues (not retryable)
+  - `NetworkError` - Base class for network issues
+  - All exceptions have `code`, `message`, and `retryable` properties
+
+#### Logging & Monitoring
+- **Request Logging**: Comprehensive logging for debugging and monitoring
+  - Logs request start, completion, timing, and errors
+  - Uses appropriate log levels (DEBUG, INFO, WARNING, ERROR)
+  - Enable with: `import logging; logging.basicConfig(level=logging.INFO)`
+  - Helps with debugging and performance monitoring
+
+#### BaseAPIClient Architecture
+- **New Base Class**: `BaseAPIClient` provides common HTTP functionality to all clients
+  - Session management with connection pooling
+  - Retry logic with exponential backoff
+  - Configurable timeouts (connect/read)
+  - Authentication handling
+  - Error response parsing and exception mapping
+  - Request logging and timing
+
+#### Documentation
+- **CONTRIBUTING.md**: Comprehensive contribution guidelines
+  - Code style guidelines (PEP 8, type hints, docstrings)
+  - Commit message format (Conventional Commits)
+  - PR workflow and checklist
+  - Bug report and feature request templates
+  - Coverage goals and test structure examples
+- **docs/source/troubleshooting.rst**: Troubleshooting guide for common issues
+  - Installation issues (module not found, version conflicts)
+  - Connection issues (timeout, connection refused)
+  - Authentication issues (401, 403)
+  - Rate limiting (429)
+  - Streaming issues
+  - Performance issues
+  - Debugging techniques
+  - Common errors reference table
+- **TESTING.md**: Testing documentation with coverage goals and guidelines
+- **Updated Examples**: `error_handling_demo.py` updated to use new exception hierarchy
+
+#### CI/CD Improvements
+- **Multi-Version Testing**: CI now tests across Python 3.8-3.14 in separate jobs
+- **Security Scanning**: Automated vulnerability detection
+  - pip-audit for dependency vulnerabilities
+  - bandit for code security issues
+  - Runs daily and on every push/PR
+- **Pre-commit Hooks**: Code quality checks before commits
+  - ruff lint and format
+  - trailing whitespace and file ending fixes
+  - YAML syntax checking
+- **Coverage Threshold**: Minimum 60% code coverage enforced in CI
+- **Separate Lint Job**: Lint and format checks run in parallel with tests
+
+### Changed
+
+#### Chat Client Improvements
+- **BaseAPIClient Integration**: Chat now inherits from `BaseAPIClient` for consistent HTTP behavior
+  - All HTTP requests now use connection pooling
+  - Network errors raise custom exceptions instead of raw requests exceptions
+  - Consistent timeout and retry behavior across all clients
+
+#### CI/CD Architecture
+- **Enhanced Pipeline**: Lint and format checks run in parallel with tests
+  - Coverage uploaded only from Python 3.14 to save CI resources
+  - Separate security workflow for dependency and code scanning
+
+### Fixed
+
+#### Bug Fixes
+- **ChatHistory Deep Copy Protection**: Added deep copy to prevent external modifications to internal state
+  - Messages list is deep copied during initialization
+  - Prevents state pollution from external code modifying original input
+  - Ensures history immutability
+- **Error Message Extraction**: API errors now extract and include detailed error messages from JSON response bodies
+  - Supports OpenAI-style error format (`{"error": {"message": "..."}}`)
+  - Falls back to generic message if parsing fails
+- **Timeout Handling**: Network timeouts now raise `TimeoutError` instead of generic `requests.exceptions.Timeout`
+- **Backward Compatibility**: Added `timeout_s` property to Chat for backward compatibility with tuple timeout configuration
+- **Test Mocks**: Fixed test mocks to work with BaseAPIClient architecture
+
+#### Code Quality
+- Fixed all ruff linting and formatting issues
+- Removed unused imports and variables
+- Corrected import order
+
+### Security
+
+- All dependency vulnerabilities now scanned in CI pipeline using pip-audit
+- Code security linted with bandit for common security issues
+- Security scan runs daily and on every push/PR
+- Found issues are acceptable for library context (non-critical use cases)
+
+### Migration Guide
+
+#### Enabling Retry Logic
+
+```python
+from lexilux import Chat
+
+# Enable automatic retry with exponential backoff
+chat = Chat(
+    base_url="https://api.example.com/v1",
+    api_key="your-key",
+    max_retries=3,  # Automatically retry on transient failures
+)
+
+# Manual retry using retryable flag
+from lexilux import LexiluxError
+import time
+
+max_retries = 3
+for attempt in range(max_retries):
+    try:
+        result = chat("Hello, world!")
+        break
+    except LexiluxError as e:
+        if e.retryable and attempt < max_retries - 1:
+            time.sleep(2 ** attempt)  # Exponential backoff
+        else:
+            raise
+```
+
+#### Using New Exceptions
+
+```python
+from lexilux import (
+    Chat,
+    AuthenticationError,
+    RateLimitError,
+    TimeoutError,
+    LexiluxError,
+)
+
+try:
+    result = chat("Hello, world!")
+except AuthenticationError as e:
+    print(f"Auth failed: {e.message}")
+    print(f"Error code: {e.code}")  # "authentication_failed"
+    print(f"Can retry: {e.retryable}")  # False
+except RateLimitError as e:
+    print(f"Rate limited: {e.message}")
+    print(f"Error code: {e.code}")  # "rate_limit_exceeded"
+    print(f"Can retry: {e.retryable}")  # True
+except LexiluxError as e:
+    print(f"Error: {e.code} - {e.message}")
+```
+
+#### Enabling Logging
+
+```python
+import logging
+
+# Enable INFO level logging
+logging.basicConfig(level=logging.INFO)
+
+from lexilux import Chat
+chat = Chat(base_url="...", api_key="...")
+result = chat("Hello")
+# Logs: "Request completed in 0.52s with status 200: https://..."
+```
+
+#### Configuring Connection Pooling
+
+```python
+from lexilux import Chat
+
+chat = Chat(
+    base_url="https://api.example.com/v1",
+    api_key="your-key",
+    pool_connections=20,  # Increase for high concurrency
+    pool_maxsize=20,
+)
+```
+
+#### Separate Timeouts
+
+```python
+from lexilux import Chat
+
+# New API: separate connect and read timeouts
+chat = Chat(
+    base_url="https://api.example.com/v1",
+    api_key="your-key",
+    connect_timeout_s=5,   # Connection timeout
+    read_timeout_s=30,     # Read timeout
+)
+
+# Old API still works
+chat = Chat(
+    base_url="https://api.example.com/v1",
+    api_key="your-key",
+    timeout_s=30,  # Used for both connect and read
+)
+```
+
+### Developer Experience
+
+- Better error messages with error codes
+- Automatic retry reduces manual error handling
+- Logging helps with debugging
+- Comprehensive documentation for troubleshooting
+- Clear contribution guidelines
+- Automated quality checks (pre-commit, CI)
+
+### Performance
+
+- Connection pooling reduces overhead for repeated requests
+- Retry logic with exponential backoff improves reliability
+- Request timing via logging helps identify bottlenecks
+
+## [Unreleased]
+
+### Added
+- **Connection Pooling**: All API clients now use connection pooling for better performance under high concurrency
+  - Configurable via `pool_connections` and `pool_maxsize` parameters
+  - Reduces connection overhead for repeated requests
+- **Retry Logic**: Automatic retry with exponential backoff for transient failures
+  - Configurable via `max_retries` parameter (default: 0, disabled)
+  - Retries on status codes: 429, 500, 502, 503, 504
+  - Exponential backoff: 0.1s, 0.2s, 0.4s...
+- **Timeout Configuration**: Separate `connect_timeout_s` and `read_timeout_s` parameters for fine-grained timeout control
+  - Legacy `timeout_s` parameter still supported for backward compatibility
+- **Unified Exception Hierarchy**: Complete exception system with error codes and retryable flags
+  - `LexiluxError` - Base exception class for all Lexilux errors
+  - `AuthenticationError` - Authentication/authorization failures (401, not retryable)
+  - `RateLimitError` - Rate limit exceeded (429, retryable)
+  - `TimeoutError` - Request timeouts (retryable)
+  - `ConnectionError` - Connection failures (retryable)
+  - `ValidationError` - Invalid input (400, not retryable)
+  - `NotFoundError` - Resource not found (404, not retryable)
+  - `ServerError` - Internal server errors (5xx, retryable)
+  - `InvalidRequestError` - Alias for ValidationError
+  - `ConfigurationError` - Client configuration issues (not retryable)
+  - `NetworkError` - Base class for network issues
+- **Logging Support**: Request logging for debugging and monitoring
+  - Logs request start, completion, timing, and errors
+  - Uses appropriate log levels (DEBUG, INFO, WARNING, ERROR)
+  - Enable with: `import logging; logging.basicConfig(level=logging.INFO)`
+- **BaseAPIClient**: New base class providing common HTTP functionality to all clients
+  - Session management with connection pooling
+  - Retry logic with exponential backoff
+  - Configurable timeouts (connect/read)
+  - Authentication handling
+  - Error response parsing and exception mapping
+  - Request logging and timing
+- **Documentation**:
+  - `CONTRIBUTING.md` - Comprehensive contribution guidelines with code style, testing, and PR templates
+  - `docs/source/troubleshooting.rst` - Troubleshooting guide for common issues
+  - `TESTING.md` - Testing documentation with coverage goals and guidelines
+- **Security Scanning**: CI workflow with pip-audit and bandit for vulnerability detection
+- **Multi-Version Testing**: CI now tests across Python 3.8-3.14 in separate jobs
+- **Pre-commit Hooks**: Code quality checks before commits (ruff lint and format)
+- **Coverage Threshold**: Minimum 60% code coverage enforced in CI
+- **Updated Examples**: `error_handling_demo.py` updated to use new exception hierarchy
+
+### Changed
+- **Chat**: Now inherits from `BaseAPIClient` for consistent HTTP behavior
+  - All HTTP requests now use connection pooling
+  - Network errors raise custom exceptions instead of raw requests exceptions
+- **CI/CD**: Enhanced with separate lint job, multi-version testing matrix, and security scanning
+  - Lint and format checks run in parallel with tests
+  - Coverage uploaded only from Python 3.14 to save resources
+
+### Fixed
+- **ChatHistory**: Added deep copy protection to prevent external modifications to internal state
+  - Messages list is deep copied during initialization
+  - Prevents state pollution from external code modifying original input
+- **Error Messages**: API errors now extract and include detailed error messages from JSON response bodies
+  - Supports OpenAI-style error format (`{"error": {"message": "..."}}`)
+  - Falls back to generic message if parsing fails
+- **Timeout Handling**: Network timeouts now raise `TimeoutError` instead of generic `requests.exceptions.Timeout`
+- **Backward Compatibility**: Added `timeout_s` property to Chat for backward compatibility with tuple timeout
+
+### Security
+- All dependency vulnerabilities now scanned in CI pipeline using pip-audit
+- Code security linted with bandit for common security issues
+- Security scan runs daily and on every push/PR
+
 ## [2.1.0] - 2026-01-10
 
 ### 🎯 API Improvements: History Immutability & Customizable Continue Strategy

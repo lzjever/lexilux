@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import MutableSequence, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -159,9 +160,13 @@ class ChatHistory(MutableSequence):
         Args:
             messages: Message list (optional, can be extracted from anywhere).
             system: System message (optional).
+
+        Note:
+            The messages list is deep copied to prevent external modifications.
         """
         self.system = system
-        self.messages: list[dict[str, str]] = messages or []
+        # Deep copy to prevent external modifications to nested dicts
+        self.messages: list[dict[str, str]] = deepcopy(messages or [])
         self.metadata: dict[str, Any] = {}  # Metadata (timestamps, model, etc.)
 
     @classmethod
