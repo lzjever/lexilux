@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Unified LLM API client library with Chat, Embedding, Rerank, and Tokenizer support"
 readme = "README.md"
 requires-python = ">=3.8,<3.15"
-license = "Apache-2.0"
+license = {text = "Apache-2.0"}
 authors = [
     {name = "Lexilux Team"}
 ]
