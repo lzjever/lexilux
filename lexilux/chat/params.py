@@ -7,8 +7,11 @@ with support for standard parameters and custom extensions.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Sequence
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Sequence
+
+if TYPE_CHECKING:
+    from lexilux.chat.tools import Tool, ToolChoice
 
 
 @dataclass
@@ -68,6 +71,20 @@ class ChatParams:
             providers.
             Default: 1
 
+        tools: List of tools (functions) that the model may call.
+            Enables function calling capabilities. When provided, the model can
+            decide to call these functions instead of or in addition to generating text.
+            Default: None (no tools)
+
+        tool_choice: Controls when the model uses tools.
+            Can be "auto" (model decides), "required" (must call tools),
+            a specific tool name, or a ToolChoice object.
+            Default: None (auto mode)
+
+        parallel_tool_calls: Whether to enable parallel function calling.
+            When True, the model may call multiple functions in a single turn.
+            Default: None (provider default)
+
         extra: Additional custom parameters for OpenAI-compatible servers that may
             accept non-standard parameters. These will be merged into the request
             payload. Useful for provider-specific features.
@@ -90,6 +107,18 @@ class ChatParams:
         ...     frequency_penalty=0.3
         ... )
 
+        With tools:
+        >>> from lexilux.chat.tools import FunctionTool
+        >>> params = ChatParams(
+        ...     tools=[
+        ...         FunctionTool(
+        ...             name="get_weather",
+        ...             description="Get current weather",
+        ...             parameters={"type": "object", "properties": {...}}
+        ...         )
+        ...     ]
+        ... )
+
         With custom parameters:
         >>> params = ChatParams(
         ...     temperature=0.8,
@@ -106,6 +135,13 @@ class ChatParams:
     logit_bias: dict[int, float] | None = None
     user: str | None = None
     n: int = 1
+
+    # Tool calling parameters
+    tools: list["Tool"] | None = None
+    tool_choice: str | "ToolChoice" | None = None
+    parallel_tool_calls: bool | None = None
+
+    # Extra parameters
     extra: dict[str, Any] | None = None
 
     def to_dict(self, exclude_none: bool = True) -> dict[str, Any]:
@@ -123,6 +159,10 @@ class ChatParams:
             >>> params = ChatParams(temperature=0.5, max_tokens=100)
             >>> params.to_dict()
             {'temperature': 0.5, 'top_p': 1.0, 'max_tokens': 100, ...}
+
+            >>> params = ChatParams(tools=[FunctionTool(...)])
+            >>> params.to_dict()
+            {'temperature': 0.7, 'tools': [...], ...}
         """
         result: dict[str, Any] = {}
 
@@ -152,7 +192,23 @@ class ChatParams:
         if not exclude_none or self.n != 1:
             result["n"] = self.n
 
-        # Merge extra parameters
+        # Add tools parameters
+        if not exclude_none or self.tools is not None:
+            if self.tools is not None:
+                result["tools"] = [tool.to_dict() for tool in self.tools]
+
+        if not exclude_none or self.tool_choice is not None:
+            if self.tool_choice is not None:
+                if isinstance(self.tool_choice, str):
+                    result["tool_choice"] = self.tool_choice
+                else:
+                    result["tool_choice"] = self.tool_choice.to_dict()
+
+        if not exclude_none or self.parallel_tool_calls is not None:
+            if self.parallel_tool_calls is not None:
+                result["parallel_tool_calls"] = self.parallel_tool_calls
+
+        # Merge extra parameters (lowest priority)
         if self.extra:
             result.update(self.extra)
 

@@ -9,15 +9,18 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from typing import Any, Iterator, Sequence
+from typing import TYPE_CHECKING, Any, Iterator, Sequence
 
 from lexilux._base import BaseAPIClient
 from lexilux.chat.history import ChatHistory
-from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike
+from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike, ToolCall
 from lexilux.chat.params import ChatParams
 from lexilux.chat.streaming import StreamingIterator, StreamingResult
 from lexilux.chat.utils import normalize_finish_reason, normalize_messages, parse_usage
 from lexilux.usage import Json, Usage
+
+if TYPE_CHECKING:
+    from lexilux.chat.tools import Tool
 
 
 class Chat(BaseAPIClient):
@@ -121,6 +124,9 @@ class Chat(BaseAPIClient):
         logit_bias: dict[int, float] | None = None,
         user: str | None = None,
         n: int | None = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | Any | None = None,
+        parallel_tool_calls: bool | None = None,
         params: ChatParams | None = None,
         extra: Json | None = None,
         return_raw: bool = False,
@@ -166,6 +172,12 @@ class Chat(BaseAPIClient):
                 values (-100 to 100). Default: None
             user: Unique identifier for end-user (for monitoring/rate limiting).
             n: Number of chat completion choices to generate. Default: 1
+            tools: List of tools (functions) that the model may call.
+                Enables function calling capabilities. Default: None (no tools)
+            tool_choice: Controls when the model uses tools. Can be "auto", "required",
+                or a specific tool configuration. Default: None (auto mode)
+            parallel_tool_calls: Whether to enable parallel function calling.
+                Default: None (provider default)
             params: ChatParams dataclass instance. If provided, overrides individual
                 parameters above. Useful for structured configuration.
             extra: Additional custom parameters for non-standard providers.
@@ -243,6 +255,16 @@ class Chat(BaseAPIClient):
                 param_dict["user"] = user
             if n is not None:
                 param_dict["n"] = n
+            # Override tools parameters
+            if tools is not None:
+                param_dict["tools"] = [tool.to_dict() for tool in tools]
+            if tool_choice is not None:
+                if isinstance(tool_choice, str):
+                    param_dict["tool_choice"] = tool_choice
+                else:
+                    param_dict["tool_choice"] = tool_choice.to_dict()
+            if parallel_tool_calls is not None:
+                param_dict["parallel_tool_calls"] = parallel_tool_calls
         else:
             # Build from individual parameters (backward compatible)
             param_dict: Json = {}
@@ -269,6 +291,16 @@ class Chat(BaseAPIClient):
                 param_dict["user"] = user
             if n is not None:
                 param_dict["n"] = n
+            # Add tools parameters
+            if tools is not None:
+                param_dict["tools"] = [tool.to_dict() for tool in tools]
+            if tool_choice is not None:
+                if isinstance(tool_choice, str):
+                    param_dict["tool_choice"] = tool_choice
+                else:
+                    param_dict["tool_choice"] = tool_choice.to_dict()
+            if parallel_tool_calls is not None:
+                param_dict["parallel_tool_calls"] = parallel_tool_calls
 
         # Build payload
         payload: Json = {
@@ -307,6 +339,32 @@ class Chat(BaseAPIClient):
             message = {}
         text = message.get("content", "") or ""
 
+        # Extract tool calls
+        tool_calls_list: list[ToolCall] = []
+        raw_tool_calls = message.get("tool_calls")
+        if raw_tool_calls:
+            if not isinstance(raw_tool_calls, list):
+                raw_tool_calls = []
+            for tc in raw_tool_calls:
+                if not isinstance(tc, dict):
+                    continue
+                try:
+                    # Extract function info
+                    function = tc.get("function", {})
+                    if not isinstance(function, dict):
+                        function = {}
+
+                    tool_call = ToolCall(
+                        id=str(tc.get("id", "")),
+                        call_id=str(tc.get("id", "")),  # OpenAI uses same id for both
+                        name=str(function.get("name", "")),
+                        arguments=str(function.get("arguments", "{}")),
+                    )
+                    tool_calls_list.append(tool_call)
+                except (KeyError, TypeError, ValueError):
+                    # Skip invalid tool call entries (defensive)
+                    continue
+
         # Normalize finish_reason (defensive against invalid implementations)
         finish_reason = normalize_finish_reason(choice.get("finish_reason"))
 
@@ -318,6 +376,7 @@ class Chat(BaseAPIClient):
             text=text,
             usage=usage,
             finish_reason=finish_reason,
+            tool_calls=tool_calls_list,
             raw=response_data if return_raw else {},
         )
 
@@ -343,6 +402,9 @@ class Chat(BaseAPIClient):
         frequency_penalty: float | None = None,
         logit_bias: dict[int, float] | None = None,
         user: str | None = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | Any | None = None,
+        parallel_tool_calls: bool | None = None,
         params: ChatParams | None = None,
         extra: Json | None = None,
         include_usage: bool = True,
@@ -462,6 +524,16 @@ class Chat(BaseAPIClient):
                 param_dict["logit_bias"] = logit_bias
             if user is not None:
                 param_dict["user"] = user
+            # Override tools parameters
+            if tools is not None:
+                param_dict["tools"] = [tool.to_dict() for tool in tools]
+            if tool_choice is not None:
+                if isinstance(tool_choice, str):
+                    param_dict["tool_choice"] = tool_choice
+                else:
+                    param_dict["tool_choice"] = tool_choice.to_dict()
+            if parallel_tool_calls is not None:
+                param_dict["parallel_tool_calls"] = parallel_tool_calls
         else:
             # Build from individual parameters (backward compatible)
             param_dict: Json = {}
@@ -486,6 +558,16 @@ class Chat(BaseAPIClient):
                 param_dict["logit_bias"] = logit_bias
             if user is not None:
                 param_dict["user"] = user
+            # Add tools parameters
+            if tools is not None:
+                param_dict["tools"] = [tool.to_dict() for tool in tools]
+            if tool_choice is not None:
+                if isinstance(tool_choice, str):
+                    param_dict["tool_choice"] = tool_choice
+                else:
+                    param_dict["tool_choice"] = tool_choice.to_dict()
+            if parallel_tool_calls is not None:
+                param_dict["parallel_tool_calls"] = parallel_tool_calls
 
         # Build payload
         payload: Json = {

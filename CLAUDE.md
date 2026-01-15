@@ -58,7 +58,29 @@ Lexilux is a unified LLM API client library with a modular architecture. The cod
    - `Usage`: Unified usage statistics (input_tokens, output_tokens, total_tokens, details)
    - `ResultBase`: Base class for all API results, ensures `.usage` and `.raw` are always available
 
-2. **`lexilux/chat/`**: Chat completion API (main module, subdirectory structure)
+2. **`lexilux/base.py`**: Base API client (v2.2.0+)
+   - `BaseAPIClient`: Provides common HTTP functionality to all clients
+   - Connection pooling with configurable pool sizes (default: 10 connections)
+   - Automatic retry logic with exponential backoff
+   - Separate connect/read timeout configuration
+   - Request logging and timing
+   - Authentication handling
+   - Error response parsing and exception mapping
+
+3. **`lexilux/exceptions.py`**: Exception hierarchy (v2.2.0+)
+   - `LexiluxError`: Base exception with `code`, `message`, `retryable` properties
+   - `AuthenticationError`: 401 errors (not retryable)
+   - `RateLimitError`: 429 errors (retryable)
+   - `TimeoutError`: Request timeouts (retryable)
+   - `ConnectionError`: Connection failures (retryable)
+   - `ValidationError`: 400 errors (not retryable)
+   - `NotFoundError`: 404 errors (not retryable)
+   - `ServerError`: 5xx errors (retryable)
+   - `InvalidRequestError`: Alias for ValidationError
+   - `ConfigurationError`: Client configuration issues (not retryable)
+   - `NetworkError`: Base class for network issues
+
+4. **`lexilux/chat/`**: Chat completion API (main module, subdirectory structure)
    - `client.py`: Core `Chat` class with `__call__()` (non-streaming) and `stream()` methods
    - `history.py`: `ChatHistory` dataclass with utility functions for message manipulation
    - `continue_.py`: `ChatContinue` for conversation continuation with customizable strategy
@@ -69,9 +91,9 @@ Lexilux is a unified LLM API client library with a modular architecture. The cod
    - `models.py`: Data models for responses
    - `utils.py`: Utility functions for message normalization
 
-3. **`lexilux/embed.py`**: Embedding API client
-4. **`lexilux/rerank.py`**: Rerank API client with multiple modes (openai, dashscope)
-5. **`lexilux/tokenizer.py`**: Tokenizer client using HuggingFace transformers (optional dependency)
+5. **`lexilux/embed.py`**: Embedding API client
+6. **`lexilux/rerank.py`**: Rerank API client with multiple modes (openai, dashscope)
+7. **`lexilux/tokenizer.py`**: Tokenizer client using HuggingFace transformers (optional dependency)
 
 ### Key Design Patterns
 
@@ -80,6 +102,10 @@ Lexilux is a unified LLM API client library with a modular architecture. The cod
 - **Flexible Input**: Messages can be strings, lists of strings, or lists of dicts
 - **Streaming Support**: Chat supports both non-streaming (`__call__`) and streaming (`stream()`) responses
 - **OpenAI-Compatible**: Works with any OpenAI-compatible API
+- **Connection Pooling** (v2.2.0+): All clients use HTTP connection pooling for better performance
+- **Automatic Retry** (v2.2.0+): Configurable retry logic with exponential backoff for transient failures
+- **Exception Hierarchy** (v2.2.0+): Structured exception system with error codes and retryable flags
+- **Request Logging** (v2.2.0+): Built-in logging for debugging and monitoring (disabled by default)
 
 ### Chat Module Details
 
@@ -117,6 +143,80 @@ When both are provided, individual parameters override the ChatParams values. Th
 - **Proxy Configuration**: All API clients support proxies via the `proxies` parameter. If `None`, uses environment variables (HTTP_PROXY, HTTPS_PROXY). Pass `{}` to disable proxies.
 
 ## Common Tasks
+
+### Configuring Retry Logic
+
+All clients support automatic retry with exponential backoff for transient failures:
+
+```python
+from lexilux import Chat
+
+chat = Chat(
+    base_url="https://api.example.com/v1",
+    api_key="your-key",
+    max_retries=3,  # Automatically retry on 429, 500, 502, 503, 504
+)
+```
+
+Retry behavior:
+- Retries on status codes: 429, 500, 502, 503, 504
+- Exponential backoff: 0.1s, 0.2s, 0.4s...
+- Check `e.retryable` property to determine if an error is retryable
+
+### Enabling Request Logging
+
+Enable logging to debug requests and monitor performance:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+from lexilux import Chat
+chat = Chat(base_url="...", api_key="...")
+result = chat("Hello")
+# Logs: "Request completed in 0.52s with status 200: https://..."
+```
+
+### Configuring Connection Pooling
+
+Adjust connection pool size for high-concurrency scenarios:
+
+```python
+from lexilux import Chat
+
+chat = Chat(
+    base_url="https://api.example.com/v1",
+    api_key="your-key",
+    pool_connections=20,  # Default: 10
+    pool_maxsize=20,      # Default: 10
+)
+```
+
+### Handling Errors
+
+Use the exception hierarchy for robust error handling:
+
+```python
+from lexilux import Chat, LexiluxError, AuthenticationError, RateLimitError
+
+chat = Chat(base_url="...", api_key="...")
+
+try:
+    result = chat("Hello")
+except AuthenticationError as e:
+    print(f"Auth failed: {e.message}")
+    print(f"Error code: {e.code}")  # "authentication_failed"
+    print(f"Can retry: {e.retryable}")  # False
+except RateLimitError as e:
+    print(f"Rate limited: {e.message}")
+    print(f"Can retry: {e.retryable}")  # True
+except LexiluxError as e:
+    print(f"Error: {e.code} - {e.message}")
+    if e.retryable:
+        # Implement retry logic
+        pass
+```
 
 ### Adding a New Chat Parameter
 

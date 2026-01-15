@@ -1,7 +1,7 @@
 # Lexilux 🚀
 
 [![PyPI version](https://img.shields.io/pypi/v/lexilux.svg)](https://pypi.org/project/lexilux/)
-[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Documentation](https://readthedocs.org/projects/lexilux/badge/?version=latest)](https://lexilux.readthedocs.io)
 [![CI](https://github.com/lzjever/lexilux/workflows/CI/badge.svg)](https://github.com/lzjever/lexilux/actions)
@@ -17,6 +17,10 @@
 - 🔧 **Flexible Input**: Support multiple input formats (string, list, dict)
 - 🚫 **Optional Dependencies**: Tokenizer requires transformers only when needed
 - 🌐 **OpenAI-Compatible**: Works with OpenAI-compatible APIs
+- 🔁 **Automatic Retry**: Built-in retry logic with exponential backoff for transient failures
+- 🎣 **Connection Pooling**: HTTP connection pooling for better performance under high concurrency
+- 🛡️ **Exception Hierarchy**: Comprehensive exception system with error codes and retryable flags
+- 📝 **Request Logging**: Built-in logging for debugging and monitoring
 
 ## 📦 Installation
 
@@ -104,6 +108,18 @@ for chunk in chat.stream("Tell me a joke"):
     print(chunk.delta, end="")
     if chunk.done:
         print(f"\nUsage: {chunk.usage.total_tokens}")
+
+# Error Handling
+from lexilux import LexiluxError, AuthenticationError, RateLimitError
+
+try:
+    result = chat("Hello, world!")
+except AuthenticationError as e:
+    print(f"Auth failed: {e.message}")
+except RateLimitError as e:
+    print(f"Rate limited: {e.message} (retryable: {e.retryable})")
+except LexiluxError as e:
+    print(f"Error: {e.code} - {e.message}")
 ```
 
 ### Embedding

@@ -15,14 +15,18 @@ from lexilux.usage import Json, Usage
 def normalize_messages(
     messages: MessagesLike,
     system: str | None = None,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """
     Normalize messages input to a list of message dictionaries.
 
-    Supports multiple input formats:
+    Supports multiple input formats with backward compatibility:
     - str: Converted to [{"role": "user", "content": str}]
-    - List[Dict]: Used as-is
+    - List[Dict[str, str]]: Used as-is (legacy format, content is string)
+    - List[Dict[str, Any]]: Used as-is (supports multimodal content as list)
     - List[str]: Converted to [{"role": "user", "content": str}, ...]
+
+    Multimodal content is supported by passing content as a list of blocks:
+    [{"type": "text", "text": "..."}, {"type": "image_url", "image_url": {...}}]
 
     Args:
         messages: Messages in various formats.
@@ -32,16 +36,28 @@ def normalize_messages(
         Normalized list of message dictionaries.
 
     Examples:
+        >>> # Simple string
         >>> normalize_messages("hi")
-        [{"role": "user", "content": "hi"}]
+        [{'role': 'user', 'content': 'hi'}]
 
+        >>> # Legacy format (content as string)
         >>> normalize_messages([{"role": "user", "content": "hi"}])
-        [{"role": "user", "content": "hi"}]
+        [{'role': 'user', 'content': 'hi'}]
 
+        >>> # Multimodal format
+        >>> normalize_messages([{
+        ...     "role": "user",
+        ...     "content": [
+        ...         {"type": "text", "text": "What's in this image?"},
+        ...         {"type": "image_url", "image_url": {"url": "https://..."}}
+        ...     ]
+        ... }])
+
+        >>> # With system message
         >>> normalize_messages("hi", system="You are helpful")
-        [{"role": "system", "content": "You are helpful"}, {"role": "user", "content": "hi"}]
+        [{'role': 'system', 'content': 'You are helpful'}, {'role': 'user', 'content': 'hi'}]
     """
-    result: list[dict[str, str]] = []
+    result: list[dict[str, Any]] = []
 
     # Add system message if provided
     if system:
@@ -58,13 +74,40 @@ def normalize_messages(
                 # String in list -> user message
                 result.append({"role": "user", "content": msg})
             elif isinstance(msg, dict):
-                # Dict -> use as-is (should have "role" and "content")
-                if "role" in msg and "content" in msg:
-                    result.append({"role": msg["role"], "content": msg["content"]})
-                else:
+                # Dict -> validate and use as-is
+                if "role" not in msg:
+                    raise ValueError(f"Invalid message dict: {msg}. Must have 'role' key.")
+
+                if "content" not in msg:
+                    raise ValueError(f"Invalid message dict: {msg}. Must have 'content' key.")
+
+                # Validate content format
+                content = msg["content"]
+                if not isinstance(content, (str, list)):
                     raise ValueError(
-                        f"Invalid message dict: {msg}. Must have 'role' and 'content' keys."
+                        f"Invalid content type: {type(content)}. "
+                        "Content must be str or list of content blocks."
                     )
+
+                # If content is a list, validate each block
+                if isinstance(content, list):
+                    for i, block in enumerate(content):
+                        if not isinstance(block, dict):
+                            raise ValueError(
+                                f"Invalid content block at index {i}: {block}. "
+                                "Each block must be a dict."
+                            )
+                        if "type" not in block:
+                            raise ValueError(
+                                f"Invalid content block at index {i}: {block}. "
+                                "Each block must have a 'type' key."
+                            )
+
+                # Message is valid, add it
+                result.append({
+                    "role": msg["role"],
+                    "content": content,
+                })
             else:
                 raise ValueError(f"Invalid message type: {type(msg)}. Expected str or dict.")
     else:
