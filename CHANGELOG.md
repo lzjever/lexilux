@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Connection Pooling**: All API clients now use connection pooling for better performance under high concurrency
+  - Configurable via `pool_connections` and `pool_maxsize` parameters
+  - Reduces connection overhead for repeated requests
+- **Retry Logic**: Automatic retry with exponential backoff for transient failures
+  - Configurable via `max_retries` parameter (default: 0, disabled)
+  - Retries on status codes: 429, 500, 502, 503, 504
+  - Exponential backoff: 0.1s, 0.2s, 0.4s...
+- **Timeout Configuration**: Separate `connect_timeout_s` and `read_timeout_s` parameters for fine-grained timeout control
+  - Legacy `timeout_s` parameter still supported for backward compatibility
+- **Unified Exception Hierarchy**: Complete exception system with error codes and retryable flags
+  - `LexiluxError` - Base exception class for all Lexilux errors
+  - `AuthenticationError` - Authentication/authorization failures (401, not retryable)
+  - `RateLimitError` - Rate limit exceeded (429, retryable)
+  - `TimeoutError` - Request timeouts (retryable)
+  - `ConnectionError` - Connection failures (retryable)
+  - `ValidationError` - Invalid input (400, not retryable)
+  - `NotFoundError` - Resource not found (404, not retryable)
+  - `ServerError` - Internal server errors (5xx, retryable)
+  - `InvalidRequestError` - Alias for ValidationError
+  - `ConfigurationError` - Client configuration issues (not retryable)
+  - `NetworkError` - Base class for network issues
+- **BaseAPIClient**: New base class providing common HTTP functionality to all clients
+  - Session management with connection pooling
+  - Retry logic with exponential backoff
+  - Configurable timeouts (connect/read)
+  - Authentication handling
+  - Error response parsing and exception mapping
+- **Security Scanning**: CI workflow with pip-audit and bandit for vulnerability detection
+- **Multi-Version Testing**: CI now tests across Python 3.8-3.14 in separate jobs
+- **Pre-commit Hooks**: Code quality checks before commits (ruff lint and format)
+- **Coverage Threshold**: Minimum 60% code coverage enforced in CI
+- **TESTING.md**: Testing documentation with coverage goals and guidelines
+
+### Changed
+- **Chat**: Now inherits from `BaseAPIClient` for consistent HTTP behavior
+  - All HTTP requests now use connection pooling
+  - Network errors raise custom exceptions instead of raw requests exceptions
+- **CI/CD**: Enhanced with separate lint job, multi-version testing matrix, and security scanning
+  - Lint and format checks run in parallel with tests
+  - Coverage uploaded only from Python 3.14 to save resources
+
+### Fixed
+- **ChatHistory**: Added deep copy protection to prevent external modifications to internal state
+  - Messages list is deep copied during initialization
+  - Prevents state pollution from external code modifying original input
+- **Error Messages**: API errors now extract and include detailed error messages from JSON response bodies
+  - Supports OpenAI-style error format (`{"error": {"message": "..."}}`)
+  - Falls back to generic message if parsing fails
+- **Timeout Handling**: Network timeouts now raise `TimeoutError` instead of generic `requests.exceptions.Timeout`
+- **Backward Compatibility**: Added `timeout_s` property to Chat for backward compatibility with tuple timeout
+
+### Security
+- All dependency vulnerabilities now scanned in CI pipeline using pip-audit
+- Code security linted with bandit for common security issues
+- Security scan runs daily and on every push/PR
+
 ## [2.1.0] - 2026-01-10
 
 ### 🎯 API Improvements: History Immutability & Customizable Continue Strategy
