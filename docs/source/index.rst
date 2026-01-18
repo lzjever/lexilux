@@ -36,6 +36,14 @@ Lexilux is a unified LLM API client library that makes calling Chat, Embedding, 
       Learn how to use OpenAI-compatible function calling with tools.
 
    .. grid-item-card::
+      :link: multimodal
+      :link-type: doc
+
+      **Multimodal & Vision**
+
+      Learn how to use image understanding with multimodal chat.
+
+   .. grid-item-card::
       :link: api_reference/index
       :link-type: doc
 
@@ -68,6 +76,7 @@ Lexilux is a unified LLM API client library that makes calling Chat, Embedding, 
    installation
    quickstart
    function_calling
+   multimodal
    recommended_workflows
    error_handling
    troubleshooting
