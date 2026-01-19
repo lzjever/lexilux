@@ -94,10 +94,10 @@ dev-install:
 	@echo "✅ Package and dependencies installed! Ready for development."
 
 test:
-	$(PYTHON_CMD) -m pytest tests/ -v
+	$(PYTHON_CMD) -m pytest tests/ -v -m "not integration"
 
 test-cov:
-	$(PYTHON_CMD) -m pytest tests/ --cov=lexilux --cov-report=html --cov-report=term
+	$(PYTHON_CMD) -m pytest tests/ -m "not integration" --cov=lexilux --cov-report=html --cov-report=term
 
 test-integration:
 	@echo "Running integration tests (requires external services)..."

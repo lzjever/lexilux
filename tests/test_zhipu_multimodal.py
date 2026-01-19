@@ -9,7 +9,12 @@ This script tests:
 import base64
 import io
 
+import pytest
+
 from lexilux import Chat, FunctionTool
+
+# All tests in this file require external services
+pytestmark = pytest.mark.integration
 
 # Zhipu AI Configuration
 # Note: base_url should NOT include the /chat/completions path
