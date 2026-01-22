@@ -347,6 +347,7 @@ class TestChatHistoryResultOperations:
 class TestChatHistoryTokenOperations:
     """Test ChatHistory token-related operations"""
 
+    @pytest.mark.integration
     def test_count_tokens(self):
         """Test count_tokens with real Qwen tokenizer"""
 
@@ -359,31 +360,36 @@ class TestChatHistoryTokenOperations:
         model_id = "Qwen/Qwen2.5-7B-Instruct"
         cache_dir = "/tmp/lexilux/tokenizer"
 
-        # Load tokenizer (will download if needed and offline=False)
+        # Load tokenizer (use offline=True to prevent hanging on downloads)
+        # This test requires the model to be pre-downloaded locally
         try:
             tokenizer = Tokenizer(
                 model_id,
                 cache_dir=cache_dir,
-                offline=False,  # Allow download if not cached
+                offline=True,  # Only use cached models, don't try to download
             )
             test_result = tokenizer("test")
             if test_result.usage.total_tokens == 0:
                 pytest.skip("Tokenizer loaded but produced zero tokens")
+        except OSError as e:
+            pytest.skip(
+                f"Model not found in cache: {e}. Download model first or mark as integration test."
+            )
         except Exception as e:
             pytest.skip(f"Could not load tokenizer '{model_id}': {e}")
 
-        # Now test count_tokens with the working tokenizer
+        # Now test count_tokens with working tokenizer
         history = ChatHistory(system="You are helpful")
         history.add_user("Hello")
         history.add_assistant("Hi there!")
 
-        # Count tokens using the interface
+        # Count tokens using interface
         total = history.count_tokens(tokenizer)
         assert total > 0
         assert isinstance(total, int)
 
         # Verify correctness: count should match sum of individual counts
-        # This tests the business logic, not just that it returns a number
+        # This tests of business logic, not just that it returns a number
         sys_result = tokenizer("You are helpful")
         expected_system_tokens = sys_result.usage.total_tokens or 0
 
@@ -394,6 +400,14 @@ class TestChatHistoryTokenOperations:
         expected_assistant_tokens = assistant_result.usage.total_tokens or 0
 
         # Business logic check: total should be sum of all messages
+        expected_total = expected_system_tokens + expected_user_tokens + expected_assistant_tokens
+        assert total == expected_total, (
+            f"count_tokens returned {total}, but sum of individual counts is {expected_total}. "
+            f"System: {expected_system_tokens}, User: {expected_user_tokens}, "
+            f"Assistant: {expected_assistant_tokens}"
+        )
+
+    def test_truncate_by_rounds_empty(self):
         expected_total = expected_system_tokens + expected_user_tokens + expected_assistant_tokens
         assert total == expected_total, (
             f"count_tokens returned {total}, but sum of individual counts is {expected_total}. "

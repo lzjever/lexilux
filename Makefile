@@ -27,9 +27,9 @@ help:
 	@echo "  pre-commit-update  - Update pre-commit hooks to latest versions"
 	@echo ""
 	@echo "Testing:"
-	@echo "  test          - Run all unit tests (excludes integration tests)"
-	@echo "  test-cov      - Run tests with coverage report"
-	@echo "  test-integration - Run all integration tests (requires external services)"
+	@echo "  test          - Run all unit tests in parallel (excludes integration tests)"
+	@echo "  test-cov      - Run tests with coverage report in parallel"
+	@echo "  test-integration - Run all integration tests in parallel (requires external services)"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  lint          - Run linting checks (ruff)"
@@ -94,14 +94,14 @@ dev-install:
 	@echo "✅ Package and dependencies installed! Ready for development."
 
 test:
-	$(PYTHON_CMD) -m pytest tests/ -v -m "not integration"
+	$(PYTHON_CMD) -m pytest tests/ -v -m "not integration" -n auto
 
 test-cov:
-	$(PYTHON_CMD) -m pytest tests/ -m "not integration" --cov=lexilux --cov-report=html --cov-report=term
+	$(PYTHON_CMD) -m pytest tests/ -m "not integration" --cov=lexilux --cov-report=html --cov-report=term -n auto
 
 test-integration:
 	@echo "Running integration tests (requires external services)..."
-	$(PYTHON_CMD) -m pytest tests/ -v -m integration
+	$(PYTHON_CMD) -m pytest tests/ -v -m integration -n auto
 
 lint:
 	$(PYTHON_CMD) -m ruff check lexilux/ tests/ examples/ --output-format=concise --no-fix
