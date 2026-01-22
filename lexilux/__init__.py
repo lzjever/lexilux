@@ -49,6 +49,17 @@ from lexilux.exceptions import (
     ValidationError,
 )
 from lexilux.rerank import Rerank, RerankResult
+from lexilux.registry import (
+    ChatFactory,
+    ConfiguredChat,
+    ModelCapabilities,
+    ModelCost,
+    ModelLimits,
+    ModelModalities,
+    ModelRegistry,
+    ModelSpec,
+    ProviderSpec,
+)
 from lexilux.tokenizer import Tokenizer, TokenizeResult
 from lexilux.usage import ResultBase, Usage
 
@@ -109,6 +120,16 @@ __all__ = [
     # Tokenizer
     "Tokenizer",
     "TokenizeResult",
+    # Registry
+    "ModelRegistry",
+    "ChatFactory",
+    "ConfiguredChat",
+    "ModelSpec",
+    "ProviderSpec",
+    "ModelCapabilities",
+    "ModelLimits",
+    "ModelModalities",
+    "ModelCost",
 ]
 
 __version__ = "2.3.0"

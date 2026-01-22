@@ -131,4 +131,5 @@ secrets/
 test_endpoints.json
 tests/test_endpoints.json
 examples/test_endpoints.json
+endpoints.txt
 

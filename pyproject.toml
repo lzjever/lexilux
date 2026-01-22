@@ -94,7 +94,7 @@ exclude = [
 version = {attr = "lexilux.__version__"}
 
 [tool.setuptools.package-data]
-lexilux = ["py.typed"]
+lexilux = ["py.typed", "data/*.json"]
 
 [tool.ruff]
 line-length = 100
