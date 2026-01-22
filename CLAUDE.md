@@ -136,7 +136,7 @@ When both are provided, individual parameters override the ChatParams values. Th
 
 ## Important Notes
 
-- **Python Version**: Supports Python 3.8-3.14 (specified in pyproject.toml)
+- **Python Version**: Supports Python 3.9-3.14 (specified in pyproject.toml)
 - **Dependencies**: Core requires only `requests>=2.28.0`. Tokenizer support is optional (`[tokenizer]` extra)
 - **Line Length**: Code is formatted to 100 characters (ruff configuration)
 - **Type Hints**: The codebase uses type hints extensively but mypy is configured permissively

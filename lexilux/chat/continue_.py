@@ -10,7 +10,8 @@ from __future__ import annotations
 import logging
 import random
 import time
-from typing import TYPE_CHECKING, Any, Callable, Iterator, Literal, overload
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any, Callable, Literal, overload
 
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk
@@ -251,7 +252,7 @@ class ChatContinue:
             auto_merge: If True, automatically merge all results into a single ChatResult.
                 If False, returns a list of all results [last_result, continue_result1, ...].
             on_progress: Optional progress callback function with signature:
-                (count: int, max_count: int, current_result: ChatResult, all_results: list[ChatResult]) -> None
+                (count: int, max_count: int, current_result: ChatResult, all_results: List[ChatResult]) -> None
             continue_delay: Delay between continue requests (seconds). Can be a float (fixed delay)
                 or tuple (min, max) for random delay. Delay is only applied after the first continue.
             on_error: Error handling strategy: "raise" (default) or "return_partial".
@@ -474,7 +475,7 @@ class ChatContinue:
                 a callable with signature: (count: int, max_count: int, current_text: str, original_prompt: str) -> str
             max_continues: Maximum number of continuation attempts. If result is still truncated after max_continues, returns merged result.
             on_progress: Optional progress callback function with signature:
-                (count: int, max_count: int, current_result: ChatResult, all_results: list[ChatResult]) -> None
+                (count: int, max_count: int, current_result: ChatResult, all_results: List[ChatResult]) -> None
             continue_delay: Delay between continue requests (seconds). Can be a float (fixed delay)
                 or tuple (min, max) for random delay. Delay is only applied after the first continue.
             on_error: Error handling strategy: "raise" (default) or "return_partial".

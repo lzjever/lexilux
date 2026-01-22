@@ -1,7 +1,7 @@
 # Lexilux 🚀
 
 [![PyPI version](https://img.shields.io/pypi/v/lexilux.svg)](https://pypi.org/project/lexilux/)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Documentation](https://readthedocs.org/projects/lexilux/badge/?version=latest)](https://lexilux.readthedocs.io)
 [![CI](https://github.com/lzjever/lexilux/workflows/CI/badge.svg)](https://github.com/lzjever/lexilux/actions)

@@ -6,7 +6,8 @@ Provides a simple, function-like API for text embeddings with unified usage trac
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Literal, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Literal
 
 import requests
 
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
     pass
 
 # Type alias
-Vector = List[float]
+Vector = list[float]
 
 
 class EmbedResult(ResultBase):

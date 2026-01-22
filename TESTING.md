@@ -55,7 +55,7 @@ uv run pytest tests/test_chat.py::test_chat_basic -v
 The CI pipeline runs:
 1. Linting (ruff check)
 2. Format checking (ruff format --check)
-3. Unit tests with coverage (Python 3.8-3.14)
+3. Unit tests with coverage (Python 3.9-3.14)
 4. Security scanning (pip-audit, bandit)
 
 ## Coverage Requirements

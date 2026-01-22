@@ -7,7 +7,8 @@ Provides a simple, function-like API for chat completions with unified usage tra
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, Iterator, Literal, Sequence, Union
+from collections.abc import Iterator, Sequence
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 import requests
 

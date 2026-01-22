@@ -8,10 +8,10 @@ Provides a unified way to load API endpoint configurations from JSON files.
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 
-def load_endpoints_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+def load_endpoints_config(config_path: Optional[str] = None) -> dict[str, Any]:
     """
     Load endpoints configuration from JSON file.
 
@@ -57,8 +57,8 @@ def load_endpoints_config(config_path: Optional[str] = None) -> Dict[str, Any]:
 
 
 def get_chat_config(
-    config: Optional[Dict[str, Any]] = None, config_path: Optional[str] = None
-) -> Dict[str, Any]:
+    config: Optional[dict[str, Any]] = None, config_path: Optional[str] = None
+) -> dict[str, Any]:
     """
     Get Chat API configuration from endpoints config.
 
@@ -90,8 +90,8 @@ def get_chat_config(
 
 
 def get_embed_config(
-    config: Optional[Dict[str, Any]] = None, config_path: Optional[str] = None
-) -> Dict[str, Any]:
+    config: Optional[dict[str, Any]] = None, config_path: Optional[str] = None
+) -> dict[str, Any]:
     """
     Get Embed API configuration from endpoints config.
 
@@ -123,8 +123,8 @@ def get_embed_config(
 
 
 def get_rerank_config(
-    config: Optional[Dict[str, Any]] = None, config_path: Optional[str] = None
-) -> Dict[str, Any]:
+    config: Optional[dict[str, Any]] = None, config_path: Optional[str] = None
+) -> dict[str, Any]:
     """
     Get Rerank API configuration from endpoints config.
 

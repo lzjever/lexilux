@@ -7,14 +7,15 @@ Defines ChatResult, ChatStreamChunk, ToolCall, and type aliases for chat complet
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, Literal, Sequence, Union
+from typing import Any, Literal, Union
 
 from lexilux.usage import Json, ResultBase, Usage
 
 # Type aliases
 Role = Literal["system", "user", "assistant", "tool"]
-MessageLike = Union[str, Dict[str, str], Dict[str, Any]]
+MessageLike = Union[str, dict[str, str], dict[str, Any]]
 MessagesLike = Union[str, Sequence[MessageLike]]
 
 

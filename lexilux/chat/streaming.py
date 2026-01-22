@@ -7,7 +7,7 @@ during streaming, allowing history to be updated in real-time.
 
 from __future__ import annotations
 
-from typing import Iterator
+from collections.abc import Iterator
 
 from lexilux.chat.models import ChatResult, ChatStreamChunk
 from lexilux.usage import Usage

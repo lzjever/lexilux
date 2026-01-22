@@ -6,7 +6,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 # Disable proxies for tests to avoid proxy-related issues
 # This ensures tests connect directly to endpoints
@@ -25,7 +25,7 @@ if str(project_root) not in sys.path:
 import pytest  # noqa: E402
 
 
-def load_test_config() -> Optional[Dict[str, Any]]:
+def load_test_config() -> Optional[dict[str, Any]]:
     """
     Load test endpoints configuration from test_endpoints.json.
 

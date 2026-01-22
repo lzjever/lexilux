@@ -8,8 +8,8 @@ both non-streaming and streaming responses.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from typing import TYPE_CHECKING, Any
 
 from lexilux._base import BaseAPIClient
 from lexilux.chat.history import ChatHistory
@@ -826,7 +826,7 @@ class Chat(BaseAPIClient):
             continue_prompt: User prompt for continuation requests. Can be a string or
                 a callable with signature: (count: int, max_count: int, current_text: str, original_prompt: str) -> str
             on_progress: Optional progress callback function with signature:
-                (count: int, max_count: int, current_result: ChatResult, all_results: list[ChatResult]) -> None
+                (count: int, max_count: int, current_result: ChatResult, all_results: List[ChatResult]) -> None
             continue_delay: Delay between continue requests (seconds). Can be a float (fixed delay)
                 or tuple (min, max) for random delay. Delay is only applied after the first continue.
             on_error: Error handling strategy: "raise" (default) or "return_partial".
@@ -954,7 +954,7 @@ class Chat(BaseAPIClient):
             continue_prompt: User prompt for continuation requests. Can be a string or
                 a callable with signature: (count: int, max_count: int, current_text: str, original_prompt: str) -> str
             on_progress: Optional progress callback function with signature:
-                (count: int, max_count: int, current_result: ChatResult, all_results: list[ChatResult]) -> None
+                (count: int, max_count: int, current_result: ChatResult, all_results: List[ChatResult]) -> None
             continue_delay: Delay between continue requests (seconds). Can be a float (fixed delay)
                 or tuple (min, max) for random delay. Delay is only applied after the first continue.
             on_error: Error handling strategy: "raise" (default) or "return_partial".

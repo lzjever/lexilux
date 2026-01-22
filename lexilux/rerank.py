@@ -8,7 +8,8 @@ Supports multiple provider modes: OpenAI-compatible and DashScope.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, List, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import requests
 
@@ -18,8 +19,8 @@ if TYPE_CHECKING:
     pass
 
 # Type aliases
-Ranked = List[Tuple[int, float]]  # (index, score)
-RankedWithDoc = List[Tuple[int, float, str]]  # (index, score, doc)
+Ranked = list[tuple[int, float]]  # (index, score)
+RankedWithDoc = list[tuple[int, float, str]]  # (index, score, doc)
 
 
 class RerankResult(ResultBase):

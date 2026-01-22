@@ -6,13 +6,13 @@ All API calls return ResultBase subclasses that include usage statistics.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     pass
 
 # Type alias for JSON-like data
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 class Usage:
