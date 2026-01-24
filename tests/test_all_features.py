@@ -1,133 +1,98 @@
 #!/usr/bin/env python
 """Comprehensive test for all refactor plan features"""
 
-from unittest.mock import Mock, patch
+import pytest
+import responses
 
 from lexilux import Chat, ChatContinue, ChatHistory, ChatHistoryFormatter, StreamingIterator
-from lexilux.chat import filter_by_role, get_statistics, merge_histories, search_content
+from lexilux.chat.history import filter_by_role, merge_histories, search_content, get_statistics
 
 
-def test_auto_history_non_streaming():
-    """Test auto_history with non-streaming"""
-    chat = Chat(
-        base_url="https://api.example.com/v1",
-        api_key="test-key",
-        model="gpt-4",
-        auto_history=True,
-    )
-
-    with patch("lexilux.chat.client.requests.post") as mock_post:
-        # First call
-        mock_response1 = Mock()
-        mock_response1.status_code = 200
-        mock_response1.json.return_value = {
-            "choices": [{"message": {"content": "Hello! How can I help?"}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 8, "total_tokens": 18},
-        }
-        mock_response1.raise_for_status = Mock()
-
-        # Second call
-        mock_response2 = Mock()
-        mock_response2.status_code = 200
-        mock_response2.json.return_value = {
-            "choices": [{"message": {"content": "I'm doing well!"}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 15, "completion_tokens": 5, "total_tokens": 20},
-        }
-        mock_response2.raise_for_status = Mock()
-
-        mock_post.side_effect = [mock_response1, mock_response2]
-
-        result1 = chat("Hello")
-        result2 = chat("How are you?")
-
-        history = chat.get_history()
-        assert history is not None
-        assert len(history.messages) == 4  # 2 user + 2 assistant
-        assert history.messages[0]["role"] == "user"
-        assert history.messages[1]["role"] == "assistant"
-        assert history.messages[2]["role"] == "user"
-        assert history.messages[3]["role"] == "assistant"
-
-    print("✓ auto_history non-streaming test passed")
-
-
-def test_auto_history_streaming():
-    """Test auto_history with streaming"""
-    chat = Chat(
-        base_url="https://api.example.com/v1",
-        api_key="test-key",
-        model="gpt-4",
-        auto_history=True,
-    )
-
-    with patch("lexilux.chat.client.requests.post") as mock_post:
-        stream_data = [
-            b'data: {"choices": [{"delta": {"content": "Hello"}, "index": 0}]}\n',
-            b'data: {"choices": [{"delta": {"content": " world"}, "index": 0}]}\n',
-            b'data: {"choices": [{"finish_reason": "stop", "index": 0}]}\n',
-            b"data: [DONE]\n",
-        ]
-
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.iter_lines.return_value = iter(stream_data)
-        mock_response.raise_for_status = Mock()
-        mock_post.return_value = mock_response
-
-        iterator = chat.stream("Hello", auto_history=True)
-        assert isinstance(iterator, StreamingIterator)
-
-        chunks = list(iterator)
-        assert len(chunks) >= 2
-
-        # Check history was updated
-        history = chat.get_history()
-        assert history is not None
-        assert len(history.messages) == 2
-        assert "Hello" in history.messages[1]["content"] or "world" in history.messages[1]["content"]
-
-    print("✓ auto_history streaming test passed")
-
-
-def test_chat_continue():
-    """Test ChatContinue functionality"""
+@responses.activate
+def test_chat_with_history():
+    """Test chat_with_history method"""
     chat = Chat(
         base_url="https://api.example.com/v1",
         api_key="test-key",
         model="gpt-4",
     )
 
-    from lexilux import ChatResult
-    from lexilux.usage import Usage
+    history = ChatHistory.from_messages("Hello")
 
-    result1 = ChatResult(
-        text="This is part 1",
-        usage=Usage(input_tokens=10, output_tokens=50, total_tokens=60),
-        finish_reason="length",
+    # Mock API response
+    responses.add(
+        responses.POST,
+        "https://api.example.com/v1/chat/completions",
+        json={
+            "choices": [{"message": {"content": "Hi!"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        },
+        status=200,
     )
 
-    history = ChatHistory.from_messages("Write a story")
-    history.append_result(result1)
+    result = chat.chat_with_history(history, temperature=0.7)
+    assert result.text == "Hi!"
+    assert result.usage.total_tokens == 15
 
-    with patch("lexilux.chat.client.requests.post") as mock_post:
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": " and part 2"}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
-        }
-        mock_response.raise_for_status = Mock()
-        mock_post.return_value = mock_response
 
-        # New API with auto_merge=True (default) returns merged result directly
-        full_result = ChatContinue.continue_request(
-            chat, result1, history=history, add_continue_prompt=True
-        )
-        assert "part 1" in full_result.text
-        assert "part 2" in full_result.text
-        assert full_result.usage.total_tokens == 90
+@responses.activate
+def test_stream_with_history():
+    """Test stream_with_history method"""
+    chat = Chat(
+        base_url="https://api.example.com/v1",
+        api_key="test-key",
+        model="gpt-4",
+    )
 
-    print("✓ ChatContinue test passed")
+    history = ChatHistory.from_messages("Hello")
+
+    # Mock streaming response
+    stream_data = [
+        b'data: {"choices": [{"delta": {"content": "Hi"}, "index": 0}]}\n',
+        b'data: {"choices": [{"finish_reason": "stop", "index": 0}]}\n',
+        b"data: [DONE]\n",
+    ]
+
+    responses.add(
+        responses.POST,
+        "https://api.example.com/v1/chat/completions",
+        body=b''.join(stream_data),
+        status=200,
+        content_type="text/event-stream",
+    )
+
+    result = chat.stream_with_history(history)
+    assert isinstance(result, StreamingIterator)
+    chunks = list(result)
+    assert len(chunks) >= 1
+
+
+@responses.activate
+def test_chat_with_additional_message():
+    """Test chat_with_history with additional message"""
+    chat = Chat(
+        base_url="https://api.example.com/v1",
+        api_key="test-key",
+        model="gpt-4",
+    )
+
+    history = ChatHistory.from_messages("First message")
+    history.add_assistant("First response")
+
+    # Mock API response
+    responses.add(
+        responses.POST,
+        "https://api.example.com/v1/chat/completions",
+        json={
+            "choices": [{"message": {"content": "Second response"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
+        },
+        status=200,
+    )
+
+    result = chat.chat_with_history(history, "Second message", temperature=0.7)
+    assert result.text == "Second response"
+    assert result.usage.total_tokens == 30
 
 
 def test_utility_functions():
@@ -157,45 +122,71 @@ def test_utility_functions():
     assert stats["user_messages"] == 2
     assert stats["assistant_messages"] == 2
 
-    print("✓ Utility functions test passed")
+
+def test_history_formatter():
+    """Test ChatHistoryFormatter"""
+    history = ChatHistory.from_messages("Hello", system="You are a helpful assistant")
+    history.add_assistant("Hi! How can I help you?")
+
+    # Test to_text
+    text_output = ChatHistoryFormatter.to_text(history)
+    assert "Hello" in text_output
+    assert "Hi!" in text_output
+
+    # Test to_markdown
+    markdown_output = ChatHistoryFormatter.to_markdown(history)
+    assert "Hello" in markdown_output
+
+    # Test to_json
+    json_output = ChatHistoryFormatter.to_json(history)
+    assert isinstance(json_output, str)
+
+    # Test to_html
+    html_output = ChatHistoryFormatter.to_html(history)
+    assert "Hello" in html_output
 
 
-def test_chat_with_history():
-    """Test chat_with_history and stream_with_history methods"""
+@responses.activate
+def test_history_tracking():
+    """Test history tracking in chat calls"""
     chat = Chat(
         base_url="https://api.example.com/v1",
         api_key="test-key",
         model="gpt-4",
     )
 
-    history = ChatHistory.from_messages("Hello")
+    # First call
+    responses.add(
+        responses.POST,
+        "https://api.example.com/v1/chat/completions",
+        json={
+            "choices": [{"message": {"content": "Hello! How can I help?"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 8, "total_tokens": 18},
+        },
+        status=200,
+    )
 
-    with patch("lexilux.chat.client.requests.post") as mock_post:
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "Hi!"}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-        }
-        mock_response.raise_for_status = Mock()
-        mock_post.return_value = mock_response
+    result1 = chat("Hello")
 
-        result = chat.chat_with_history(history, temperature=0.7)
-        assert result.text == "Hi!"
-
-    print("✓ chat_with_history test passed")
+    # Verify we can create history from result
+    history = ChatHistory.from_chat_result("Hello", result1)
+    assert len(history.messages) == 2  # user + assistant
+    assert history.messages[0]["role"] == "user"
+    assert history.messages[1]["role"] == "assistant"
+    
+    # Can also create with system separately - system is not in messages list
+    history_with_system = ChatHistory(system="System message")
+    history_with_system.add_user("Hello")
+    history_with_system.add_assistant(result1.text)
+    assert len(history_with_system.messages) == 2  # user + assistant (system is separate attribute)
+    assert history_with_system.system == "System message"
+    assert history_with_system.messages[0]["role"] == "user"
+    
+    # get_messages includes system message
+    all_messages = history_with_system.get_messages()
+    assert len(all_messages) == 3  # system + user + assistant
+    assert all_messages[0]["role"] == "system"
 
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("Testing all refactor plan features...")
-    print("=" * 60)
-    test_auto_history_non_streaming()
-    test_auto_history_streaming()
-    test_chat_continue()
-    test_utility_functions()
-    test_chat_with_history()
-    print("=" * 60)
-    print("✅ All tests passed! All features from plan are implemented!")
-    print("=" * 60)
-
+    pytest.main([__file__, "-v"])
