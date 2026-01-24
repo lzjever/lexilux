@@ -113,10 +113,10 @@ class ToolChoice:
         Examples:
             >>> ToolChoice(type="auto").to_dict()
             'auto'
-            >>> ToolChoice(type="required").to_dict()
-            'required'
-            >>> ToolChoice(type="function", name="get_weather").to_dict()
-            {'type': 'function', 'name': 'get_weather'}
+        >>> ToolChoice(type="required").to_dict()
+        'required'
+        >>> ToolChoice(type="function", name="get_weather").to_dict()
+        {'type': 'function', 'function': {'name': 'get_weather'}}
         """
         if self.type == "auto":
             return "auto"
@@ -125,7 +125,9 @@ class ToolChoice:
         elif self.type == "function":
             return {
                 "type": "function",
-                "name": self.name,
+                "function": {
+                    "name": self.name,
+                },
             }
         elif self.type == "allowed_tools":
             return {
