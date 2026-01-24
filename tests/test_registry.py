@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import tempfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -14,7 +14,6 @@ from lexilux.registry import (
     ChatFactory,
     ConfiguredChat,
     ModelCapabilities,
-    ModelCost,
     ModelLimits,
     ModelModalities,
     ModelRegistry,
@@ -316,7 +315,9 @@ class TestModelRegistry:
     def test_search_combined_criteria(self, registry):
         """Test searching with multiple criteria."""
         results = list(
-            registry.search(supports_tool_call=True, supports_vision=True, min_context=100000)
+            registry.search(
+                supports_tool_call=True, supports_vision=True, min_context=100000
+            )
         )
 
         assert len(results) == 2

@@ -242,7 +242,9 @@ class TestAnalyzeTokens:
 
         analysis = history.analyze_tokens(tokenizer)
         assert len(analysis.per_message) == 3
-        assert all(isinstance(item, tuple) and len(item) == 3 for item in analysis.per_message)
+        assert all(
+            isinstance(item, tuple) and len(item) == 3 for item in analysis.per_message
+        )
         # Check structure: (role, preview, tokens)
         for role, preview, tokens in analysis.per_message:
             assert role in ["system", "user", "assistant"]
@@ -431,7 +433,9 @@ class TestGetStatisticsWithTokenizer:
         # Values should match
         assert stats["total_tokens"] == analysis.total_tokens
         assert stats["tokens_by_role"] == analysis.token_distribution
-        assert stats["average_tokens_per_message"] == analysis.average_tokens_per_message
+        assert (
+            stats["average_tokens_per_message"] == analysis.average_tokens_per_message
+        )
         assert stats["average_tokens_per_round"] == analysis.average_tokens_per_round
         assert stats["max_message_tokens"] == analysis.max_message_tokens
         assert stats["min_message_tokens"] == analysis.min_message_tokens
@@ -455,7 +459,9 @@ class TestTokenAnalysisIntegration:
         assert len(analysis_before.per_round) == 5
 
         # Truncate
-        truncated = history.truncate_by_rounds(tokenizer, max_tokens=20, keep_system=True)
+        truncated = history.truncate_by_rounds(
+            tokenizer, max_tokens=20, keep_system=True
+        )
 
         # Analyze after truncation
         analysis_after = truncated.analyze_tokens(tokenizer)
@@ -500,11 +506,15 @@ class TestTokenAnalysisIntegration:
         tokenizer = MockTokenizer()
         history = ChatHistory()
         # Long message
-        long_message = "This is a very long message that should be truncated in the preview"
+        long_message = (
+            "This is a very long message that should be truncated in the preview"
+        )
         history.add_user(long_message)
 
         analysis = history.analyze_tokens(tokenizer)
-        user_message = next((msg for msg in analysis.per_message if msg[0] == "user"), None)
+        user_message = next(
+            (msg for msg in analysis.per_message if msg[0] == "user"), None
+        )
         assert user_message is not None
         preview = user_message[1]
         # Preview should be truncated (50 chars + "...")

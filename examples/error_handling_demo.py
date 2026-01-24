@@ -144,7 +144,9 @@ def demo_streaming_error_handling():
         print(f"  Error code: {e.code}")
         print(f"  Retryable: {e.retryable}")
         if completed:
-            print(f"  → Completion occurred before error: finish_reason = {finish_reason}")
+            print(
+                f"  → Completion occurred before error: finish_reason = {finish_reason}"
+            )
         else:
             print("  → No completion received - stream was interrupted")
 
@@ -153,7 +155,9 @@ def demo_streaming_error_handling():
         print(f"  Error code: {e.code}")
         print(f"  Retryable: {e.retryable}")
         if completed:
-            print(f"  → Completion occurred before timeout: finish_reason = {finish_reason}")
+            print(
+                f"  → Completion occurred before timeout: finish_reason = {finish_reason}"
+            )
         else:
             print("  → No completion received - stream timed out")
 

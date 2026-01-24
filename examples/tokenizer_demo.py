@@ -23,7 +23,9 @@ def main():
 
     # Initialize tokenizer (offline mode)
     tokenizer = Tokenizer(
-        "deepseek-ai/DeepSeek-V3.2", offline=False, cache_dir="~/.cache/lexilux/tokenizer"
+        "deepseek-ai/DeepSeek-V3.2",
+        offline=False,
+        cache_dir="~/.cache/lexilux/tokenizer",
     )
 
     # Single text

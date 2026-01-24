@@ -83,7 +83,9 @@ class TestChatIntegration:
 
     @pytest.mark.integration
     @pytest.mark.skip_if_no_config
-    def test_chat_finish_reason_with_stop_sequence(self, test_config, has_real_api_config):
+    def test_chat_finish_reason_with_stop_sequence(
+        self, test_config, has_real_api_config
+    ):
         """Test chat completion with stop sequence"""
         if not has_real_api_config or "completion" not in test_config:
             pytest.skip("No real API config available")
@@ -122,7 +124,9 @@ class TestChatIntegration:
         result = chat("What is 2+2?", system="You are a helpful math assistant")
         assert isinstance(result, ChatResult)
         assert len(result.text) > 0
-        assert result.finish_reason is not None or result.finish_reason is None  # Accept any value
+        assert (
+            result.finish_reason is not None or result.finish_reason is None
+        )  # Accept any value
 
     @pytest.mark.integration
     @pytest.mark.skip_if_no_config

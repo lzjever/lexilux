@@ -305,7 +305,10 @@ class BaseAPIClient:
             self._handle_response_error(response)
 
         logger.info(
-            "Request completed in %.2fs with status %d: %s", elapsed, response.status_code, url
+            "Request completed in %.2fs with status %d: %s",
+            elapsed,
+            response.status_code,
+            url,
         )
         return response
 
@@ -357,7 +360,9 @@ class BaseAPIClient:
             raise LexiluxConnectionError(f"Connection failed: {e}") from e
         except requests.exceptions.RequestException as e:
             elapsed = time.time() - start_time
-            logger.error("Streaming request failed after %.2fs: %s - %s", elapsed, url, e)
+            logger.error(
+                "Streaming request failed after %.2fs: %s - %s", elapsed, url, e
+            )
             # Generic requests error
             raise APIError(f"Request failed: {e}") from e
 
@@ -601,15 +606,21 @@ class BaseAPIClient:
 
         except httpx.TimeoutException as e:
             elapsed = time.time() - start_time
-            logger.error("Async streaming request timeout after %.2fs: %s", elapsed, url)
+            logger.error(
+                "Async streaming request timeout after %.2fs: %s", elapsed, url
+            )
             raise LexiluxTimeoutError(f"Request timeout: {e}") from e
         except httpx.ConnectError as e:
             elapsed = time.time() - start_time
-            logger.error("Async streaming connection failed after %.2fs: %s", elapsed, url)
+            logger.error(
+                "Async streaming connection failed after %.2fs: %s", elapsed, url
+            )
             raise LexiluxConnectionError(f"Connection failed: {e}") from e
         except httpx.HTTPError as e:
             elapsed = time.time() - start_time
-            logger.error("Async streaming request failed after %.2fs: %s - %s", elapsed, url, e)
+            logger.error(
+                "Async streaming request failed after %.2fs: %s - %s", elapsed, url, e
+            )
             raise APIError(f"Request failed: {e}") from e
 
     async def aclose(self) -> None:

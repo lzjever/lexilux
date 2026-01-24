@@ -26,7 +26,11 @@ from lexilux.chat._request import (
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike
 from lexilux.chat.params import ChatParams
-from lexilux.chat.streaming import AsyncStreamingIterator, StreamingIterator, StreamingResult
+from lexilux.chat.streaming import (
+    AsyncStreamingIterator,
+    StreamingIterator,
+    StreamingResult,
+)
 from lexilux.usage import Json
 
 if TYPE_CHECKING:
@@ -217,10 +221,12 @@ class Chat(BaseAPIClient):
                 a network/connection problem, not a normal completion.
             ValueError: On invalid input or response format.
         """
-        normalized_messages, working_history, user_messages_to_add = prepare_messages_for_request(
-            messages,
-            system=system,
-            history=history,
+        normalized_messages, working_history, user_messages_to_add = (
+            prepare_messages_for_request(
+                messages,
+                system=system,
+                history=history,
+            )
         )
 
         model = model or self.model
@@ -362,10 +368,12 @@ class Chat(BaseAPIClient):
             ...     print("Response was truncated")
         """
         # Normalize messages
-        normalized_messages, working_history, user_messages_to_add = prepare_messages_for_request(
-            messages,
-            system=system,
-            history=history,
+        normalized_messages, working_history, user_messages_to_add = (
+            prepare_messages_for_request(
+                messages,
+                system=system,
+                history=history,
+            )
         )
         model = model or self.model
         if not model:
@@ -465,7 +473,9 @@ class Chat(BaseAPIClient):
                 self._history = history
                 # Use base iterator's result (which is already accumulating)
                 self._result = base_iterator.result
-                self._assistant_added = False  # Track if assistant message has been added
+                self._assistant_added = (
+                    False  # Track if assistant message has been added
+                )
 
             def __iter__(self) -> Iterator[ChatStreamChunk]:
                 """Iterate chunks and update history."""
@@ -563,10 +573,12 @@ class Chat(BaseAPIClient):
             >>> tasks = [chat.acall(f"Question {i}") for i in range(5)]
             >>> results = await asyncio.gather(*tasks)
         """
-        normalized_messages, working_history, user_messages_to_add = prepare_messages_for_request(
-            messages,
-            system=system,
-            history=history,
+        normalized_messages, working_history, user_messages_to_add = (
+            prepare_messages_for_request(
+                messages,
+                system=system,
+                history=history,
+            )
         )
         model = model or self.model
         if not model:
@@ -686,10 +698,12 @@ class Chat(BaseAPIClient):
             ...     print(chunk.delta, end="")
             >>> print(f"Total: {iterator.result.usage.total_tokens}")
         """
-        normalized_messages, working_history, user_messages_to_add = prepare_messages_for_request(
-            messages,
-            system=system,
-            history=history,
+        normalized_messages, working_history, user_messages_to_add = (
+            prepare_messages_for_request(
+                messages,
+                system=system,
+                history=history,
+            )
         )
         model = model or self.model
         if not model:
@@ -724,7 +738,9 @@ class Chat(BaseAPIClient):
 
         async def _async_chunk_generator() -> AsyncIterator[ChatStreamChunk]:
             parser = SSEChatStreamParser(return_raw_events=return_raw_events)
-            async for line in self._amake_streaming_request("chat/completions", payload):
+            async for line in self._amake_streaming_request(
+                "chat/completions", payload
+            ):
                 chunk = parser.feed_line(line)
                 if chunk is None:
                     continue
@@ -763,7 +779,9 @@ class Chat(BaseAPIClient):
         class AsyncHistoryUpdatingIterator(AsyncStreamingIterator):
             """Async iterator wrapper that updates history on each chunk."""
 
-            def __init__(self, base_iterator: AsyncStreamingIterator, history: ChatHistory):
+            def __init__(
+                self, base_iterator: AsyncStreamingIterator, history: ChatHistory
+            ):
                 super().__init__(base_iterator._iterator)
                 self._base = base_iterator
                 self._history = history
@@ -1133,7 +1151,9 @@ class Chat(BaseAPIClient):
             # Use last user message from history as the message
             last_user = history.get_last_user_message()
             if last_user is None:
-                raise ValueError("History has no user messages. Provide a message parameter.")
+                raise ValueError(
+                    "History has no user messages. Provide a message parameter."
+                )
             return self(last_user, history=history, **params)
 
     def stream_with_history(
@@ -1170,5 +1190,7 @@ class Chat(BaseAPIClient):
             # Use last user message from history as the message
             last_user = history.get_last_user_message()
             if last_user is None:
-                raise ValueError("History has no user messages. Provide a message parameter.")
+                raise ValueError(
+                    "History has no user messages. Provide a message parameter."
+                )
             return self.stream(last_user, history=history, **params)

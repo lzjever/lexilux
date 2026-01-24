@@ -132,7 +132,9 @@ class TestChatParamsIntegration:
 
     @pytest.mark.integration
     @pytest.mark.skip_if_no_config
-    def test_chat_with_chatparams_presence_penalty(self, test_config, has_real_api_config):
+    def test_chat_with_chatparams_presence_penalty(
+        self, test_config, has_real_api_config
+    ):
         """Test ChatParams with presence_penalty parameter"""
         if not has_real_api_config or "completion" not in test_config:
             pytest.skip("No real API config available")
@@ -151,7 +153,9 @@ class TestChatParamsIntegration:
 
     @pytest.mark.integration
     @pytest.mark.skip_if_no_config
-    def test_chat_with_chatparams_frequency_penalty(self, test_config, has_real_api_config):
+    def test_chat_with_chatparams_frequency_penalty(
+        self, test_config, has_real_api_config
+    ):
         """Test ChatParams with frequency_penalty parameter"""
         if not has_real_api_config or "completion" not in test_config:
             pytest.skip("No real API config available")
@@ -215,7 +219,9 @@ class TestChatParamsIntegration:
 
     @pytest.mark.integration
     @pytest.mark.skip_if_no_config
-    def test_chat_params_override_with_direct_args(self, test_config, has_real_api_config):
+    def test_chat_params_override_with_direct_args(
+        self, test_config, has_real_api_config
+    ):
         """Test that direct arguments override ChatParams values"""
         if not has_real_api_config or "completion" not in test_config:
             pytest.skip("No real API config available")

@@ -123,7 +123,10 @@ def test_function_calling_with_execution():
     print("TEST: Function Calling with Execution")
     print("=" * 70)
 
-    from lexilux.chat.tool_helpers import create_conversation_history, execute_tool_calls
+    from lexilux.chat.tool_helpers import (
+        create_conversation_history,
+        execute_tool_calls,
+    )
 
     chat = Chat(
         base_url=ZHIPU_BASE_URL,
@@ -150,7 +153,9 @@ def test_function_calling_with_execution():
             description="Calculate mathematical expression",
             parameters={
                 "type": "object",
-                "properties": {"expression": {"type": "string", "description": "Math expression"}},
+                "properties": {
+                    "expression": {"type": "string", "description": "Math expression"}
+                },
                 "required": ["expression"],
             },
         ),
@@ -175,7 +180,9 @@ def test_function_calling_with_execution():
         print("\nTool responses:")
         for i, resp in enumerate(tool_responses):
             # Find the corresponding tool call to get the name
-            tool_name = result.tool_calls[i].name if i < len(result.tool_calls) else "unknown"
+            tool_name = (
+                result.tool_calls[i].name if i < len(result.tool_calls) else "unknown"
+            )
             print(f"  {tool_name}: {resp['content']}")
 
         # Create conversation history

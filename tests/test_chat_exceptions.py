@@ -1,5 +1,5 @@
 """Test chat-specific exceptions"""
-import pytest
+
 from lexilux.chat.exceptions import (
     ChatStreamInterruptedError,
     ChatIncompleteResponseError,
@@ -54,8 +54,12 @@ class TestChatStreamInterruptedError:
     def test_get_partial_text_from_chunks(self):
         """Test getting partial text from chunks when no result"""
         chunks = [
-            ChatStreamChunk(delta="Hello", done=False, finish_reason=None, usage=Usage()),
-            ChatStreamChunk(delta=" World", done=False, finish_reason=None, usage=Usage()),
+            ChatStreamChunk(
+                delta="Hello", done=False, finish_reason=None, usage=Usage()
+            ),
+            ChatStreamChunk(
+                delta=" World", done=False, finish_reason=None, usage=Usage()
+            ),
         ]
         error = ChatStreamInterruptedError(
             message="Interrupted",
@@ -80,7 +84,9 @@ class TestChatStreamInterruptedError:
     def test_get_partial_result_from_chunks(self):
         """Test getting partial result from chunks when no result"""
         chunks = [
-            ChatStreamChunk(delta="Hello", done=False, finish_reason=None, usage=Usage()),
+            ChatStreamChunk(
+                delta="Hello", done=False, finish_reason=None, usage=Usage()
+            ),
         ]
         error = ChatStreamInterruptedError(
             message="Interrupted",

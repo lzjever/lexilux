@@ -6,10 +6,8 @@ This module tests the async versions of Chat, Embed, and Rerank methods.
 
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 from lexilux import (
@@ -49,7 +47,10 @@ class TestChatAcall:
         return {
             "choices": [
                 {
-                    "message": {"role": "assistant", "content": "Hello! How can I help?"},
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello! How can I help?",
+                    },
                     "finish_reason": "stop",
                 }
             ],
@@ -122,6 +123,7 @@ class TestChatAstream:
     @pytest.mark.asyncio
     async def test_astream_returns_async_iterator(self, chat):
         """Test that astream returns an AsyncStreamingIterator."""
+
         # Mock the streaming request
         async def mock_stream(*args, **kwargs):
             yield 'data: {"choices":[{"delta":{"content":"Hello"}}]}'
@@ -173,7 +175,6 @@ class TestChatAstream:
 
             # Verify that streaming result still includes history context
             assert iterator.result.text == "Hello!"
-
 
 
 class TestChatAcomplete:
@@ -333,9 +334,7 @@ class TestRerankAcall:
             mock_client.post.return_value = mock_response
             mock_get_client.return_value = mock_client
 
-            result = await rerank.acall(
-                "python http", ["urllib", "requests", "httpx"]
-            )
+            result = await rerank.acall("python http", ["urllib", "requests", "httpx"])
 
             assert isinstance(result, RerankResult)
             assert len(result.results) == 3

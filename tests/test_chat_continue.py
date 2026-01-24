@@ -37,14 +37,20 @@ class TestChatContinueContinueRequest:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "choices": [{"message": {"content": " and part 2"}, "finish_reason": "stop"}],
+            "choices": [
+                {"message": {"content": " and part 2"}, "finish_reason": "stop"}
+            ],
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
         }
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
         continue_result = ChatContinue.continue_request(
-            chat, result1, history=history, add_continue_prompt=True, continue_prompt="continue"
+            chat,
+            result1,
+            history=history,
+            add_continue_prompt=True,
+            continue_prompt="continue",
         )
 
         # New API with auto_merge=True (default) returns merged result
@@ -75,7 +81,9 @@ class TestChatContinueContinueRequest:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "choices": [{"message": {"content": " and part 2"}, "finish_reason": "stop"}],
+            "choices": [
+                {"message": {"content": " and part 2"}, "finish_reason": "stop"}
+            ],
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
         }
         mock_response.raise_for_status = Mock()
@@ -112,7 +120,9 @@ class TestChatContinueContinueRequest:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "choices": [{"message": {"content": " continuation"}, "finish_reason": "stop"}],
+            "choices": [
+                {"message": {"content": " continuation"}, "finish_reason": "stop"}
+            ],
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
         }
         mock_response.raise_for_status = Mock()
@@ -262,16 +272,24 @@ class TestChatContinueLoopBehavior:
         history.append_result(result1)
 
         chat = DummyChat(results=[result2, result3])
-        full = ChatContinue.continue_request(chat, result1, history=history, max_continues=2)
+        full = ChatContinue.continue_request(
+            chat, result1, history=history, max_continues=2
+        )
 
         assert full.text == "Part 1 Part 2 Part 3"
         assert len(chat.calls) == 2
 
         # First continue call sees initial assistant, plus one "continue" user prompt.
-        assert any(m.get("content") == "Part 1" and m.get("role") == "assistant" for m in chat.calls[0])
+        assert any(
+            m.get("content") == "Part 1" and m.get("role") == "assistant"
+            for m in chat.calls[0]
+        )
 
         # Second continue call should now include assistant from previous continue.
-        assert any(m.get("content") == " Part 2" and m.get("role") == "assistant" for m in chat.calls[1])
+        assert any(
+            m.get("content") == " Part 2" and m.get("role") == "assistant"
+            for m in chat.calls[1]
+        )
 
     def test_continue_request_on_error_raise_reraises_original(self):
         """on_error='raise' should re-raise the original exception, not RuntimeError."""
@@ -285,7 +303,9 @@ class TestChatContinueLoopBehavior:
         history.append_result(result1)
 
         with pytest.raises(RuntimeError, match="boom"):
-            ChatContinue.continue_request(DummyChat(), result1, history=history, max_continues=1)
+            ChatContinue.continue_request(
+                DummyChat(), result1, history=history, max_continues=1
+            )
 
 
 class TestChatContinueIntegration:
@@ -315,7 +335,10 @@ class TestChatContinueIntegration:
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "choices": [
-                {"message": {"content": " and here is the continuation"}, "finish_reason": "stop"}
+                {
+                    "message": {"content": " and here is the continuation"},
+                    "finish_reason": "stop",
+                }
             ],
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
         }

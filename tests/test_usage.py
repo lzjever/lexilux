@@ -96,7 +96,9 @@ class TestResultBase:
         usage = Usage(total_tokens=10)
 
         class CustomResult(ResultBase):
-            def __init__(self, *, usage: Usage, value: str, raw: Union[Json, None] = None):
+            def __init__(
+                self, *, usage: Usage, value: str, raw: Union[Json, None] = None
+            ):
                 super().__init__(usage=usage, raw=raw)
                 self.value = value
 

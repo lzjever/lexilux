@@ -74,7 +74,9 @@ class ChatHistoryFormatter:
                 lines.append("**User:**")
                 lines.append("")
                 # Escape markdown special characters in content
-                content_escaped = content.replace("**", "\\*\\*").replace("__", "\\_\\_")
+                content_escaped = content.replace("**", "\\*\\*").replace(
+                    "__", "\\_\\_"
+                )
                 lines.append(content_escaped)
                 lines.append("")
 
@@ -82,7 +84,9 @@ class ChatHistoryFormatter:
             elif role == "assistant":
                 lines.append("**Assistant:**")
                 lines.append("")
-                content_escaped = content.replace("**", "\\*\\*").replace("__", "\\_\\_")
+                content_escaped = content.replace("**", "\\*\\*").replace(
+                    "__", "\\_\\_"
+                )
                 lines.append(content_escaped)
                 lines.append("")
 
@@ -202,7 +206,9 @@ class ChatHistoryFormatter:
                 in_round = True
                 html_parts.append("<div class='round'>")
                 if show_round_numbers:
-                    html_parts.append(f"<div class='round-header'>Round {round_num}</div>")
+                    html_parts.append(
+                        f"<div class='round-header'>Round {round_num}</div>"
+                    )
                 html_parts.append("<div class='message user'>")
                 html_parts.append("<div class='role'>User</div>")
                 html_parts.append(f"<div class='content'>{html.escape(content)}</div>")

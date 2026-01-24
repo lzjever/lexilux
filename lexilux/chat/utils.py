@@ -76,10 +76,14 @@ def normalize_messages(
             elif isinstance(msg, dict):
                 # Dict -> validate and use as-is
                 if "role" not in msg:
-                    raise ValueError(f"Invalid message dict: {msg}. Must have 'role' key.")
+                    raise ValueError(
+                        f"Invalid message dict: {msg}. Must have 'role' key."
+                    )
 
                 if "content" not in msg:
-                    raise ValueError(f"Invalid message dict: {msg}. Must have 'content' key.")
+                    raise ValueError(
+                        f"Invalid message dict: {msg}. Must have 'content' key."
+                    )
 
                 # Validate content format
                 content = msg["content"]
@@ -125,9 +129,13 @@ def normalize_messages(
 
                 result.append(normalized_msg)
             else:
-                raise ValueError(f"Invalid message type: {type(msg)}. Expected str or dict.")
+                raise ValueError(
+                    f"Invalid message type: {type(msg)}. Expected str or dict."
+                )
     else:
-        raise ValueError(f"Invalid messages type: {type(messages)}. Expected str, list, or tuple.")
+        raise ValueError(
+            f"Invalid messages type: {type(messages)}. Expected str, list, or tuple."
+        )
 
     return result
 
@@ -150,7 +158,8 @@ def parse_usage(response_data: Json) -> Usage:
 
     return Usage(
         input_tokens=usage_data.get("prompt_tokens") or usage_data.get("input_tokens"),
-        output_tokens=usage_data.get("completion_tokens") or usage_data.get("output_tokens"),
+        output_tokens=usage_data.get("completion_tokens")
+        or usage_data.get("output_tokens"),
         total_tokens=usage_data.get("total_tokens"),
         details=usage_data,
     )

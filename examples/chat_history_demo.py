@@ -52,7 +52,9 @@ def demo_basic_history():
 
     # Continue the conversation
     print("\n2. Continue conversation:")
-    result2 = chat(history.get_messages() + [{"role": "user", "content": "Tell me more"}])
+    result2 = chat(
+        history.get_messages() + [{"role": "user", "content": "Tell me more"}]
+    )
     history = ChatHistory.from_chat_result(
         history.get_messages() + [{"role": "user", "content": "Tell me more"}],
         result2,

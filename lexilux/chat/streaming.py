@@ -16,7 +16,7 @@ from lexilux.chat.models import ChatResult, ChatStreamChunk
 from lexilux.usage import Usage
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    pass
 
 
 class StreamingResult:

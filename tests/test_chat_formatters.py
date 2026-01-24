@@ -286,7 +286,9 @@ class TestChatHistoryFormatterSave:
         """Test save with explicit format"""
         history = ChatHistory()
         history.add_user("Hello")
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".unknown", delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".unknown", delete=False
+        ) as f:
             temp_path = f.name
         try:
             ChatHistoryFormatter.save(history, temp_path, format="markdown")
@@ -314,7 +316,9 @@ class TestChatHistoryFormatterSave:
         """Test save with unknown format raises error"""
         history = ChatHistory()
         history.add_user("Hello")
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".unknown", delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".unknown", delete=False
+        ) as f:
             temp_path = f.name
         try:
             with pytest.raises(ValueError, match="Unknown format"):

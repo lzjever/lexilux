@@ -227,7 +227,9 @@ class TestRerankCall:
     def test_call_empty_docs(self):
         """Test rerank call with empty docs (should raise error)"""
         rerank = Rerank(
-            base_url="https://api.example.com/v1", api_key="test-key", model="rerank-model"
+            base_url="https://api.example.com/v1",
+            api_key="test-key",
+            model="rerank-model",
         )
 
         with pytest.raises(ValueError, match="Docs cannot be empty"):
@@ -422,7 +424,11 @@ class TestRerankOpenAIMode:
             mode=config.get("mode", "openai"),
         )
 
-        docs = ["urllib is a built-in library", "requests is popular", "httpx is modern"]
+        docs = [
+            "urllib is a built-in library",
+            "requests is popular",
+            "httpx is modern",
+        ]
         result = rerank("python http library", docs, top_k=2)
 
         # Verify results are limited to top_k (or at least not more than requested)
@@ -449,7 +455,9 @@ class TestRerankOpenAIMode:
         )
 
         # This test verifies the API works correctly with real service
-        result = rerank("python http library", ["urllib", "requests"], include_docs=True)
+        result = rerank(
+            "python http library", ["urllib", "requests"], include_docs=True
+        )
 
         # Verify we got valid results
         assert isinstance(result, RerankResult)
@@ -520,7 +528,9 @@ class TestRerankResult:
         """Test RerankResult representation"""
         from lexilux.usage import Usage
 
-        result = RerankResult(results=[(0, 0.95), (1, 0.80)], usage=Usage(total_tokens=100))
+        result = RerankResult(
+            results=[(0, 0.95), (1, 0.80)], usage=Usage(total_tokens=100)
+        )
         repr_str = repr(result)
         assert "RerankResult" in repr_str
         assert "2 items" in repr_str

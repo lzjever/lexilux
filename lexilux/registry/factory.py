@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from lexilux.chat.client import Chat
 from lexilux.chat.history import ChatHistory
-from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike
+from lexilux.chat.models import ChatResult, MessagesLike
 from lexilux.chat.params import ChatParams
 from lexilux.chat.streaming import StreamingIterator
 from lexilux.registry.models import ModelSpec
@@ -611,7 +611,9 @@ class ChatFactory:
             >>> spec = factory.get_model_spec("gpt-4o")
             >>> print(f"Context: {spec.limits.context}")
         """
-        return self._registry.get(model, provider=provider, suppress_unknown_warning=True)
+        return self._registry.get(
+            model, provider=provider, suppress_unknown_warning=True
+        )
 
     def search_models(
         self,

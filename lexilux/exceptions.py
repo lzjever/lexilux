@@ -51,7 +51,9 @@ class LexiluxError(Exception):
 
     def __repr__(self) -> str:
         """Return representation including code."""
-        return f"{self.__class__.__name__}(code={self.code!r}, message={self.message!r})"
+        return (
+            f"{self.__class__.__name__}(code={self.code!r}, message={self.message!r})"
+        )
 
 
 class APIError(LexiluxError):
@@ -94,7 +96,9 @@ class AuthenticationError(APIError):
     retryable = False
 
     def __init__(self, message: str = "Authentication failed"):
-        super().__init__(message, status_code=401, code=self.code, retryable=self.retryable)
+        super().__init__(
+            message, status_code=401, code=self.code, retryable=self.retryable
+        )
 
 
 class RateLimitError(APIError):
@@ -110,7 +114,9 @@ class RateLimitError(APIError):
     retryable = True
 
     def __init__(self, message: str = "Rate limit exceeded"):
-        super().__init__(message, status_code=429, code=self.code, retryable=self.retryable)
+        super().__init__(
+            message, status_code=429, code=self.code, retryable=self.retryable
+        )
 
 
 class InvalidRequestError(APIError):
@@ -126,7 +132,9 @@ class InvalidRequestError(APIError):
     retryable = False
 
     def __init__(self, message: str = "Invalid request"):
-        super().__init__(message, status_code=400, code=self.code, retryable=self.retryable)
+        super().__init__(
+            message, status_code=400, code=self.code, retryable=self.retryable
+        )
 
 
 class NotFoundError(APIError):
@@ -142,7 +150,9 @@ class NotFoundError(APIError):
     retryable = False
 
     def __init__(self, message: str = "Resource not found"):
-        super().__init__(message, status_code=404, code=self.code, retryable=self.retryable)
+        super().__init__(
+            message, status_code=404, code=self.code, retryable=self.retryable
+        )
 
 
 class ServerError(APIError):
@@ -158,7 +168,9 @@ class ServerError(APIError):
     retryable = True
 
     def __init__(self, message: str = "Internal server error"):
-        super().__init__(message, status_code=500, code=self.code, retryable=self.retryable)
+        super().__init__(
+            message, status_code=500, code=self.code, retryable=self.retryable
+        )
 
 
 class NetworkError(LexiluxError):

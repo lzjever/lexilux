@@ -296,7 +296,9 @@ class TestEmbedResult:
         """Test EmbedResult representation for multiple vectors"""
         from lexilux.usage import Usage
 
-        result = EmbedResult(vectors=[[0.1, 0.2], [0.3, 0.4]], usage=Usage(total_tokens=10))
+        result = EmbedResult(
+            vectors=[[0.1, 0.2], [0.3, 0.4]], usage=Usage(total_tokens=10)
+        )
         repr_str = repr(result)
         assert "EmbedResult" in repr_str
         assert "2 vectors" in repr_str
@@ -345,8 +347,12 @@ class TestEmbedRealAPI:
         assert isinstance(result, EmbedResult)
         assert isinstance(result.vectors, list)
         assert len(result.vectors) == 3  # Should have 3 vectors
-        assert all(isinstance(v, list) for v in result.vectors)  # Each should be a vector
-        assert all(len(v) > 0 for v in result.vectors)  # Each vector should have dimensions
+        assert all(
+            isinstance(v, list) for v in result.vectors
+        )  # Each should be a vector
+        assert all(
+            len(v) > 0 for v in result.vectors
+        )  # Each vector should have dimensions
         assert isinstance(result.usage, Usage)
 
     @pytest.mark.integration

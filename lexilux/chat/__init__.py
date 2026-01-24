@@ -12,9 +12,10 @@ from lexilux.chat.content_blocks import (
     TextContentBlock,
 )
 from lexilux.chat.conversation import Conversation
-# Backward compatibility alias
-ChatContinue = Conversation
-from lexilux.chat.exceptions import ChatIncompleteResponseError, ChatStreamInterruptedError
+from lexilux.chat.exceptions import (
+    ChatIncompleteResponseError,
+    ChatStreamInterruptedError,
+)
 from lexilux.chat.formatters import ChatHistoryFormatter
 from lexilux.chat.history import (
     ChatHistory,
@@ -33,7 +34,11 @@ from lexilux.chat.models import (
     ToolCall,
 )
 from lexilux.chat.params import ChatParams
-from lexilux.chat.streaming import AsyncStreamingIterator, StreamingIterator, StreamingResult
+from lexilux.chat.streaming import (
+    AsyncStreamingIterator,
+    StreamingIterator,
+    StreamingResult,
+)
 from lexilux.chat.tool_helpers import (
     ToolCallHelper,
     create_conversation_history,
@@ -41,6 +46,9 @@ from lexilux.chat.tool_helpers import (
 )
 from lexilux.chat.tools import FunctionTool, Tool, ToolChoice
 from lexilux.chat.utils import normalize_messages
+
+# Backward compatibility alias
+ChatContinue = Conversation
 
 __all__ = [
     # Main classes

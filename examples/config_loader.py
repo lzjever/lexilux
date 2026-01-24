@@ -85,7 +85,8 @@ def get_chat_config(
     return {
         "base_url": completion_config["api_base"],
         "api_key": completion_config["api_key"],
-        "model": completion_config.get("model") or completion_config.get("source_model"),
+        "model": completion_config.get("model")
+        or completion_config.get("source_model"),
     }
 
 

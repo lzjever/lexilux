@@ -71,7 +71,9 @@ class RerankResult(ResultBase):
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"RerankResult(results=[{len(self.results)} items], usage={self.usage!r})"
+        return (
+            f"RerankResult(results=[{len(self.results)} items], usage={self.usage!r})"
+        )
 
 
 class RerankModeHandler(ABC):
@@ -227,7 +229,9 @@ class RerankModeHandler(ABC):
         # Format results based on include_docs
         if include_docs:
             results: Ranked | RankedWithDoc = [
-                (idx, score, doc) for idx, score, doc in parsed_results if doc is not None
+                (idx, score, doc)
+                for idx, score, doc in parsed_results
+                if doc is not None
             ]
         else:
             results = [(idx, score) for idx, score, _ in parsed_results]
@@ -293,7 +297,9 @@ class OpenAICompatibleHandler(RerankModeHandler):
         parsed_results: list[tuple[int, float, str | None]] = []
         for item in results_data:
             if not isinstance(item, dict):
-                raise ValueError(f"Unexpected result format: {item} (type: {type(item)})")
+                raise ValueError(
+                    f"Unexpected result format: {item} (type: {type(item)})"
+                )
 
             index = item.get("index", 0)
             score = item.get("relevance_score", 0.0)
@@ -374,7 +380,9 @@ class DashScopeHandler(RerankModeHandler):
         parsed_results: list[tuple[int, float, str | None]] = []
         for item in results_data:
             if not isinstance(item, dict):
-                raise ValueError(f"Unexpected result format: {item} (type: {type(item)})")
+                raise ValueError(
+                    f"Unexpected result format: {item} (type: {type(item)})"
+                )
 
             index = item.get("index", 0)
             score = item.get("relevance_score", 0.0)

@@ -71,7 +71,9 @@ def build_params_dict(
     if params is not None:
         param_dict: Json = params.to_dict(exclude_none=True)
     else:
-        param_dict = {"temperature": DEFAULT_TEMPERATURE if temperature is None else temperature}
+        param_dict = {
+            "temperature": DEFAULT_TEMPERATURE if temperature is None else temperature
+        }
 
     if temperature is not None:
         param_dict["temperature"] = temperature
@@ -232,7 +234,9 @@ class SSEChatStreamParser:
         data_str = line[6:]
         if data_str == "[DONE]":
             self._done = True
-            final_usage = self._final_usage if self._final_usage is not None else Usage()
+            final_usage = (
+                self._final_usage if self._final_usage is not None else Usage()
+            )
             return ChatStreamChunk(
                 delta="",
                 done=True,

@@ -186,7 +186,9 @@ def main():
         demo_include_docs()
         demo_extra_parameters()
     except Exception as e:
-        print(f"\nNote: Some demos failed (this is expected if using placeholder credentials): {e}")
+        print(
+            f"\nNote: Some demos failed (this is expected if using placeholder credentials): {e}"
+        )
         print("To run with real APIs:")
         print("  1. Create tests/test_endpoints.json with your API credentials")
         print(

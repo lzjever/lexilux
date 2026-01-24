@@ -188,7 +188,10 @@ class Tokenizer:
         for file in all_files:
             filename = Path(file).name
             # Check if file matches any tokenizer pattern
-            if any(pattern in filename or filename == pattern for pattern in tokenizer_patterns):
+            if any(
+                pattern in filename or filename == pattern
+                for pattern in tokenizer_patterns
+            ):
                 tokenizer_files.append(file)
             # Also include files in tokenizer subdirectory if it exists
             elif file.startswith("tokenizer/"):
@@ -447,7 +450,9 @@ class Tokenizer:
 
         # Extract results
         input_ids = encoded["input_ids"]
-        attention_mask = encoded.get("attention_mask") if return_attention_mask else None
+        attention_mask = (
+            encoded.get("attention_mask") if return_attention_mask else None
+        )
 
         # Calculate usage (total tokens across all sequences)
         total_tokens = sum(len(ids) for ids in input_ids)

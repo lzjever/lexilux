@@ -39,7 +39,9 @@ class TestHistoryImmutability:
 
         # Verify original history is not modified
         assert len(original_history.messages) == original_messages_count
-        assert original_history.messages == [{"role": "user", "content": "Previous message"}]
+        assert original_history.messages == [
+            {"role": "user", "content": "Previous message"}
+        ]
 
         # Verify result is correct
         assert result.text == "Hello"
@@ -67,7 +69,9 @@ class TestHistoryImmutability:
 
         # Verify original history is not modified
         assert len(original_history.messages) == original_messages_count
-        assert original_history.messages == [{"role": "user", "content": "Previous message"}]
+        assert original_history.messages == [
+            {"role": "user", "content": "Previous message"}
+        ]
 
         # Verify chunks
         assert len(chunks) >= 2
@@ -84,12 +88,24 @@ class TestHistoryImmutability:
         # Mock responses (initial + continue)
         responses = [
             {
-                "choices": [{"message": {"content": "Partial"}, "finish_reason": "length"}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                "choices": [
+                    {"message": {"content": "Partial"}, "finish_reason": "length"}
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                    "total_tokens": 15,
+                },
             },
             {
-                "choices": [{"message": {"content": " complete"}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 15, "completion_tokens": 10, "total_tokens": 25},
+                "choices": [
+                    {"message": {"content": " complete"}, "finish_reason": "stop"}
+                ],
+                "usage": {
+                    "prompt_tokens": 15,
+                    "completion_tokens": 10,
+                    "total_tokens": 25,
+                },
             },
         ]
         mock_post.side_effect = [
@@ -102,7 +118,9 @@ class TestHistoryImmutability:
 
         # Verify original history is not modified
         assert len(original_history.messages) == original_messages_count
-        assert original_history.messages == [{"role": "user", "content": "Previous message"}]
+        assert original_history.messages == [
+            {"role": "user", "content": "Previous message"}
+        ]
 
         # Verify result is merged
         assert "Partial" in result.text
@@ -118,7 +136,9 @@ class TestChatVsComplete:
 
         # Mock truncated response
         mock_post.return_value.json.return_value = {
-            "choices": [{"message": {"content": "Partial response"}, "finish_reason": "length"}],
+            "choices": [
+                {"message": {"content": "Partial response"}, "finish_reason": "length"}
+            ],
             "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
         }
 
@@ -135,12 +155,24 @@ class TestChatVsComplete:
         # Mock responses (initial truncated + continue complete)
         responses = [
             {
-                "choices": [{"message": {"content": "Partial"}, "finish_reason": "length"}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                "choices": [
+                    {"message": {"content": "Partial"}, "finish_reason": "length"}
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                    "total_tokens": 15,
+                },
             },
             {
-                "choices": [{"message": {"content": " complete"}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 15, "completion_tokens": 10, "total_tokens": 25},
+                "choices": [
+                    {"message": {"content": " complete"}, "finish_reason": "stop"}
+                ],
+                "usage": {
+                    "prompt_tokens": 15,
+                    "completion_tokens": 10,
+                    "total_tokens": 25,
+                },
             },
         ]
         mock_post.side_effect = [
@@ -161,7 +193,9 @@ class TestChatVsComplete:
 
         # Mock complete response (no truncation)
         mock_post.return_value.json.return_value = {
-            "choices": [{"message": {"content": "Complete response"}, "finish_reason": "stop"}],
+            "choices": [
+                {"message": {"content": "Complete response"}, "finish_reason": "stop"}
+            ],
             "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
         }
 
@@ -186,7 +220,10 @@ class TestChatVsComplete:
         # Should raise error if still truncated
         with pytest.raises(ChatIncompleteResponseError):
             chat.complete(
-                "Write a very long story", max_tokens=5, max_continues=2, ensure_complete=True
+                "Write a very long story",
+                max_tokens=5,
+                max_continues=2,
+                ensure_complete=True,
             )
 
 
@@ -201,12 +238,24 @@ class TestCustomizableContinueStrategy:
         # Mock responses
         responses = [
             {
-                "choices": [{"message": {"content": "Partial"}, "finish_reason": "length"}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                "choices": [
+                    {"message": {"content": "Partial"}, "finish_reason": "length"}
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                    "total_tokens": 15,
+                },
             },
             {
-                "choices": [{"message": {"content": " complete"}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 15, "completion_tokens": 10, "total_tokens": 25},
+                "choices": [
+                    {"message": {"content": " complete"}, "finish_reason": "stop"}
+                ],
+                "usage": {
+                    "prompt_tokens": 15,
+                    "completion_tokens": 10,
+                    "total_tokens": 25,
+                },
             },
         ]
         mock_post.side_effect = [
@@ -241,12 +290,24 @@ class TestCustomizableContinueStrategy:
         # Mock responses
         responses = [
             {
-                "choices": [{"message": {"content": "Partial"}, "finish_reason": "length"}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                "choices": [
+                    {"message": {"content": "Partial"}, "finish_reason": "length"}
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                    "total_tokens": 15,
+                },
             },
             {
-                "choices": [{"message": {"content": " complete"}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 15, "completion_tokens": 10, "total_tokens": 25},
+                "choices": [
+                    {"message": {"content": " complete"}, "finish_reason": "stop"}
+                ],
+                "usage": {
+                    "prompt_tokens": 15,
+                    "completion_tokens": 10,
+                    "total_tokens": 25,
+                },
             },
         ]
         mock_post.side_effect = [
@@ -258,7 +319,9 @@ class TestCustomizableContinueStrategy:
         progress_calls = []
 
         def on_progress(count, max_count, current, all_results):
-            progress_calls.append((count, max_count, len(current.text), len(all_results)))
+            progress_calls.append(
+                (count, max_count, len(current.text), len(all_results))
+            )
 
         chat.complete(
             "Write story",
@@ -290,9 +353,16 @@ class TestCustomizableContinueStrategy:
                 return Mock(
                     json=lambda: {
                         "choices": [
-                            {"message": {"content": "Partial1"}, "finish_reason": "length"}
+                            {
+                                "message": {"content": "Partial1"},
+                                "finish_reason": "length",
+                            }
                         ],
-                        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                        "usage": {
+                            "prompt_tokens": 10,
+                            "completion_tokens": 5,
+                            "total_tokens": 15,
+                        },
                     },
                     raise_for_status=lambda: None,
                 )
@@ -301,9 +371,16 @@ class TestCustomizableContinueStrategy:
                 return Mock(
                     json=lambda: {
                         "choices": [
-                            {"message": {"content": "Partial2"}, "finish_reason": "length"}
+                            {
+                                "message": {"content": "Partial2"},
+                                "finish_reason": "length",
+                            }
                         ],
-                        "usage": {"prompt_tokens": 15, "completion_tokens": 10, "total_tokens": 25},
+                        "usage": {
+                            "prompt_tokens": 15,
+                            "completion_tokens": 10,
+                            "total_tokens": 25,
+                        },
                     },
                     raise_for_status=lambda: None,
                 )
@@ -311,8 +388,17 @@ class TestCustomizableContinueStrategy:
                 # Second continue - complete
                 return Mock(
                     json=lambda: {
-                        "choices": [{"message": {"content": " complete"}, "finish_reason": "stop"}],
-                        "usage": {"prompt_tokens": 20, "completion_tokens": 15, "total_tokens": 35},
+                        "choices": [
+                            {
+                                "message": {"content": " complete"},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {
+                            "prompt_tokens": 20,
+                            "completion_tokens": 15,
+                            "total_tokens": 35,
+                        },
                     },
                     raise_for_status=lambda: None,
                 )
@@ -350,8 +436,17 @@ class TestCustomizableContinueStrategy:
                 # Initial request - truncated
                 return Mock(
                     json=lambda: {
-                        "choices": [{"message": {"content": "Partial"}, "finish_reason": "length"}],
-                        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                        "choices": [
+                            {
+                                "message": {"content": "Partial"},
+                                "finish_reason": "length",
+                            }
+                        ],
+                        "usage": {
+                            "prompt_tokens": 10,
+                            "completion_tokens": 5,
+                            "total_tokens": 15,
+                        },
                     },
                     raise_for_status=lambda: None,
                 )
@@ -447,7 +542,9 @@ class TestContinueRequestCustomization:
 
         # Verify original history is not modified
         assert len(original_history.messages) == original_messages_count
-        assert original_history.messages == [{"role": "user", "content": "Original message"}]
+        assert original_history.messages == [
+            {"role": "user", "content": "Original message"}
+        ]
 
 
 class TestNeedsContinue:

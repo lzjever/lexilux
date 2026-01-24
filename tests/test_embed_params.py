@@ -1,5 +1,5 @@
 """Test embed parameters"""
-import pytest
+
 from lexilux.embed_params import EmbedParams
 
 
@@ -45,7 +45,9 @@ class TestEmbedParams:
             extra={"custom": "value"},
         )
         result = params.to_dict()
-        assert len(result) == 3  # dimensions, user, custom (encoding_format excluded as default)
+        assert (
+            len(result) == 3
+        )  # dimensions, user, custom (encoding_format excluded as default)
         assert result["dimensions"] == 512
         assert result["user"] == "user123"
         assert result["custom"] == "value"

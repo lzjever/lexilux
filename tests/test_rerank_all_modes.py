@@ -58,7 +58,10 @@ class TestRerankOpenAIModeReal:
             mode=config.get("mode", "openai"),
         )
 
-        docs = ["urllib is a built-in Python library", "requests is a popular third-party library"]
+        docs = [
+            "urllib is a built-in Python library",
+            "requests is a popular third-party library",
+        ]
         result = rerank("python http library", docs, include_docs=True)
         assert len(result.results) >= 1
         assert isinstance(result.results[0], tuple)
@@ -85,7 +88,11 @@ class TestRerankOpenAIModeReal:
             mode=config.get("mode", "openai"),
         )
 
-        docs = ["urllib is a built-in library", "requests is popular", "httpx is modern"]
+        docs = [
+            "urllib is a built-in library",
+            "requests is popular",
+            "httpx is modern",
+        ]
         result = rerank("python http library", docs, top_k=2)
 
         # Verify results are limited to top_k
@@ -144,7 +151,11 @@ class TestRerankDashScopeModeReal:
             mode=config.get("mode", "dashscope"),
         )
 
-        docs = ["urllib is a built-in library", "requests is popular", "httpx is modern"]
+        docs = [
+            "urllib is a built-in library",
+            "requests is popular",
+            "httpx is modern",
+        ]
         result = rerank("python http library", docs, top_k=2)
 
         # Verify results are limited to top_k

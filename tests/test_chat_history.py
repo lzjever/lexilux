@@ -400,15 +400,9 @@ class TestChatHistoryTokenOperations:
         expected_assistant_tokens = assistant_result.usage.total_tokens or 0
 
         # Business logic check: total should be sum of all messages
-        expected_total = expected_system_tokens + expected_user_tokens + expected_assistant_tokens
-        assert total == expected_total, (
-            f"count_tokens returned {total}, but sum of individual counts is {expected_total}. "
-            f"System: {expected_system_tokens}, User: {expected_user_tokens}, "
-            f"Assistant: {expected_assistant_tokens}"
+        expected_total = (
+            expected_system_tokens + expected_user_tokens + expected_assistant_tokens
         )
-
-    def test_truncate_by_rounds_empty(self):
-        expected_total = expected_system_tokens + expected_user_tokens + expected_assistant_tokens
         assert total == expected_total, (
             f"count_tokens returned {total}, but sum of individual counts is {expected_total}. "
             f"System: {expected_system_tokens}, User: {expected_user_tokens}, "

@@ -130,7 +130,9 @@ def test_function_calling_simple_tool_use(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     # Define tool
     weather_tool = FunctionTool(
@@ -177,7 +179,9 @@ def test_function_calling_with_execution(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     # Define tools
     tools_dict = {
@@ -203,7 +207,9 @@ def test_function_calling_with_execution(test_config, has_real_api_config):
             description="Get current time for a timezone",
             parameters={
                 "type": "object",
-                "properties": {"timezone": {"type": "string", "description": "Timezone name"}},
+                "properties": {
+                    "timezone": {"type": "string", "description": "Timezone name"}
+                },
                 "required": ["timezone"],
             },
         ),
@@ -237,7 +243,9 @@ def test_function_calling_tool_choice_required(test_config, has_real_api_config)
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -264,18 +272,26 @@ def test_function_calling_tool_choice_specific(test_config, has_real_api_config)
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     tools = [
         FunctionTool(
             name="get_weather",
             description="Get weather",
-            parameters={"type": "object", "properties": {"location": {"type": "string"}}},
+            parameters={
+                "type": "object",
+                "properties": {"location": {"type": "string"}},
+            },
         ),
         FunctionTool(
             name="get_time",
             description="Get time",
-            parameters={"type": "object", "properties": {"timezone": {"type": "string"}}},
+            parameters={
+                "type": "object",
+                "properties": {"timezone": {"type": "string"}},
+            },
         ),
     ]
 
@@ -297,23 +313,36 @@ def test_function_calling_parallel(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     tools = [
         FunctionTool(
             name="get_weather",
             description="Get weather",
-            parameters={"type": "object", "properties": {"location": {"type": "string"}}},
+            parameters={
+                "type": "object",
+                "properties": {"location": {"type": "string"}},
+            },
         ),
         FunctionTool(
             name="get_time",
             description="Get time",
-            parameters={"type": "object", "properties": {"timezone": {"type": "string"}}},
+            parameters={
+                "type": "object",
+                "properties": {"timezone": {"type": "string"}},
+            },
         ),
     ]
 
     # Ask for multiple things that might trigger parallel tool calls
-    messages = [{"role": "user", "content": "What's the weather in Paris and the time in London?"}]
+    messages = [
+        {
+            "role": "user",
+            "content": "What's the weather in Paris and the time in London?",
+        }
+    ]
     result = chat(messages, tools=tools, parallel_tool_calls=True)
 
     # Check if multiple tools were called
@@ -336,7 +365,9 @@ def test_function_calling_complex_parameters(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     # Tool with complex schema
     search_tool = FunctionTool(
@@ -360,7 +391,10 @@ def test_function_calling_complex_parameters(test_config, has_real_api_config):
                 },
                 "filters": {
                     "type": "object",
-                    "properties": {"date_range": {"type": "string"}, "site": {"type": "string"}},
+                    "properties": {
+                        "date_range": {"type": "string"},
+                        "site": {"type": "string"},
+                    },
                 },
             },
             "required": ["query"],
@@ -389,7 +423,9 @@ def test_function_calling_streaming(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -429,7 +465,9 @@ def test_function_calling_streaming_with_execution(test_config, has_real_api_con
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -496,7 +534,9 @@ def test_tool_call_helper_continue_conversation(test_config, has_real_api_config
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     # Create helper
     helper = ToolCallHelper(
@@ -511,12 +551,18 @@ def test_tool_call_helper_continue_conversation(test_config, has_real_api_config
         FunctionTool(
             name="get_weather",
             description="Get weather",
-            parameters={"type": "object", "properties": {"location": {"type": "string"}}},
+            parameters={
+                "type": "object",
+                "properties": {"location": {"type": "string"}},
+            },
         ),
         FunctionTool(
             name="calculate",
             description="Calculate math expression",
-            parameters={"type": "object", "properties": {"expression": {"type": "string"}}},
+            parameters={
+                "type": "object",
+                "properties": {"expression": {"type": "string"}},
+            },
         ),
     ]
 
@@ -546,7 +592,9 @@ def test_multimodal_image_url(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     # Message with text + image URL
     messages = [
@@ -580,7 +628,9 @@ def test_multimodal_base64_image(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     # Create a simple test image
     from PIL import Image
@@ -599,7 +649,10 @@ def test_multimodal_base64_image(test_config, has_real_api_config):
             "role": "user",
             "content": [
                 {"type": "text", "text": "What color is this image?"},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_data}"},
+                },
             ],
         }
     ]
@@ -620,7 +673,9 @@ def test_multimodal_multiple_images(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     # Use two different public images
     messages = [
@@ -659,7 +714,9 @@ def test_multimodal_with_image_detail_low(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     messages = [
         {
@@ -691,7 +748,9 @@ def test_multimodal_with_image_detail_high(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     messages = [
         {
@@ -729,7 +788,9 @@ def test_function_calling_no_tool_needed(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -755,7 +816,9 @@ def test_function_calling_execution_error_handling(test_config, has_real_api_con
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     # Tool that will fail
     def failing_tool(location: str) -> str:
@@ -786,7 +849,9 @@ def test_function_calling_missing_required_parameter(test_config, has_real_api_c
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -815,7 +880,9 @@ def test_function_calling_with_system_message(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     weather_tool = FunctionTool(
         name="get_weather",
@@ -847,18 +914,26 @@ def test_function_calling_multi_turn_conversation(test_config, has_real_api_conf
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     tools = [
         FunctionTool(
             name="get_weather",
             description="Get weather",
-            parameters={"type": "object", "properties": {"location": {"type": "string"}}},
+            parameters={
+                "type": "object",
+                "properties": {"location": {"type": "string"}},
+            },
         ),
         FunctionTool(
             name="calculate",
             description="Calculate",
-            parameters={"type": "object", "properties": {"expression": {"type": "string"}}},
+            parameters={
+                "type": "object",
+                "properties": {"expression": {"type": "string"}},
+            },
         ),
     ]
 
@@ -897,7 +972,9 @@ def test_function_calling_with_chained_tools(test_config, has_real_api_config):
         pytest.skip("No real API config available")
 
     config = test_config["completion"]
-    chat = Chat(base_url=config["api_base"], api_key=config["api_key"], model=config["model"])
+    chat = Chat(
+        base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
+    )
 
     # Define tools that might be chained
     tools = [
@@ -909,7 +986,10 @@ def test_function_calling_with_chained_tools(test_config, has_real_api_config):
         FunctionTool(
             name="calculate",
             description="Calculate mathematical expression",
-            parameters={"type": "object", "properties": {"expression": {"type": "string"}}},
+            parameters={
+                "type": "object",
+                "properties": {"expression": {"type": "string"}},
+            },
         ),
     ]
 

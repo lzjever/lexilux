@@ -274,7 +274,9 @@ async def acomplete_stream(
     original_prompt = _get_original_prompt(messages)
 
     async def _async_complete_stream_generator() -> AsyncIterator[ChatStreamChunk]:
-        initial_iterator = await chat.astream(messages, history=working_history, **params)
+        initial_iterator = await chat.astream(
+            messages, history=working_history, **params
+        )
         async for chunk in initial_iterator:
             yield chunk
 

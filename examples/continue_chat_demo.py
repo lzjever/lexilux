@@ -94,7 +94,9 @@ def scenario_2_multiple_continues(chat: Chat):
     history = ChatHistory()
 
     # Request something very long with tiny max_tokens to force multiple continues
-    print("Requesting a very long response with max_tokens=30 (will need multiple continues)...")
+    print(
+        "Requesting a very long response with max_tokens=30 (will need multiple continues)..."
+    )
     result = chat(
         "Write a comprehensive guide on Python programming covering: variables, functions, classes, modules, and best practices. Make it detailed and at least 1000 words.",
         history=history,
@@ -187,7 +189,9 @@ def scenario_4_manual_continue(chat: Chat):
     print_result_info(result, "Initial Result")
 
     if result.finish_reason == "length":
-        print("\n🔄 Continuing with auto_merge=False to get all intermediate results...")
+        print(
+            "\n🔄 Continuing with auto_merge=False to get all intermediate results..."
+        )
         # Get all results separately
         all_results = ChatContinue.continue_request(
             chat,
@@ -228,7 +232,9 @@ def scenario_5_custom_continue_prompt(chat: Chat):
     print_result_info(result, "Initial Result")
 
     if result.finish_reason == "length":
-        print("\n🔄 Continuing with custom prompt: 'Please continue from where you left off.'...")
+        print(
+            "\n🔄 Continuing with custom prompt: 'Please continue from where you left off.'..."
+        )
         # Use a custom continue prompt
         full_result = ChatContinue.continue_request(
             chat,
@@ -242,7 +248,9 @@ def scenario_5_custom_continue_prompt(chat: Chat):
 
         # Test without adding continue prompt (direct continuation)
         if full_result.finish_reason == "length":
-            print("\n🔄 Trying continue without adding prompt (add_continue_prompt=False)...")
+            print(
+                "\n🔄 Trying continue without adding prompt (add_continue_prompt=False)..."
+            )
             result2 = ChatContinue.continue_request(
                 chat,
                 full_result,
@@ -275,7 +283,9 @@ def scenario_6_large_input_small_output(chat: Chat):
     large_input += "\n\nBased on the above document, please write a comprehensive summary covering all key points. Make it detailed and thorough."
 
     print(f"Input size: {len(large_input)} characters")
-    print("Requesting response with very small max_tokens (simulating small output limit)...")
+    print(
+        "Requesting response with very small max_tokens (simulating small output limit)..."
+    )
 
     result = chat(
         large_input,
@@ -284,7 +294,9 @@ def scenario_6_large_input_small_output(chat: Chat):
     )
 
     print_result_info(result, "Initial Result")
-    print(f"Input tokens: {result.usage.input_tokens}, Output tokens: {result.usage.output_tokens}")
+    print(
+        f"Input tokens: {result.usage.input_tokens}, Output tokens: {result.usage.output_tokens}"
+    )
 
     if result.finish_reason == "length":
         print("\n🔄 Continuing multiple times to get full response...")
@@ -316,7 +328,9 @@ def scenario_7_concatenate_and_continue(chat: Chat):
       that have large input windows but small output limits
     - Compare this with the library's automatic continue mechanism
     """
-    print_section("Scenario 7: Concatenate Output to Input and Continue (Production Pattern)")
+    print_section(
+        "Scenario 7: Concatenate Output to Input and Continue (Production Pattern)"
+    )
 
     # Test 1: Manual concatenation pattern
     print("Test 1: Manual concatenation pattern (output -> input context)")
@@ -334,7 +348,9 @@ def scenario_7_concatenate_and_continue(chat: Chat):
     print_result_info(result1, "Initial Result")
 
     if result1.finish_reason == "length":
-        print("\n🔄 Manual Pattern: Concatenating output to input and making new request...")
+        print(
+            "\n🔄 Manual Pattern: Concatenating output to input and making new request..."
+        )
 
         # Manual pattern: concatenate output to input
         partial_output = result1.text
@@ -358,7 +374,9 @@ def scenario_7_concatenate_and_continue(chat: Chat):
         print(f"\n🔗 Manually merged text length: {len(merged_text)} characters")
 
         if continue_result.finish_reason == "length":
-            print("⚠️  Continue result also truncated - pattern works but needs iteration")
+            print(
+                "⚠️  Continue result also truncated - pattern works but needs iteration"
+            )
         else:
             print("✅ Successfully continued using manual concatenation pattern")
 
@@ -389,7 +407,9 @@ def scenario_7_concatenate_and_continue(chat: Chat):
             f"  Manual pattern final length: {len(merged_text) if result1.finish_reason == 'length' else 'N/A'} chars"
         )
         print(f"  Auto continue final length: {len(auto_result.text)} chars")
-        print("\n💡 Recommendation: Use library's continue mechanism for better integration")
+        print(
+            "\n💡 Recommendation: Use library's continue mechanism for better integration"
+        )
 
 
 def scenario_8_error_handling(chat: Chat):
@@ -409,7 +429,9 @@ def scenario_8_error_handling(chat: Chat):
     print_result_info(result, "Non-truncated Result")
 
     if result.finish_reason != "length":
-        print("Attempting continue_request on non-truncated result (should raise ValueError)...")
+        print(
+            "Attempting continue_request on non-truncated result (should raise ValueError)..."
+        )
         try:
             ChatContinue.continue_request(chat, result, history=history)
             print("❌ ERROR: Should have raised ValueError!")
@@ -424,7 +446,9 @@ def scenario_8_error_handling(chat: Chat):
     )
 
     if result2.finish_reason == "length":
-        print("Attempting continue_request without history (should raise ValueError)...")
+        print(
+            "Attempting continue_request without history (should raise ValueError)..."
+        )
         try:
             ChatContinue.continue_request(chat, result2, history=None)
             print("❌ ERROR: Should have raised ValueError!")
@@ -462,7 +486,9 @@ def scenario_9_complete_method(chat: Chat):
         print(
             f"⚠️  Exception (expected if still truncated after max_continues): {type(e).__name__}: {e}"
         )
-        print("This is expected behavior when ensure_complete=True and response is still truncated")
+        print(
+            "This is expected behavior when ensure_complete=True and response is still truncated"
+        )
 
     # Test with ensure_complete=False
     print("\nTesting with ensure_complete=False (allows partial result)...")

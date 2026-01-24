@@ -13,7 +13,9 @@ class TestIntegration:
     @responses.activate
     def test_chat_basic_flow(self):
         """Test basic chat flow"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,

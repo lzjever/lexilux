@@ -108,7 +108,9 @@ class TestTokenizerInit:
     def test_list_tokenizer_files_without_huggingface_hub(self):
         """Test list_tokenizer_files raises ImportError when huggingface_hub is not available"""
         with patch.dict("sys.modules", {"huggingface_hub": None}):
-            with pytest.raises(ImportError, match="huggingface_hub library is required"):
+            with pytest.raises(
+                ImportError, match="huggingface_hub library is required"
+            ):
                 Tokenizer.list_tokenizer_files("test-model")
 
 

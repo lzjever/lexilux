@@ -170,7 +170,9 @@ class ChatHistory(MutableSequence):
         self.metadata: dict[str, Any] = {}  # Metadata (timestamps, model, etc.)
 
     @classmethod
-    def from_messages(cls, messages: MessagesLike, system: str | None = None) -> ChatHistory:
+    def from_messages(
+        cls, messages: MessagesLike, system: str | None = None
+    ) -> ChatHistory:
         """
         Automatically build from message list (supports all Chat-supported formats).
 
@@ -195,7 +197,9 @@ class ChatHistory(MutableSequence):
         return cls(messages=normalized, system=sys_msg)
 
     @classmethod
-    def from_chat_result(cls, messages: MessagesLike, result: ChatResult) -> ChatHistory:
+    def from_chat_result(
+        cls, messages: MessagesLike, result: ChatResult
+    ) -> ChatHistory:
         """
         Automatically build complete history from Chat call and result.
 
@@ -328,7 +332,9 @@ class ChatHistory(MutableSequence):
         Returns:
             List of assistant message contents.
         """
-        return [msg["content"] for msg in self.messages if msg.get("role") == "assistant"]
+        return [
+            msg["content"] for msg in self.messages if msg.get("role") == "assistant"
+        ]
 
     def get_last_message(self) -> dict[str, str] | None:
         """
@@ -621,7 +627,9 @@ class ChatHistory(MutableSequence):
         # Calculate statistics
         avg_per_message = total_tokens / len(messages) if messages else 0.0
         avg_per_round = (
-            sum(round_tokens_list) / len(round_tokens_list) if round_tokens_list else 0.0
+            sum(round_tokens_list) / len(round_tokens_list)
+            if round_tokens_list
+            else 0.0
         )
         max_message = max(message_tokens_list) if message_tokens_list else 0
         min_message = min(message_tokens_list) if message_tokens_list else 0
@@ -965,7 +973,9 @@ def search_content(history: ChatHistory, pattern: str) -> list[dict[str, str]]:
     return results
 
 
-def get_statistics(history: ChatHistory, tokenizer: Tokenizer | None = None) -> dict[str, Any]:
+def get_statistics(
+    history: ChatHistory, tokenizer: Tokenizer | None = None
+) -> dict[str, Any]:
     """
     Get comprehensive statistics about the conversation history.
 

@@ -1,5 +1,5 @@
 """Additional tests for chat parameters"""
-import pytest
+
 from lexilux.chat.params import ChatParams
 
 

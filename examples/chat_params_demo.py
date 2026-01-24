@@ -210,7 +210,9 @@ def demo_streaming_with_params():
     else:
         # Fallback to last chunk if no done chunk found
         final_chunk = chunks[-1]
-        print(f"\n   Finish reason: {final_chunk.finish_reason} (done={final_chunk.done})")
+        print(
+            f"\n   Finish reason: {final_chunk.finish_reason} (done={final_chunk.done})"
+        )
         print(f"   Tokens: {final_chunk.usage.total_tokens}")
 
     # Streaming with stop sequence
@@ -234,7 +236,9 @@ def demo_streaming_with_params():
     else:
         # Fallback to last chunk if no done chunk found
         final_chunk = chunks[-1]
-        print(f"\n   Finish reason: {final_chunk.finish_reason} (done={final_chunk.done})")
+        print(
+            f"\n   Finish reason: {final_chunk.finish_reason} (done={final_chunk.done})"
+        )
 
 
 def demo_comparison():

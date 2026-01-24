@@ -14,7 +14,9 @@ class TestChatStream:
     @patch("lexilux._base.requests.Session.post")
     def test_stream_basic(self, mock_post):
         """Test basic streaming"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         # Mock SSE stream
         stream_data = [
@@ -44,7 +46,9 @@ class TestChatStream:
     @patch("lexilux._base.requests.Session.post")
     def test_stream_with_usage(self, mock_post):
         """Test streaming with usage in final chunk"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         stream_data = [
             b'data: {"choices": [{"delta": {"content": "Hello"}, "index": 0}]}\n',
@@ -75,7 +79,9 @@ class TestChatStream:
     @patch("lexilux._base.requests.Session.post")
     def test_stream_without_usage(self, mock_post):
         """Test streaming without usage"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         stream_data = [
             b'data: {"choices": [{"delta": {"content": "Hello"}, "index": 0}]}\n',
@@ -100,7 +106,9 @@ class TestChatStream:
     @patch("lexilux._base.requests.Session.post")
     def test_stream_with_system_message(self, mock_post):
         """Test streaming with system message"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         stream_data = [
             b'data: {"choices": [{"delta": {"content": "Response"}, "index": 0}]}\n',
@@ -129,7 +137,9 @@ class TestChatStream:
     @patch("lexilux._base.requests.Session.post")
     def test_stream_parameters(self, mock_post):
         """Test streaming with additional parameters"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         stream_data = [
             b'data: {"choices": [{"delta": {"content": "Response"}, "index": 0}]}\n',
@@ -166,7 +176,9 @@ class TestChatStream:
     @patch("lexilux._base.requests.Session.post")
     def test_stream_finish_reason(self, mock_post):
         """Test streaming with finish_reason in chunks"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         stream_data = [
             b'data: {"choices": [{"delta": {"content": "Hello"}, "index": 0}]}\n',
@@ -193,7 +205,9 @@ class TestChatStream:
     @patch("lexilux._base.requests.Session.post")
     def test_stream_finish_reason_length(self, mock_post):
         """Test streaming with finish_reason='length'"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         stream_data = [
             b'data: {"choices": [{"delta": {"content": "Hello"}, "index": 0}]}\n',
@@ -216,7 +230,9 @@ class TestChatStream:
     @patch("lexilux._base.requests.Session.post")
     def test_stream_finish_reason_empty_string(self, mock_post):
         """Test streaming with finish_reason='' (defensive handling)"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         stream_data = [
             b'data: {"choices": [{"delta": {"content": "Hello"}, "finish_reason": "", "index": 0}]}\n',
@@ -241,7 +257,9 @@ class TestChatStream:
     @patch("lexilux._base.requests.Session.post")
     def test_stream_finish_reason_invalid_type(self, mock_post):
         """Test streaming with invalid finish_reason type (defensive handling)"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         # Simulate invalid finish_reason (number instead of string)
         # Note: JSON doesn't allow this, but we test defensive code

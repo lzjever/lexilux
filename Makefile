@@ -101,7 +101,7 @@ test-cov:
 
 test-integration:
 	@echo "Running integration tests (requires external services)..."
-	$(PYTHON_CMD) -m pytest tests/ -v -m integration -n auto
+	$(PYTHON_CMD) -m pytest tests/ -v -m integration
 
 lint:
 	$(PYTHON_CMD) -m ruff check lexilux/ tests/ examples/ --output-format=concise --no-fix
