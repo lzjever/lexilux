@@ -96,17 +96,16 @@ def test_wolo_adapter_example_imports():
     """Test that the wolo adapter example can be imported."""
     # Import the example module
     import sys
-    import os
     from pathlib import Path
 
     # Find the examples directory relative to the test file
     test_dir = Path(__file__).parent
     examples_dir = test_dir.parent / "examples"
-    
+
     # Add examples directory to path if it exists
     if examples_dir.exists():
         sys.path.insert(0, str(examples_dir))
-        
+
         try:
             from wolo_adapter_example import WoloGLMClient, WoloConfig
 
@@ -124,7 +123,7 @@ def test_wolo_adapter_example_imports():
             assert hasattr(adapter, "_log_request")
 
             print("✅ Wolo adapter example imports and instantiates correctly")
-            
+
         except ImportError as e:
             pytest.fail(f"Failed to import wolo adapter example: {e}")
         finally:
