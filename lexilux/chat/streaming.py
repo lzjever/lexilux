@@ -27,16 +27,22 @@ class StreamingResult:
     on each iteration. Can be used as a string, or converted to ChatResult.
     """
 
+    __slots__ = ("_text_parts", "_text_cache", "_finish_reason", "_usage", "_done")
+
     def __init__(self) -> None:
         """Initialize accumulated result."""
-        self._text: str = ""
+        # Use list buffer for O(n) instead of O(n²) string concatenation
+        self._text_parts: list[str] = []
+        self._text_cache: str | None = None  # Lazy cache for joined text
         self._finish_reason: str | None = None
         self._usage: Usage = Usage()
         self._done: bool = False
 
     def update(self, chunk: ChatStreamChunk) -> None:
         """Update accumulated content (internal call)."""
-        self._text += chunk.delta
+        if chunk.delta:
+            self._text_parts.append(chunk.delta)
+            self._text_cache = None  # Invalidate cache
         if chunk.done:
             self._done = True
             # Only update finish_reason if chunk provides one (don't overwrite with None)
@@ -48,7 +54,9 @@ class StreamingResult:
     @property
     def text(self) -> str:
         """Get currently accumulated text (can be used as string)."""
-        return self._text
+        if self._text_cache is None:
+            self._text_cache = "".join(self._text_parts)
+        return self._text_cache
 
     @property
     def finish_reason(self) -> str | None:
@@ -68,19 +76,19 @@ class StreamingResult:
     def to_chat_result(self) -> ChatResult:
         """Convert to ChatResult (for history)."""
         return ChatResult(
-            text=self._text,
+            text=self.text,
             finish_reason=self._finish_reason,
             usage=self._usage,
         )
 
     def __str__(self) -> str:
         """Use as string."""
-        return self._text
+        return self.text
 
     def __repr__(self) -> str:
         """Return string representation."""
         return (
-            f"StreamingResult(text={self._text!r}, done={self._done}, "
+            f"StreamingResult(text={self.text!r}, done={self._done}, "
             f"finish_reason={self._finish_reason!r})"
         )
 

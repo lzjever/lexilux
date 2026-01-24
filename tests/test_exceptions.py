@@ -128,9 +128,14 @@ class TestChatExceptionHandling:
         )
 
         # Verify attributes from BaseAPIClient
-        assert hasattr(chat, "session")
+        # Note: session is now lazy-initialized (private _session)
+        assert hasattr(chat, "_session")  # Private session (lazy)
         assert hasattr(chat, "timeout")
         assert chat.api_key == "test-key"
+
+        # Verify session is created when needed
+        session = chat._get_session()
+        assert session is not None
 
     def test_chat_timeout_property_backward_compat(self):
         """Chat should have timeout_s property for backward compatibility."""

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from lexilux._base import BaseAPIClient
 from lexilux.chat._request import (
     SSEChatStreamParser,
+    build_api_messages,
     build_params_dict,
     build_payload,
     parse_chat_completion_response,
@@ -32,10 +33,6 @@ from lexilux.usage import Json
 
 if TYPE_CHECKING:
     from lexilux.chat.tools import Tool
-
-
-def _get_working_history(history: ChatHistory | None) -> ChatHistory:
-    return history.clone() if history is not None else ChatHistory()
 
 
 def _get_original_prompt(messages: MessagesLike) -> str:
@@ -188,7 +185,7 @@ class Chat(BaseAPIClient):
             return self.timeout[1]  # Return read timeout
         return self.timeout
 
-    def _prepare_chat_request(
+    def _build_payload(
         self,
         messages: MessagesLike,
         *,
@@ -200,13 +197,56 @@ class Chat(BaseAPIClient):
         stream: bool,
         include_usage: bool,
         **kwargs: Any,
+    ) -> Json:
+        """
+        Build request payload (read-only from history, no cloning).
+
+        This is the fast path for basic __call__ and stream operations.
+        History is only read, never modified.
+        """
+        # Build messages (read-only from history)
+        api_messages = build_api_messages(messages, system=system, history=history)
+
+        final_model = model or self.model
+        if not final_model:
+            raise ValueError("Model must be specified (either in __init__ or in call)")
+
+        param_dict = build_params_dict(params=params, **kwargs)
+        return build_payload(
+            model=final_model,
+            messages=api_messages,
+            params=param_dict,
+            stream=stream,
+            include_usage=include_usage,
+            extra=extra,
+        )
+
+    def _prepare_chat_request_with_history(
+        self,
+        messages: MessagesLike,
+        *,
+        history: ChatHistory | None,
+        model: str | None,
+        system: str | None,
+        params: ChatParams | None,
+        extra: Json | None,
+        stream: bool,
+        include_usage: bool,
+        clone_history: bool = True,
+        **kwargs: Any,
     ) -> tuple[Json, ChatHistory | None]:
-        """Prepares the request payload and working history."""
+        """
+        Prepare request payload with mutable history tracking.
+
+        This is for complete() family methods that need to track
+        conversation state across multiple API calls.
+        """
         normalized_messages, working_history, user_messages_to_add = (
             prepare_messages_for_request(
                 messages,
                 system=system,
                 history=history,
+                clone_history=clone_history,
             )
         )
 
@@ -230,13 +270,13 @@ class Chat(BaseAPIClient):
 
         return payload, working_history
 
-    def _process_chat_response(
+    def _process_chat_response_with_history(
         self,
         response_data: Json,
         working_history: ChatHistory | None,
         return_raw: bool,
     ) -> ChatResult:
-        """Processes the JSON response and updates history."""
+        """Process response and update working history (for complete() family)."""
         result = parse_chat_completion_response(response_data, return_raw=return_raw)
         if working_history:
             working_history.append_result(result)
@@ -267,8 +307,10 @@ class Chat(BaseAPIClient):
     ) -> ChatResult:
         """
         Make a single chat completion request.
+
+        History is read-only - used for context but never modified.
         """
-        payload, working_history = self._prepare_chat_request(
+        payload = self._build_payload(
             messages=messages,
             history=history,
             model=model,
@@ -291,10 +333,7 @@ class Chat(BaseAPIClient):
             parallel_tool_calls=parallel_tool_calls,
         )
         response = self._make_request("chat/completions", payload)
-        response_data = response.json()
-        return self._process_chat_response(
-            response_data, working_history, return_raw=return_raw
-        )
+        return parse_chat_completion_response(response.json(), return_raw=return_raw)
 
     def stream(
         self,
@@ -318,13 +357,14 @@ class Chat(BaseAPIClient):
         extra: Json | None = None,
         include_usage: bool = True,
         return_raw_events: bool = False,
-        # ✅ NEW: Add reasoning parameter
         include_reasoning: bool = False,
     ) -> StreamingIterator:
         """
         Stream a single chat completion response.
+
+        History is read-only - used for context but never modified.
         """
-        payload, working_history = self._prepare_chat_request(
+        payload = self._build_payload(
             messages=messages,
             history=history,
             model=model,
@@ -355,7 +395,7 @@ class Chat(BaseAPIClient):
             """Internal generator for streaming chunks."""
             parser = SSEChatStreamParser(
                 return_raw_events=return_raw_events,
-                include_reasoning=include_reasoning,  # ✅ NEW
+                include_reasoning=include_reasoning,
             )
             for line in response.iter_lines():
                 if not line:
@@ -371,77 +411,92 @@ class Chat(BaseAPIClient):
                 if parser.done:
                     break
 
-        # Create StreamingIterator
-        chunk_iterator = _chunk_generator()
-        streaming_iterator = StreamingIterator(chunk_iterator)
+        # Create iterator with cleanup callback
+        iterator = StreamingIterator(_chunk_generator())
 
-        # If working history is provided, wrap iterator to update working history
-        if working_history is not None:
-            streaming_iterator = self._wrap_streaming_with_history(
-                streaming_iterator, working_history
-            )
+        # Wrap iterator to schedule cleanup when done
+        return self._wrap_iterator_with_cleanup(iterator)
 
-        return streaming_iterator
-
-    def _wrap_streaming_with_history(
-        self,
-        iterator: StreamingIterator,
-        history: ChatHistory,
+    def _wrap_iterator_with_cleanup(
+        self, iterator: StreamingIterator
     ) -> StreamingIterator:
         """
-        Wrap streaming iterator to automatically update history.
-
-        Behavior:
-        - User messages should already be added to history before calling this method
-        - Assistant message is added to history only on first iteration (lazy initialization)
-        - Assistant message content is updated on each iteration with accumulated text
-        - If iterator is never iterated, no assistant message is added
+        Wrap streaming iterator to schedule connection cleanup when iteration completes.
 
         Args:
-            iterator: StreamingIterator to wrap.
-            history: ChatHistory instance to update.
+            iterator: Original StreamingIterator.
 
         Returns:
-            Wrapped StreamingIterator that updates history on each chunk.
+            Wrapped iterator that schedules cleanup on completion.
         """
 
-        # Wrap iterator to update history
-        class HistoryUpdatingIterator(StreamingIterator):
-            """Iterator wrapper that updates history on each chunk."""
+        class CleanupStreamingIterator(StreamingIterator):
+            """Iterator wrapper that schedules cleanup when done."""
 
-            def __init__(self, base_iterator: StreamingIterator, history: ChatHistory):
-                # Initialize with base iterator's internal iterator
-                super().__init__(base_iterator._iterator)
+            def __init__(self, base_iterator: StreamingIterator, client: Chat):
+                # Don't call super().__init__() - we'll delegate to base
                 self._base = base_iterator
-                self._history = history
-                # Use base iterator's result (which is already accumulating)
-                self._result = base_iterator.result
-                self._assistant_added = (
-                    False  # Track if assistant message has been added
-                )
+                self._client = client
+                self._cleanup_scheduled = False
 
             def __iter__(self) -> Iterator[ChatStreamChunk]:
-                """Iterate chunks and update history."""
-                for chunk in self._base:
-                    # Add assistant message on first iteration (lazy initialization)
-                    if not self._assistant_added:
-                        self._history.add_assistant("")
-                        self._assistant_added = True
-
-                    # Update history's last assistant message with current accumulated text
-                    if (
-                        self._history.messages
-                        and self._history.messages[-1].get("role") == "assistant"
-                    ):
-                        self._history.messages[-1]["content"] = self.result.text
-                    yield chunk
+                try:
+                    for chunk in self._base:
+                        yield chunk
+                finally:
+                    # Schedule cleanup when iteration completes (success or failure)
+                    if not self._cleanup_scheduled:
+                        self._cleanup_scheduled = True
+                        self._client._schedule_connection_cleanup()
 
             @property
             def result(self) -> StreamingResult:
-                """Get accumulated result."""
-                return self._result
+                """Delegate to base iterator."""
+                return self._base.result
 
-        return HistoryUpdatingIterator(iterator, history)
+        return CleanupStreamingIterator(iterator, self)
+
+    def _wrap_async_iterator_with_cleanup(
+        self, iterator: AsyncStreamingIterator
+    ) -> AsyncStreamingIterator:
+        """
+        Wrap async streaming iterator to schedule connection cleanup when iteration completes.
+
+        Args:
+            iterator: Original AsyncStreamingIterator.
+
+        Returns:
+            Wrapped async iterator that schedules cleanup on completion.
+        """
+
+        class CleanupAsyncStreamingIterator(AsyncStreamingIterator):
+            """Async iterator wrapper that schedules cleanup when done."""
+
+            def __init__(self, base_iterator: AsyncStreamingIterator, client: Chat):
+                # Don't call super().__init__() - we'll delegate to base
+                self._base = base_iterator
+                self._client = client
+                self._cleanup_scheduled = False
+
+            def __aiter__(self) -> AsyncIterator[ChatStreamChunk]:
+                return self
+
+            async def __anext__(self) -> ChatStreamChunk:
+                try:
+                    return await self._base.__anext__()
+                except StopAsyncIteration:
+                    # Schedule cleanup when iteration completes
+                    if not self._cleanup_scheduled:
+                        self._cleanup_scheduled = True
+                        self._client._schedule_connection_cleanup()
+                    raise
+
+            @property
+            def result(self) -> StreamingResult:
+                """Delegate to base iterator."""
+                return self._base.result
+
+        return CleanupAsyncStreamingIterator(iterator, self)
 
     # =========================================================================
     # Async Methods
@@ -472,8 +527,10 @@ class Chat(BaseAPIClient):
     ) -> ChatResult:
         """
         Make an async chat completion request.
+
+        History is read-only - used for context but never modified.
         """
-        payload, working_history = self._prepare_chat_request(
+        payload = self._build_payload(
             messages=messages,
             history=history,
             model=model,
@@ -498,10 +555,7 @@ class Chat(BaseAPIClient):
 
         # Make async request
         response = await self._amake_request("chat/completions", payload)
-        response_data = response.json()
-        return self._process_chat_response(
-            response_data, working_history, return_raw=return_raw
-        )
+        return parse_chat_completion_response(response.json(), return_raw=return_raw)
 
     async def astream(
         self,
@@ -525,13 +579,14 @@ class Chat(BaseAPIClient):
         extra: Json | None = None,
         include_usage: bool = True,
         return_raw_events: bool = False,
-        # ✅ NEW: Add reasoning parameter
         include_reasoning: bool = False,
     ) -> AsyncStreamingIterator:
         """
         Stream an async chat completion response.
+
+        History is read-only - used for context but never modified.
         """
-        payload, working_history = self._prepare_chat_request(
+        payload = self._build_payload(
             messages=messages,
             history=history,
             model=model,
@@ -557,7 +612,7 @@ class Chat(BaseAPIClient):
         async def _async_chunk_generator() -> AsyncIterator[ChatStreamChunk]:
             parser = SSEChatStreamParser(
                 return_raw_events=return_raw_events,
-                include_reasoning=include_reasoning,  # ✅ NEW
+                include_reasoning=include_reasoning,
             )
             async for line in self._amake_streaming_request(
                 "chat/completions", payload
@@ -569,74 +624,11 @@ class Chat(BaseAPIClient):
                 if parser.done:
                     break
 
-        # Create AsyncStreamingIterator
-        chunk_iterator = _async_chunk_generator()
-        streaming_iterator = AsyncStreamingIterator(chunk_iterator)
+        # Create async iterator with cleanup callback
+        iterator = AsyncStreamingIterator(_async_chunk_generator())
 
-        # Wrap with history updating if needed
-        if working_history is not None:
-            streaming_iterator = self._wrap_async_streaming_with_history(
-                streaming_iterator, working_history
-            )
-
-        return streaming_iterator
-
-    def _wrap_async_streaming_with_history(
-        self,
-        iterator: AsyncStreamingIterator,
-        history: ChatHistory,
-    ) -> AsyncStreamingIterator:
-        """
-        Wrap async streaming iterator to automatically update history.
-
-        Args:
-            iterator: AsyncStreamingIterator to wrap.
-            history: ChatHistory instance to update.
-
-        Returns:
-            Wrapped AsyncStreamingIterator that updates history on each chunk.
-        """
-
-        class AsyncHistoryUpdatingIterator(AsyncStreamingIterator):
-            """Async iterator wrapper that updates history on each chunk."""
-
-            def __init__(
-                self, base_iterator: AsyncStreamingIterator, history: ChatHistory
-            ):
-                super().__init__(base_iterator._iterator)
-                self._base = base_iterator
-                self._history = history
-                self._result = base_iterator.result
-                self._assistant_added = False
-
-            def __aiter__(self) -> AsyncIterator[ChatStreamChunk]:
-                return self
-
-            async def __anext__(self) -> ChatStreamChunk:
-                try:
-                    chunk = await self._base.__anext__()
-
-                    # Add assistant message on first iteration
-                    if not self._assistant_added:
-                        self._history.add_assistant("")
-                        self._assistant_added = True
-
-                    # Update history's last assistant message
-                    if (
-                        self._history.messages
-                        and self._history.messages[-1].get("role") == "assistant"
-                    ):
-                        self._history.messages[-1]["content"] = self.result.text
-
-                    return chunk
-                except StopAsyncIteration:
-                    raise
-
-            @property
-            def result(self) -> StreamingResult:
-                return self._result
-
-        return AsyncHistoryUpdatingIterator(iterator, history)
+        # Wrap iterator to schedule cleanup when done
+        return self._wrap_async_iterator_with_cleanup(iterator)
 
     def complete(
         self,
@@ -713,16 +705,31 @@ class Chat(BaseAPIClient):
             ...     print(f"继续生成 {count}/{max_count}...")
             >>> result = chat.complete("Write JSON", on_progress=on_progress)
         """
-        working_history = _get_working_history(history)
+        from lexilux.chat.utils import normalize_messages
+
         original_prompt = _get_original_prompt(messages)
 
-        result = self(messages, history=working_history, **params)
+        # Build messages list (read-only from history, no cloning)
+        working_messages: list[dict[str, Any]] = []
+        if history is not None:
+            working_messages.extend(history.get_messages(include_system=True))
+
+        # Add user message(s) from input
+        for msg in normalize_messages(messages):
+            working_messages.append(msg)
+
+        # First API call
+        result = self(working_messages, **params)
+
+        # Add assistant response for potential continuation
+        working_messages.append({"role": "assistant", "content": result.text})
+
         if result.finish_reason == "length":
             try:
                 result = Conversation.continue_request(
                     self,
                     result,
-                    history=working_history,
+                    messages=working_messages,
                     max_continues=max_continues,
                     continue_prompt=continue_prompt,
                     on_progress=on_progress,
@@ -828,14 +835,31 @@ class Chat(BaseAPIClient):
             >>> iterator1 = chat.complete_stream("First question", history=history)
             >>> iterator2 = chat.complete_stream("Follow-up", history=history)
         """
-        working_history = _get_working_history(history)
+        from lexilux.chat.utils import normalize_messages
+
         original_prompt = _get_original_prompt(messages)
 
+        # Build messages list (read-only from history, no cloning)
+        working_messages: list[dict[str, Any]] = []
+        if history is not None:
+            working_messages.extend(history.get_messages(include_system=True))
+
+        # Add user message(s) from input
+        for msg in normalize_messages(messages):
+            working_messages.append(msg)
+
         def _complete_stream_generator() -> Iterator[ChatStreamChunk]:
-            initial_iterator = self.stream(messages, history=working_history, **params)
+            # First stream
+            initial_iterator = self.stream(working_messages, **params)
             yield from initial_iterator
 
             initial_result = initial_iterator.result.to_chat_result()
+
+            # Add assistant response for potential continuation
+            working_messages.append(
+                {"role": "assistant", "content": initial_result.text}
+            )
+
             if initial_result.finish_reason != "length":
                 return
 
@@ -843,7 +867,7 @@ class Chat(BaseAPIClient):
                 continue_iterator = Conversation.continue_request_stream(
                     self,
                     initial_result,
-                    history=working_history,
+                    messages=working_messages,
                     max_continues=max_continues,
                     continue_prompt=continue_prompt,
                     on_progress=on_progress,
@@ -921,16 +945,31 @@ class Chat(BaseAPIClient):
             >>> tasks = [chat.acomplete(f"Write story {i}") for i in range(3)]
             >>> results = await asyncio.gather(*tasks)
         """
-        working_history = _get_working_history(history)
+        from lexilux.chat.utils import normalize_messages
+
         original_prompt = _get_original_prompt(messages)
 
-        result = await self.acall(messages, history=working_history, **params)
+        # Build messages list (read-only from history, no cloning)
+        working_messages: list[dict[str, Any]] = []
+        if history is not None:
+            working_messages.extend(history.get_messages(include_system=True))
+
+        # Add user message(s) from input
+        for msg in normalize_messages(messages):
+            working_messages.append(msg)
+
+        # First API call
+        result = await self.acall(working_messages, **params)
+
+        # Add assistant response for potential continuation
+        working_messages.append({"role": "assistant", "content": result.text})
+
         if result.finish_reason == "length":
             try:
                 result = await Conversation.acontinue_request(
                     self,
                     result,
-                    history=working_history,
+                    messages=working_messages,
                     max_continues=max_continues,
                     continue_prompt=continue_prompt,
                     on_progress=on_progress,
@@ -1007,17 +1046,32 @@ class Chat(BaseAPIClient):
             ...     print(chunk.delta, end="", flush=True)
             >>> result = iterator.result.to_chat_result()
         """
-        working_history = _get_working_history(history)
+        from lexilux.chat.utils import normalize_messages
+
         original_prompt = _get_original_prompt(messages)
 
+        # Build messages list (read-only from history, no cloning)
+        working_messages: list[dict[str, Any]] = []
+        if history is not None:
+            working_messages.extend(history.get_messages(include_system=True))
+
+        # Add user message(s) from input
+        for msg in normalize_messages(messages):
+            working_messages.append(msg)
+
         async def _async_complete_stream_generator() -> AsyncIterator[ChatStreamChunk]:
-            initial_iterator = await self.astream(
-                messages, history=working_history, **params
-            )
+            # First stream
+            initial_iterator = await self.astream(working_messages, **params)
             async for chunk in initial_iterator:
                 yield chunk
 
             initial_result = initial_iterator.result.to_chat_result()
+
+            # Add assistant response for potential continuation
+            working_messages.append(
+                {"role": "assistant", "content": initial_result.text}
+            )
+
             if initial_result.finish_reason != "length":
                 return
 
@@ -1025,7 +1079,7 @@ class Chat(BaseAPIClient):
                 continue_iterator = await Conversation.acontinue_request_stream(
                     self,
                     initial_result,
-                    history=working_history,
+                    messages=working_messages,
                     max_continues=max_continues,
                     continue_prompt=continue_prompt,
                     on_progress=on_progress,

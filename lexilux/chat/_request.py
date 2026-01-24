@@ -11,6 +11,7 @@ This module centralizes:
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from typing import Any, TYPE_CHECKING
 from lexilux.chat.history import ChatHistory
@@ -25,12 +26,59 @@ if TYPE_CHECKING:
 DEFAULT_TEMPERATURE = 0.7
 
 
+def build_api_messages(
+    messages: MessagesLike,
+    *,
+    system: str | None,
+    history: ChatHistory | None,
+) -> list[dict[str, Any]]:
+    """
+    Build messages list for API request (read-only from history).
+
+    This is a pure function that only reads from history, never modifies it.
+    No cloning is needed.
+
+    Args:
+        messages: Input messages.
+        system: Optional system message.
+        history: Optional chat history (read-only).
+
+    Returns:
+        Combined messages list ready for API.
+    """
+    base_messages = normalize_messages(messages, system=system)
+
+    if history is None:
+        return base_messages
+
+    # Read-only: just get messages, no clone needed
+    history_messages = history.get_messages(include_system=True)
+    return history_messages + base_messages
+
+
 def prepare_messages_for_request(
     messages: MessagesLike,
     *,
     system: str | None,
     history: ChatHistory | None,
+    clone_history: bool = True,
 ) -> tuple[list[dict[str, Any]], ChatHistory | None, list[Any]]:
+    """
+    Prepare messages for API request with mutable history tracking.
+
+    This version is for complete() family methods that need to track
+    conversation state across multiple API calls.
+
+    Args:
+        messages: Input messages.
+        system: Optional system message.
+        history: Optional chat history.
+        clone_history: Whether to clone history (default True for safety).
+            Set to False when caller has already created a working copy.
+
+    Returns:
+        Tuple of (normalized_messages, working_history, user_messages_to_add).
+    """
     base_messages = normalize_messages(messages, system=system)
     user_messages_to_add: list[Any] = [
         msg.get("content", "") for msg in base_messages if msg.get("role") == "user"
@@ -39,7 +87,7 @@ def prepare_messages_for_request(
     if history is None:
         return base_messages, None, user_messages_to_add
 
-    working_history = history.clone()
+    working_history = history.clone() if clone_history else history
     history_messages = working_history.get_messages(include_system=True)
     return history_messages + base_messages, working_history, user_messages_to_add
 
@@ -225,8 +273,6 @@ def _parse_text_tool_calls(text: str) -> list[ToolCall]:
     Handles formats like: <tool_call>function_name</tool_call>
     This is a non-invasive fallback for providers that don't follow OpenAI format.
     """
-    import re
-
     if not text:
         return []
 

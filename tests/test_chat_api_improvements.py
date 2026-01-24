@@ -476,8 +476,6 @@ class TestContinueRequestCustomization:
     def test_continue_request_with_custom_prompt(self, mock_post):
         """Test continue_request with custom prompt function."""
         chat = Chat(base_url="https://api.test.com/v1", api_key="test", model="test")
-        history = ChatHistory()
-        history.add_user("Original prompt")
 
         # Mock initial result
         initial_result = ChatResult(
@@ -485,6 +483,12 @@ class TestContinueRequestCustomization:
             usage=Usage(input_tokens=10, output_tokens=5, total_tokens=15),
             finish_reason="length",
         )
+
+        # Build messages list (new API uses plain messages, not ChatHistory)
+        messages = [
+            {"role": "user", "content": "Original prompt"},
+            {"role": "assistant", "content": initial_result.text},
+        ]
 
         # Mock continue response
         mock_post.return_value.json.return_value = {
@@ -503,7 +507,7 @@ class TestContinueRequestCustomization:
         result = ChatContinue.continue_request(
             chat,
             initial_result,
-            history=history,
+            messages=messages,
             continue_prompt=custom_prompt,
         )
 
@@ -511,14 +515,9 @@ class TestContinueRequestCustomization:
         assert len(prompt_calls) > 0
         assert result.finish_reason == "stop"
 
-    def test_continue_request_history_immutability(self, mock_post):
-        """Test that continue_request does not modify original history."""
+    def test_continue_request_messages_modified_in_place(self, mock_post):
+        """Test that continue_request modifies the provided messages list in place."""
         chat = Chat(base_url="https://api.test.com/v1", api_key="test", model="test")
-
-        # Create original history
-        original_history = ChatHistory()
-        original_history.add_user("Original message")
-        original_messages_count = len(original_history.messages)
 
         # Mock initial result
         initial_result = ChatResult(
@@ -526,6 +525,13 @@ class TestContinueRequestCustomization:
             usage=Usage(input_tokens=10, output_tokens=5, total_tokens=15),
             finish_reason="length",
         )
+
+        # Build messages list (new API modifies list in place)
+        messages = [
+            {"role": "user", "content": "Original message"},
+            {"role": "assistant", "content": initial_result.text},
+        ]
+        original_messages_count = len(messages)
 
         # Mock continue response
         mock_post.return_value.json.return_value = {
@@ -537,14 +543,11 @@ class TestContinueRequestCustomization:
         ChatContinue.continue_request(
             chat,
             initial_result,
-            history=original_history,
+            messages=messages,
         )
 
-        # Verify original history is not modified
-        assert len(original_history.messages) == original_messages_count
-        assert original_history.messages == [
-            {"role": "user", "content": "Original message"}
-        ]
+        # Messages list is modified in place (has new continue prompt + assistant response)
+        assert len(messages) > original_messages_count
 
 
 class TestNeedsContinue:

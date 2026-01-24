@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from lexilux import Chat, ChatContinue, ChatHistory, ChatResult
+from lexilux import Chat, ChatContinue, ChatResult
 from lexilux.usage import Usage
 
 
@@ -31,8 +31,11 @@ class TestChatContinueContinueRequest:
             finish_reason="length",
         )
 
-        history = ChatHistory.from_messages("Write a story")
-        history.append_result(result1)
+        # Build messages list (new API uses plain messages, not ChatHistory)
+        messages = [
+            {"role": "user", "content": "Write a story"},
+            {"role": "assistant", "content": result1.text},
+        ]
 
         mock_response = Mock()
         mock_response.status_code = 200
@@ -48,7 +51,7 @@ class TestChatContinueContinueRequest:
         continue_result = ChatContinue.continue_request(
             chat,
             result1,
-            history=history,
+            messages=messages,
             add_continue_prompt=True,
             continue_prompt="continue",
         )
@@ -56,9 +59,8 @@ class TestChatContinueContinueRequest:
         # New API with auto_merge=True (default) returns merged result
         assert continue_result.text == "This is part 1 and part 2"
         assert " and part 2" in continue_result.text
-        # Verify that history was updated with continue prompt
-        # The history should have the continue prompt as a user message
-        assert len(history.messages) >= 2  # Original + continue prompt
+        # Verify that messages was updated with continue prompt
+        assert len(messages) >= 3  # Original user + assistant + continue prompt
 
     @patch("lexilux._base.requests.Session.post")
     def test_continue_request_without_prompt(self, mock_post):
@@ -75,8 +77,11 @@ class TestChatContinueContinueRequest:
             finish_reason="length",
         )
 
-        history = ChatHistory.from_messages("Write a story")
-        history.append_result(result1)
+        # Build messages list (new API uses plain messages, not ChatHistory)
+        messages = [
+            {"role": "user", "content": "Write a story"},
+            {"role": "assistant", "content": result1.text},
+        ]
 
         mock_response = Mock()
         mock_response.status_code = 200
@@ -90,13 +95,13 @@ class TestChatContinueContinueRequest:
         mock_post.return_value = mock_response
 
         continue_result = ChatContinue.continue_request(
-            chat, result1, history=history, add_continue_prompt=False
+            chat, result1, messages=messages, add_continue_prompt=False
         )
 
         # New API with auto_merge=True (default) returns merged result
         assert continue_result.text == "This is part 1 and part 2"
         assert " and part 2" in continue_result.text
-        # History should not have additional user message when add_continue_prompt=False
+        # Messages should not have additional user message when add_continue_prompt=False
         # Note: This tests the interface contract
 
     @patch("lexilux._base.requests.Session.post")
@@ -114,8 +119,11 @@ class TestChatContinueContinueRequest:
             finish_reason="length",
         )
 
-        history = ChatHistory.from_messages("Write a story")
-        history.append_result(result1)
+        # Build messages list (new API uses plain messages, not ChatHistory)
+        messages = [
+            {"role": "user", "content": "Write a story"},
+            {"role": "assistant", "content": result1.text},
+        ]
 
         mock_response = Mock()
         mock_response.status_code = 200
@@ -131,7 +139,7 @@ class TestChatContinueContinueRequest:
         continue_result = ChatContinue.continue_request(
             chat,
             result1,
-            history=history,
+            messages=messages,
             add_continue_prompt=True,
             continue_prompt="Please continue",
         )
@@ -139,8 +147,7 @@ class TestChatContinueContinueRequest:
         # New API with auto_merge=True (default) returns merged result
         assert continue_result.text == "This is part 1 continuation"
         assert " continuation" in continue_result.text
-        # Verify custom prompt was used - check API call payload instead of history
-        # (history is immutable, so we check the actual API call)
+        # Verify custom prompt was used - check API call payload
         assert mock_post.call_count >= 1
         # The continue request should have been made with custom prompt
         # We verify the result contains the continuation text
@@ -252,7 +259,7 @@ class TestChatContinueMergeResults:
 class TestChatContinueLoopBehavior:
     """Test continuation loop behavior beyond single-continue."""
 
-    def test_continue_request_multiple_continues_updates_history(self):
+    def test_continue_request_multiple_continues_updates_messages(self):
         """Second continue should include the previous continue assistant text in messages."""
 
         class DummyChat:
@@ -268,12 +275,15 @@ class TestChatContinueLoopBehavior:
         result2 = ChatResult(text=" Part 2", usage=Usage(), finish_reason="length")
         result3 = ChatResult(text=" Part 3", usage=Usage(), finish_reason="stop")
 
-        history = ChatHistory.from_messages("Write a story")
-        history.append_result(result1)
+        # Build messages list (new API uses plain messages, not ChatHistory)
+        messages = [
+            {"role": "user", "content": "Write a story"},
+            {"role": "assistant", "content": result1.text},
+        ]
 
         chat = DummyChat(results=[result2, result3])
         full = ChatContinue.continue_request(
-            chat, result1, history=history, max_continues=2
+            chat, result1, messages=messages, max_continues=2
         )
 
         assert full.text == "Part 1 Part 2 Part 3"
@@ -299,12 +309,16 @@ class TestChatContinueLoopBehavior:
                 raise RuntimeError("boom")
 
         result1 = ChatResult(text="Part 1", usage=Usage(), finish_reason="length")
-        history = ChatHistory.from_messages("Write a story")
-        history.append_result(result1)
+
+        # Build messages list (new API uses plain messages, not ChatHistory)
+        messages = [
+            {"role": "user", "content": "Write a story"},
+            {"role": "assistant", "content": result1.text},
+        ]
 
         with pytest.raises(RuntimeError, match="boom"):
             ChatContinue.continue_request(
-                DummyChat(), result1, history=history, max_continues=1
+                DummyChat(), result1, messages=messages, max_continues=1
             )
 
 
@@ -327,8 +341,11 @@ class TestChatContinueIntegration:
             finish_reason="length",
         )
 
-        history = ChatHistory.from_messages("Write a long story")
-        history.append_result(result1)
+        # Build messages list (new API uses plain messages, not ChatHistory)
+        messages = [
+            {"role": "user", "content": "Write a long story"},
+            {"role": "assistant", "content": result1.text},
+        ]
 
         # Continue request
         mock_response = Mock()
@@ -347,7 +364,7 @@ class TestChatContinueIntegration:
 
         # New API with auto_merge=True (default) returns merged result directly
         full_result = ChatContinue.continue_request(
-            chat, result1, history=history, add_continue_prompt=True
+            chat, result1, messages=messages, add_continue_prompt=True
         )
 
         assert "This is a long story that was cut off" in full_result.text

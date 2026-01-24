@@ -13,7 +13,7 @@ import random
 import time
 from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING, Any, Callable, Literal, overload
-from lexilux.chat.history import ChatHistory
+
 from lexilux.chat.models import ChatResult, ChatStreamChunk
 from lexilux.chat.streaming import (
     AsyncStreamingIterator,
@@ -215,31 +215,43 @@ class Conversation:
     @staticmethod
     def _prepare_continue_loop(
         last_result: ChatResult,
-        history: ChatHistory | None,
+        messages: list[dict[str, Any]],
         original_prompt: str | None,
-    ) -> tuple[ChatHistory, list[ChatResult], ChatResult, int, str, str | None]:
-        """Prepare state for the continuation loop."""
+    ) -> tuple[
+        list[dict[str, Any]], list[ChatResult], ChatResult, int, str, str | None
+    ]:
+        """
+        Prepare state for the continuation loop.
+
+        Args:
+            last_result: The result that needs continuation.
+            messages: Current messages list (modified in place for continuation).
+            original_prompt: Original user prompt for dynamic continue prompts.
+
+        Returns:
+            Tuple of (messages, all_results, current_result, continue_count,
+                     accumulated_text, original_prompt).
+        """
         if last_result.finish_reason != "length":
             raise ValueError(
                 f"continue_request requires finish_reason='length', got '{last_result.finish_reason}'"
             )
-        if history is None:
-            raise ValueError("History is required for continuation requests.")
+        if not messages:
+            raise ValueError("Messages list is required for continuation requests.")
 
-        working_history = history.clone()
         all_results = [last_result]
         current_result = last_result
         continue_count = 0
         accumulated_text = last_result.text
 
         if original_prompt is None:
-            for msg in reversed(working_history.get_messages()):
+            for msg in reversed(messages):
                 if msg.get("role") == "user":
                     original_prompt = msg.get("content", "")
                     break
 
         return (
-            working_history,
+            messages,
             all_results,
             current_result,
             continue_count,
@@ -251,13 +263,14 @@ class Conversation:
     def _process_continue_step(
         continue_result: ChatResult,
         all_results: list[ChatResult],
-        working_history: ChatHistory,
+        messages: list[dict[str, Any]],
     ) -> tuple[ChatResult, str]:
         """Process the result of a single continuation step."""
         all_results.append(continue_result)
         current_result = continue_result
         accumulated_text = "".join(r.text for r in all_results)
-        working_history.append_result(continue_result)
+        # Append assistant response to messages list
+        messages.append({"role": "assistant", "content": continue_result.text})
         return current_result, accumulated_text
 
     @staticmethod
@@ -282,7 +295,7 @@ class Conversation:
         chat: Chat,
         last_result: ChatResult,
         *,
-        history: ChatHistory | None = None,
+        messages: list[dict[str, Any]],
         add_continue_prompt: bool = True,
         continue_prompt: str | Callable = "continue",
         max_continues: int = 1,
@@ -301,7 +314,7 @@ class Conversation:
         chat: Chat,
         last_result: ChatResult,
         *,
-        history: ChatHistory | None = None,
+        messages: list[dict[str, Any]],
         add_continue_prompt: bool = True,
         continue_prompt: str | Callable = "continue",
         max_continues: int = 1,
@@ -319,7 +332,7 @@ class Conversation:
         chat: Chat,
         last_result: ChatResult,
         *,
-        history: ChatHistory | None = None,
+        messages: list[dict[str, Any]],
         add_continue_prompt: bool = True,
         continue_prompt: str | Callable = "continue",
         max_continues: int = 1,
@@ -333,15 +346,30 @@ class Conversation:
     ) -> ChatResult | list[ChatResult]:
         """
         Continue generation request (enhanced version with customization support).
+
+        Args:
+            chat: Chat client instance.
+            last_result: The result that needs continuation.
+            messages: Messages list (modified in place for continuation tracking).
+            add_continue_prompt: Whether to add continue prompt.
+            continue_prompt: Continue prompt string or callable.
+            max_continues: Maximum continuation attempts.
+            auto_merge: Whether to merge results automatically.
+            on_progress: Progress callback.
+            continue_delay: Delay between requests.
+            on_error: Error handling strategy.
+            on_error_callback: Error callback.
+            original_prompt: Original user prompt.
+            **params: Additional parameters for chat calls.
         """
         (
-            working_history,
+            working_messages,
             all_results,
             current_result,
             continue_count,
             accumulated_text,
             original_prompt,
-        ) = Conversation._prepare_continue_loop(last_result, history, original_prompt)
+        ) = Conversation._prepare_continue_loop(last_result, messages, original_prompt)
 
         while (
             current_result.finish_reason == "length" and continue_count < max_continues
@@ -361,12 +389,12 @@ class Conversation:
                     original_prompt or "",
                 )
                 if add_continue_prompt:
-                    working_history.add_user(prompt)
+                    working_messages.append({"role": "user", "content": prompt})
 
-                continue_result = chat(working_history.get_messages(), **params)
+                continue_result = chat(working_messages, **params)
 
                 current_result, accumulated_text = Conversation._process_continue_step(
-                    continue_result, all_results, working_history
+                    continue_result, all_results, working_messages
                 )
             except Exception as e:
                 return Conversation._handle_continue_error(
@@ -447,7 +475,7 @@ class Conversation:
         chat: Chat,
         last_result: ChatResult,
         *,
-        history: ChatHistory,
+        messages: list[dict[str, Any]],
         add_continue_prompt: bool = True,
         continue_prompt: str | Callable = "continue",
         max_continues: int = 1,
@@ -460,15 +488,29 @@ class Conversation:
     ) -> StreamingIterator:
         """
         Continue generation with streaming output (enhanced version with customization support).
+
+        Args:
+            chat: Chat client instance.
+            last_result: The result that needs continuation.
+            messages: Messages list (modified in place for continuation tracking).
+            add_continue_prompt: Whether to add continue prompt.
+            continue_prompt: Continue prompt string or callable.
+            max_continues: Maximum continuation attempts.
+            on_progress: Progress callback.
+            continue_delay: Delay between requests.
+            on_error: Error handling strategy.
+            on_error_callback: Error callback.
+            original_prompt: Original user prompt.
+            **params: Additional parameters for chat calls.
         """
         (
-            working_history,
+            working_messages,
             all_results,
             current_result,
             continue_count,
             accumulated_text,
             original_prompt,
-        ) = Conversation._prepare_continue_loop(last_result, history, original_prompt)
+        ) = Conversation._prepare_continue_loop(last_result, messages, original_prompt)
 
         # Reset all_results for the generator to populate
         all_results.clear()
@@ -500,17 +542,15 @@ class Conversation:
                         original_prompt or "",
                     )
                     if add_continue_prompt:
-                        working_history.add_user(prompt)
+                        working_messages.append({"role": "user", "content": prompt})
 
-                    continue_iterator = chat.stream(
-                        working_history.get_messages(), **params
-                    )
+                    continue_iterator = chat.stream(working_messages, **params)
                     yield from continue_iterator
 
                     continue_result = continue_iterator.result.to_chat_result()
                     current_result, accumulated_text = (
                         Conversation._process_continue_step(
-                            continue_result, all_results, working_history
+                            continue_result, all_results, working_messages
                         )
                     )
                 except Exception as e:
@@ -544,7 +584,7 @@ class Conversation:
         chat: Chat,
         last_result: ChatResult,
         *,
-        history: ChatHistory | None = None,
+        messages: list[dict[str, Any]],
         add_continue_prompt: bool = True,
         continue_prompt: str | Callable = "continue",
         max_continues: int = 1,
@@ -558,15 +598,30 @@ class Conversation:
     ) -> ChatResult | list[ChatResult]:
         """
         Async version of continue_request.
+
+        Args:
+            chat: Chat client instance.
+            last_result: The result that needs continuation.
+            messages: Messages list (modified in place for continuation tracking).
+            add_continue_prompt: Whether to add continue prompt.
+            continue_prompt: Continue prompt string or callable.
+            max_continues: Maximum continuation attempts.
+            auto_merge: Whether to merge results automatically.
+            on_progress: Progress callback.
+            continue_delay: Delay between requests.
+            on_error: Error handling strategy.
+            on_error_callback: Error callback.
+            original_prompt: Original user prompt.
+            **params: Additional parameters for chat calls.
         """
         (
-            working_history,
+            working_messages,
             all_results,
             current_result,
             continue_count,
             accumulated_text,
             original_prompt,
-        ) = Conversation._prepare_continue_loop(last_result, history, original_prompt)
+        ) = Conversation._prepare_continue_loop(last_result, messages, original_prompt)
 
         while (
             current_result.finish_reason == "length" and continue_count < max_continues
@@ -588,14 +643,12 @@ class Conversation:
                     original_prompt or "",
                 )
                 if add_continue_prompt:
-                    working_history.add_user(prompt)
+                    working_messages.append({"role": "user", "content": prompt})
 
-                continue_result = await chat.acall(
-                    working_history.get_messages(), **params
-                )
+                continue_result = await chat.acall(working_messages, **params)
 
                 current_result, accumulated_text = Conversation._process_continue_step(
-                    continue_result, all_results, working_history
+                    continue_result, all_results, working_messages
                 )
             except Exception as e:
                 return Conversation._handle_continue_error(
@@ -611,7 +664,7 @@ class Conversation:
         chat: Chat,
         last_result: ChatResult,
         *,
-        history: ChatHistory,
+        messages: list[dict[str, Any]],
         add_continue_prompt: bool = True,
         continue_prompt: str | Callable = "continue",
         max_continues: int = 1,
@@ -624,15 +677,29 @@ class Conversation:
     ) -> AsyncStreamingIterator:
         """
         Async version of continue_request_stream.
+
+        Args:
+            chat: Chat client instance.
+            last_result: The result that needs continuation.
+            messages: Messages list (modified in place for continuation tracking).
+            add_continue_prompt: Whether to add continue prompt.
+            continue_prompt: Continue prompt string or callable.
+            max_continues: Maximum continuation attempts.
+            on_progress: Progress callback.
+            continue_delay: Delay between requests.
+            on_error: Error handling strategy.
+            on_error_callback: Error callback.
+            original_prompt: Original user prompt.
+            **params: Additional parameters for chat calls.
         """
         (
-            working_history,
+            working_messages,
             all_results,
             current_result,
             continue_count,
             accumulated_text,
             original_prompt,
-        ) = Conversation._prepare_continue_loop(last_result, history, original_prompt)
+        ) = Conversation._prepare_continue_loop(last_result, messages, original_prompt)
 
         all_results.clear()
         all_results.append(last_result)
@@ -665,18 +732,16 @@ class Conversation:
                         original_prompt or "",
                     )
                     if add_continue_prompt:
-                        working_history.add_user(prompt)
+                        working_messages.append({"role": "user", "content": prompt})
 
-                    continue_iterator = await chat.astream(
-                        working_history.get_messages(), **params
-                    )
+                    continue_iterator = await chat.astream(working_messages, **params)
                     async for chunk in continue_iterator:
                         yield chunk
 
                     continue_result = continue_iterator.result.to_chat_result()
                     current_result, accumulated_text = (
                         Conversation._process_continue_step(
-                            continue_result, all_results, working_history
+                            continue_result, all_results, working_messages
                         )
                     )
                 except Exception as e:

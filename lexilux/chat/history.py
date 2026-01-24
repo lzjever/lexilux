@@ -149,6 +149,8 @@ class ChatHistory(MutableSequence):
         >>> msg in history  # Check membership
     """
 
+    __slots__ = ("system", "messages", "metadata")
+
     def __init__(
         self,
         messages: list[dict[str, str]] | None = None,
@@ -168,6 +170,24 @@ class ChatHistory(MutableSequence):
         # Deep copy to prevent external modifications to nested dicts
         self.messages: list[dict[str, str]] = deepcopy(messages or [])
         self.metadata: dict[str, Any] = {}  # Metadata (timestamps, model, etc.)
+
+    @classmethod
+    def _from_trusted(
+        cls,
+        messages: list[dict[str, str]],
+        system: str | None = None,
+    ) -> ChatHistory:
+        """
+        Internal constructor for trusted data (skips deepcopy).
+
+        Use only when messages are already safe (e.g., from clone()).
+        This is an internal method - external callers should use __init__.
+        """
+        instance = object.__new__(cls)
+        instance.system = system
+        instance.messages = messages  # No copy - caller guarantees safety
+        instance.metadata = {}
+        return instance
 
     @classmethod
     def from_messages(
@@ -364,7 +384,8 @@ class ChatHistory(MutableSequence):
         Returns:
             New ChatHistory instance with copied messages.
         """
-        return ChatHistory(
+        # Use _from_trusted to avoid redundant deepcopy
+        return ChatHistory._from_trusted(
             messages=[msg.copy() for msg in self.messages],
             system=self.system,
         )
@@ -471,7 +492,14 @@ class ChatHistory(MutableSequence):
         See Also:
             :meth:`analyze_tokens` - For detailed per-round analysis with role breakdown
         """
-        rounds = self._get_rounds()
+        return self._count_tokens_per_round_with_rounds(tokenizer, self._get_rounds())
+
+    def _count_tokens_per_round_with_rounds(
+        self,
+        tokenizer: Tokenizer,
+        rounds: list[list[dict[str, str]]],
+    ) -> list[tuple[int, int]]:
+        """Internal helper that accepts pre-computed rounds to avoid recomputation."""
         result = []
         for idx, round_messages in enumerate(rounds):
             round_tokens = 0
@@ -572,15 +600,20 @@ class ChatHistory(MutableSequence):
         user_count = 0
         assistant_count = 0
 
-        # Per-message analysis
+        # Per-message analysis - also build token cache for per-round analysis
         per_message: list[tuple[str, str, int]] = []
         message_tokens_list: list[int] = []
+        # Cache: id(msg) -> tokens to avoid re-tokenization in per-round analysis
+        msg_token_cache: dict[int, int] = {}
 
         for msg in messages:
             role = msg.get("role", "")
             content = msg.get("content", "")
             result = tokenizer(content)
             tokens = result.usage.total_tokens or 0
+
+            # Cache by message id for reuse in per-round analysis
+            msg_token_cache[id(msg)] = tokens
 
             total_tokens += tokens
             message_tokens_list.append(tokens)
@@ -600,7 +633,7 @@ class ChatHistory(MutableSequence):
                 assistant_tokens += tokens
                 assistant_count += 1
 
-        # Per-round analysis
+        # Per-round analysis - use cached token counts
         per_round: list[tuple[int, int, int, int]] = []
         round_tokens_list: list[int] = []
 
@@ -611,9 +644,8 @@ class ChatHistory(MutableSequence):
 
             for msg in round_messages:
                 role = msg.get("role", "")
-                content = msg.get("content", "")
-                result = tokenizer(content)
-                tokens = result.usage.total_tokens or 0
+                # Use cached token count instead of re-tokenizing
+                tokens = msg_token_cache.get(id(msg), 0)
 
                 round_total += tokens
                 if role == "user":
@@ -678,17 +710,19 @@ class ChatHistory(MutableSequence):
         """
         rounds = self._get_rounds()
         if not rounds:
-            return ChatHistory(messages=[], system=self.system if keep_system else None)
+            return ChatHistory._from_trusted(
+                messages=[], system=self.system if keep_system else None
+            )
 
-        # Count tokens per round
-        round_tokens = self.count_tokens_per_round(tokenizer)
+        # Count tokens per round - pass rounds to avoid recomputation
+        round_tokens = self._count_tokens_per_round_with_rounds(tokenizer, rounds)
         system_tokens = 0
         if keep_system and self.system:
             sys_result = tokenizer(self.system)
             system_tokens = sys_result.usage.total_tokens or 0
 
         # Keep rounds from the end until we exceed max_tokens
-        kept_rounds = []
+        kept_rounds: list[list[dict[str, str]]] = []
         current_tokens = system_tokens
         for idx in range(len(rounds) - 1, -1, -1):
             round_token_count = round_tokens[idx][1]
@@ -698,12 +732,10 @@ class ChatHistory(MutableSequence):
             else:
                 break
 
-        # Rebuild messages
-        new_messages = []
-        for round_msgs in kept_rounds:
-            new_messages.extend(round_msgs)
+        # Rebuild messages - copy dicts for safety
+        new_messages = [msg.copy() for round_msgs in kept_rounds for msg in round_msgs]
 
-        return ChatHistory(
+        return ChatHistory._from_trusted(
             messages=new_messages,
             system=self.system if keep_system else None,
         )
@@ -720,14 +752,13 @@ class ChatHistory(MutableSequence):
         """
         rounds = self._get_rounds()
         if not rounds:
-            return ChatHistory(messages=[], system=self.system)
+            return ChatHistory._from_trusted(messages=[], system=self.system)
 
         last_rounds = rounds[-n:] if n > 0 else []
-        new_messages = []
-        for round_msgs in last_rounds:
-            new_messages.extend(round_msgs)
+        # Copy dicts for safety
+        new_messages = [msg.copy() for round_msgs in last_rounds for msg in round_msgs]
 
-        return ChatHistory(messages=new_messages, system=self.system)
+        return ChatHistory._from_trusted(messages=new_messages, system=self.system)
 
     def remove_last_round(self) -> None:
         """Remove the last round (user + assistant pair)."""
