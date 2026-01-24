@@ -41,6 +41,7 @@ tokenizer = [
 
 dev = [
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "pytest-xdist>=3.0.0",
     "pytest-mock>=3.10.0",
@@ -61,6 +62,7 @@ docs = [
 [dependency-groups]
 dev = [
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "pytest-xdist>=3.0.0",
     "pytest-mock>=3.10.0",
@@ -100,5 +102,26 @@ version = {attr = "lexilux.__version__"}
 lexilux = ["py.typed", "data/*.json"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=lexilux --cov-report=html --cov-report=term --cov-report=term-missing --cov-fail-under=68"
+addopts = [
+    "--cov=lexilux",
+    "--cov-report=html", 
+    "--cov-report=term",
+    "--cov-report=term-missing",
+    "--cov-fail-under=68",
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "-m not integration",
+    "--asyncio-mode=auto"
+]
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests (require external services)",
+    "slow: Slow running tests", 
+    "mock: Tests that require mocking",
+    "asyncio: Async tests"
+]
