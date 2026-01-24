@@ -11,6 +11,9 @@ from lexilux.chat.content_blocks import (
     ImageUrlDetail,
     TextContentBlock,
 )
+from lexilux.chat.conversation import Conversation
+# Backward compatibility alias
+ChatContinue = Conversation
 from lexilux.chat.exceptions import ChatIncompleteResponseError, ChatStreamInterruptedError
 from lexilux.chat.formatters import ChatHistoryFormatter
 from lexilux.chat.history import (
@@ -47,7 +50,8 @@ __all__ = [
     "ChatParams",
     "ChatHistory",
     "ChatHistoryFormatter",
-    "ChatContinue",
+    "Conversation",
+    "ChatContinue",  # Backward compatibility alias
     "StreamingResult",
     "StreamingIterator",
     "AsyncStreamingIterator",

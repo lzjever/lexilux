@@ -16,6 +16,7 @@ import httpx
 import requests
 
 from lexilux.usage import Json, ResultBase, Usage
+from lexilux.chat.utils import parse_usage
 
 if TYPE_CHECKING:
     pass

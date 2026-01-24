@@ -7,12 +7,13 @@ Provides Chat, Embedding, Rerank, and Tokenizer support with a simple, function-
 from lexilux.chat import (
     AsyncStreamingIterator,
     Chat,
-    ChatContinue,
     ChatHistory,
     ChatHistoryFormatter,
     ChatParams,
     ChatResult,
     ChatStreamChunk,
+    Conversation,
+    ChatContinue,  # Backward compatibility
     ContentBlock,
     FunctionTool,
     ImageContentBlock,
@@ -88,7 +89,8 @@ __all__ = [
     "ChatParams",
     "ChatHistory",
     "ChatHistoryFormatter",
-    "ChatContinue",
+    "Conversation",
+    "ChatContinue",  # Backward compatibility
     "StreamingResult",
     "StreamingIterator",
     "AsyncStreamingIterator",
