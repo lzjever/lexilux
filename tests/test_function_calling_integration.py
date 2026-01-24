@@ -134,10 +134,10 @@ def test_function_calling_basic_tool_definition():
 @pytest.mark.skip_if_no_config
 def test_function_calling_simple_tool_use(test_config, has_real_api_config):
     """Test simple function calling with one tool."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -183,10 +183,10 @@ def test_function_calling_simple_tool_use(test_config, has_real_api_config):
 @pytest.mark.skip_if_no_config
 def test_function_calling_with_execution(test_config, has_real_api_config):
     """Test complete function calling workflow: request -> execute -> final response."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -247,10 +247,10 @@ def test_function_calling_with_execution(test_config, has_real_api_config):
 @pytest.mark.skip_if_no_config
 def test_function_calling_tool_choice_required(test_config, has_real_api_config):
     """Test tool_choice='required' to force tool calling."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -276,10 +276,10 @@ def test_function_calling_tool_choice_required(test_config, has_real_api_config)
 @pytest.mark.skip_if_no_config
 def test_function_calling_tool_choice_specific(test_config, has_real_api_config):
     """Test tool_choice with specific function name."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -317,10 +317,10 @@ def test_function_calling_tool_choice_specific(test_config, has_real_api_config)
 @pytest.mark.skip_if_no_config
 def test_function_calling_parallel(test_config, has_real_api_config):
     """Test parallel function calling (multiple tools in one request)."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -369,10 +369,10 @@ def test_function_calling_parallel(test_config, has_real_api_config):
 @pytest.mark.skip_if_no_config
 def test_function_calling_complex_parameters(test_config, has_real_api_config):
     """Test function calling with complex JSON Schema parameters."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -427,10 +427,10 @@ def test_function_calling_complex_parameters(test_config, has_real_api_config):
 @pytest.mark.skip_if_no_config
 def test_function_calling_streaming(test_config, has_real_api_config):
     """Test function calling with streaming response."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -469,10 +469,10 @@ def test_function_calling_streaming(test_config, has_real_api_config):
 @pytest.mark.skip_if_no_config
 def test_function_calling_streaming_with_execution(test_config, has_real_api_config):
     """Test complete workflow with streaming: tool call -> execute -> stream final response."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -536,10 +536,10 @@ def test_function_calling_streaming_with_execution(test_config, has_real_api_con
 @pytest.mark.skip_if_no_config
 def test_tool_call_helper_continue_conversation(test_config, has_real_api_config):
     """Test ToolCallHelper for simplified workflow."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -611,7 +611,7 @@ def test_multimodal_image_url(test_config, has_real_api_config):
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+                        "url": "https://www.nasa.gov/wp-content/uploads/2026/01/suni-williams-portrait.jpg"
                     },
                 },
             ],
@@ -696,13 +696,13 @@ def test_multimodal_multiple_images(test_config, has_real_api_config):
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Lion_crossing_Savuti.jpg/2560px-Lion_crossing_Savuti.jpg"
+                        "url": "https://www.nasa.gov/wp-content/uploads/2026/01/suni-williams-portrait.jpg"
                     },
                 },
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+                        "url": "https://www.nasa.gov/wp-content/uploads/2026/01/suni-williams-portrait.jpg"
                     },
                 },
             ],
@@ -736,7 +736,7 @@ def test_multimodal_with_image_detail_low(test_config, has_real_api_config):
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+                        "url": "https://www.nasa.gov/wp-content/uploads/2026/01/suni-williams-portrait.jpg",
                         "detail": "low",
                     },
                 },
@@ -770,7 +770,7 @@ def test_multimodal_with_image_detail_high(test_config, has_real_api_config):
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+                        "url": "https://www.nasa.gov/wp-content/uploads/2026/01/suni-williams-portrait.jpg",
                         "detail": "high",
                     },
                 },
@@ -794,10 +794,10 @@ def test_multimodal_with_image_detail_high(test_config, has_real_api_config):
 @pytest.mark.skip_if_no_config
 def test_function_calling_no_tool_needed(test_config, has_real_api_config):
     """Test that model doesn't call tools when not needed."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -822,10 +822,10 @@ def test_function_calling_no_tool_needed(test_config, has_real_api_config):
 @pytest.mark.skip_if_no_config
 def test_function_calling_execution_error_handling(test_config, has_real_api_config):
     """Test error handling when tool execution fails."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -855,10 +855,10 @@ def test_function_calling_execution_error_handling(test_config, has_real_api_con
 @pytest.mark.skip_if_no_config
 def test_function_calling_missing_required_parameter(test_config, has_real_api_config):
     """Test tool call with missing required parameter."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -886,10 +886,10 @@ def test_function_calling_missing_required_parameter(test_config, has_real_api_c
 @pytest.mark.skip_if_no_config
 def test_function_calling_with_system_message(test_config, has_real_api_config):
     """Test function calling with system message."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -920,10 +920,10 @@ def test_function_calling_with_system_message(test_config, has_real_api_config):
 @pytest.mark.skip_if_no_config
 def test_function_calling_multi_turn_conversation(test_config, has_real_api_config):
     """Test multi-turn conversation with function calling."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )
@@ -978,10 +978,10 @@ def test_function_calling_multi_turn_conversation(test_config, has_real_api_conf
 @pytest.mark.skip_if_no_config
 def test_function_calling_with_chained_tools(test_config, has_real_api_config):
     """Test workflow where output of one tool informs another."""
-    if not has_real_api_config or "zhipu_multimodal" not in test_config:
+    if not has_real_api_config or "zhipu_function_calling" not in test_config:
         pytest.skip("No real API config available")
 
-    config = test_config["zhipu_multimodal"]
+    config = test_config["zhipu_function_calling"]
     chat = Chat(
         base_url=config["api_base"], api_key=config["api_key"], model=config["model"]
     )

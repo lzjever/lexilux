@@ -1,0 +1,6 @@
+apikey: 4f5ff08f17b14cdc9795ab696508e9ae.0i5f9tcioBW8cNr9
+base_url: https://open.bigmodel.cn/api/coding/paas/v4
+
+avialbel models:
+functiona calling: glm-4.7
+multimodal image understanding:  glm-4.6v-flash
