@@ -96,29 +96,43 @@ def test_wolo_adapter_example_imports():
     """Test that the wolo adapter example can be imported."""
     # Import the example module
     import sys
+    import os
+    from pathlib import Path
 
-    sys.path.append("/home/percy/works/mygithub/mbos-agent/lexilux/examples")
+    # Find the examples directory relative to the test file
+    test_dir = Path(__file__).parent
+    examples_dir = test_dir.parent / "examples"
+    
+    # Add examples directory to path if it exists
+    if examples_dir.exists():
+        sys.path.insert(0, str(examples_dir))
+        
+        try:
+            from wolo_adapter_example import WoloGLMClient, WoloConfig
 
-    try:
-        from wolo_adapter_example import WoloGLMClient, WoloConfig
+            # Test basic instantiation
+            config = WoloConfig(
+                base_url="https://example.com", api_key="test", model="test-model"
+            )
 
-        # Test basic instantiation
-        config = WoloConfig(
-            base_url="https://example.com", api_key="test", model="test-model"
-        )
+            # Should not raise any errors
+            adapter = WoloGLMClient(config)
 
-        # Should not raise any errors
-        adapter = WoloGLMClient(config)
+            # Verify it has the expected methods
+            assert hasattr(adapter, "chat_completion")
+            assert hasattr(adapter, "_build_opencode_headers")
+            assert hasattr(adapter, "_log_request")
 
-        # Verify it has the expected methods
-        assert hasattr(adapter, "chat_completion")
-        assert hasattr(adapter, "_build_opencode_headers")
-        assert hasattr(adapter, "_log_request")
-
-        print("✅ Wolo adapter example imports and instantiates correctly")
-
-    except ImportError as e:
-        pytest.fail(f"Failed to import wolo adapter example: {e}")
+            print("✅ Wolo adapter example imports and instantiates correctly")
+            
+        except ImportError as e:
+            pytest.fail(f"Failed to import wolo adapter example: {e}")
+        finally:
+            # Clean up path
+            if str(examples_dir) in sys.path:
+                sys.path.remove(str(examples_dir))
+    else:
+        pytest.skip(f"Examples directory not found at {examples_dir}")
 
 
 def test_no_more_error_parameters():
