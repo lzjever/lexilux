@@ -131,7 +131,10 @@ class ToolChoice:
             return {
                 "type": "allowed_tools",
                 "mode": "auto",
-                "tools": [{"type": "function", "name": tool.name} for tool in (self.tools or [])],
+                "tools": [
+                    {"type": "function", "name": tool.name}
+                    for tool in (self.tools or [])
+                ],
             }
         else:
             # Fallback
@@ -139,4 +142,4 @@ class ToolChoice:
 
 
 # Type alias for tool choice parameter
-ToolChoiceParam = Union[str, ToolChoice, None]
+ToolChoiceParam = str | ToolChoice | None

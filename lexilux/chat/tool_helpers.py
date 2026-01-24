@@ -7,6 +7,8 @@ including executing tool calls and managing conversation history with tool calls
 
 from __future__ import annotations
 
+import json
+
 from collections.abc import Callable
 from typing import Any
 
@@ -61,10 +63,9 @@ def execute_tool_calls(
         if func is None:
             raise ValueError(f"Unknown function: {tool_call.name}")
 
-        # Parse arguments
         try:
             args = tool_call.get_arguments()
-        except Exception as e:
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
             raise ValueError(f"Invalid arguments for {tool_call.name}: {e}") from e
 
         # Execute function

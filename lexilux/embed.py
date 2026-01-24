@@ -14,7 +14,6 @@ import httpx
 import requests
 
 from lexilux.embed_params import EmbedParams
-from lexilux.embed_params import EmbedParams
 from lexilux.usage import Json, ResultBase, Usage
 from lexilux.chat.utils import parse_usage
 
@@ -71,7 +70,9 @@ class EmbedResult(ResultBase):
             return f"EmbedResult(vectors=[{len(self.vectors)} vectors], usage={self.usage!r})"
         else:
             # Single vector
-            return f"EmbedResult(vectors=[{len(self.vectors)} dims], usage={self.usage!r})"
+            return (
+                f"EmbedResult(vectors=[{len(self.vectors)} dims], usage={self.usage!r})"
+            )
 
 
 class Embed:
@@ -126,24 +127,6 @@ class Embed:
 
         # Async client (lazy initialization)
         self._async_client: httpx.AsyncClient | None = None
-
-    def _parse_usage(self, response_data: Json) -> Usage:
-        """
-        Parse usage information from API response.
-
-        Args:
-            response_data: API response data.
-
-        Returns:
-            Usage object.
-        """
-        usage_data = response_data.get("usage", {})
-        return Usage(
-            input_tokens=usage_data.get("prompt_tokens") or usage_data.get("input_tokens"),
-            output_tokens=usage_data.get("completion_tokens") or usage_data.get("output_tokens"),
-            total_tokens=usage_data.get("total_tokens"),
-            details=usage_data,
-        )
 
     def __call__(
         self,

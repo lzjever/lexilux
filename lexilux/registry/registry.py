@@ -103,7 +103,9 @@ class ModelRegistry:
             >>> registry = ModelRegistry(data_path="/path/to/models.json")
         """
         self._providers: dict[str, ProviderSpec] = {}
-        self._models: dict[str, dict[str, ModelSpec]] = {}  # provider_id -> model_id -> spec
+        self._models: dict[
+            str, dict[str, ModelSpec]
+        ] = {}  # provider_id -> model_id -> spec
         self._model_index: dict[str, list[str]] = {}  # model_id -> list of provider_ids
         self._loaded = False
         self._load_data(data_path)
@@ -152,7 +154,7 @@ class ModelRegistry:
             try:
                 data_file = resources.files("lexilux.data").joinpath("models.json")
                 data = json.loads(data_file.read_text(encoding="utf-8"))
-            except Exception as e:
+            except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Could not load bundled models data: {e}")
                 return
 
@@ -545,4 +547,6 @@ class ModelRegistry:
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"ModelRegistry(providers={self.provider_count()}, models={self.count()})"
+        return (
+            f"ModelRegistry(providers={self.provider_count()}, models={self.count()})"
+        )

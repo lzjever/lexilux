@@ -81,7 +81,9 @@ class TestChatNormalizeMessages:
 
     def test_normalize_mixed_list(self):
         """Test normalizing mixed list (strings and dicts)"""
-        messages = normalize_messages(["Hello", {"role": "assistant", "content": "Hi!"}])
+        messages = normalize_messages(
+            ["Hello", {"role": "assistant", "content": "Hi!"}]
+        )
         assert messages == [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi!"},
@@ -104,14 +106,20 @@ class TestChatCall:
     @responses.activate
     def test_call_with_string(self):
         """Test calling chat with a string"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
             "https://api.example.com/v1/chat/completions",
             json={
                 "choices": [{"message": {"content": "Hello! How can I help?"}}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                    "total_tokens": 15,
+                },
             },
             status=200,
         )
@@ -126,7 +134,9 @@ class TestChatCall:
     @responses.activate
     def test_call_with_system_message(self):
         """Test calling chat with system message"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
@@ -143,6 +153,7 @@ class TestChatCall:
 
         # Verify request payload
         request = responses.calls[0].request
+        assert request.body is not None, "Request body should not be None"
         payload = json.loads(request.body)
         assert payload["messages"][0]["role"] == "system"
         assert payload["messages"][0]["content"] == "You are a helpful assistant"
@@ -152,7 +163,9 @@ class TestChatCall:
     @responses.activate
     def test_call_with_parameters(self):
         """Test calling chat with additional parameters"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
@@ -174,6 +187,7 @@ class TestChatCall:
 
         # Verify request payload
         request = responses.calls[0].request
+        assert request.body is not None, "Request body should not be None"
         payload = json.loads(request.body)
         assert payload["temperature"] == 0.9
         assert payload["max_tokens"] == 100
@@ -183,7 +197,9 @@ class TestChatCall:
     @responses.activate
     def test_call_with_stop_list(self):
         """Test calling chat with stop as a list"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
@@ -198,13 +214,16 @@ class TestChatCall:
         chat("Hello", stop=[".", "!", "?"])
 
         request = responses.calls[0].request
+        assert request.body is not None, "Request body should not be None"
         payload = json.loads(request.body)
         assert payload["stop"] == [".", "!", "?"]
 
     @responses.activate
     def test_call_with_extra_params(self):
         """Test calling chat with extra parameters"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
@@ -219,6 +238,7 @@ class TestChatCall:
         chat("Hello", extra={"top_p": 0.9, "frequency_penalty": 0.5})
 
         request = responses.calls[0].request
+        assert request.body is not None, "Request body should not be None"
         payload = json.loads(request.body)
         assert payload["top_p"] == 0.9
         assert payload["frequency_penalty"] == 0.5
@@ -226,7 +246,9 @@ class TestChatCall:
     @responses.activate
     def test_call_with_return_raw(self):
         """Test calling chat with return_raw=True"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         response_data = {
             "id": "chat-123",
@@ -255,7 +277,9 @@ class TestChatCall:
     @responses.activate
     def test_call_http_error(self):
         """Test handling HTTP errors"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
@@ -269,7 +293,9 @@ class TestChatCall:
     @responses.activate
     def test_call_no_choices(self):
         """Test handling response with no choices"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
@@ -284,7 +310,9 @@ class TestChatCall:
     @responses.activate
     def test_call_usage_parsing(self):
         """Test usage parsing from different response formats"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         # Test OpenAI-style usage (prompt_tokens, completion_tokens)
         responses.add(
@@ -292,7 +320,11 @@ class TestChatCall:
             "https://api.example.com/v1/chat/completions",
             json={
                 "choices": [{"message": {"content": "Response"}}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                    "total_tokens": 15,
+                },
             },
             status=200,
         )
@@ -322,7 +354,9 @@ class TestChatCall:
     @responses.activate
     def test_call_empty_usage(self):
         """Test handling response with no usage"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
@@ -341,13 +375,17 @@ class TestChatCall:
     @responses.activate
     def test_call_with_finish_reason_stop(self):
         """Test chat completion with finish_reason='stop'"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
             "https://api.example.com/v1/chat/completions",
             json={
-                "choices": [{"message": {"content": "Hello!"}, "finish_reason": "stop"}],
+                "choices": [
+                    {"message": {"content": "Hello!"}, "finish_reason": "stop"}
+                ],
                 "usage": {"total_tokens": 10},
             },
             status=200,
@@ -359,13 +397,17 @@ class TestChatCall:
     @responses.activate
     def test_call_with_finish_reason_length(self):
         """Test chat completion with finish_reason='length'"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
             "https://api.example.com/v1/chat/completions",
             json={
-                "choices": [{"message": {"content": "Hello"}, "finish_reason": "length"}],
+                "choices": [
+                    {"message": {"content": "Hello"}, "finish_reason": "length"}
+                ],
                 "usage": {"total_tokens": 10},
             },
             status=200,
@@ -377,13 +419,17 @@ class TestChatCall:
     @responses.activate
     def test_call_with_finish_reason_content_filter(self):
         """Test chat completion with finish_reason='content_filter'"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
             "https://api.example.com/v1/chat/completions",
             json={
-                "choices": [{"message": {"content": ""}, "finish_reason": "content_filter"}],
+                "choices": [
+                    {"message": {"content": ""}, "finish_reason": "content_filter"}
+                ],
                 "usage": {"total_tokens": 10},
             },
             status=200,
@@ -395,7 +441,9 @@ class TestChatCall:
     @responses.activate
     def test_call_with_finish_reason_none(self):
         """Test chat completion with finish_reason=None (missing field)"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
@@ -413,7 +461,9 @@ class TestChatCall:
     @responses.activate
     def test_call_with_finish_reason_empty_string(self):
         """Test chat completion with finish_reason='' (defensive handling)"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,
@@ -432,7 +482,9 @@ class TestChatCall:
     @responses.activate
     def test_call_with_finish_reason_invalid_type(self):
         """Test chat completion with invalid finish_reason type (defensive handling)"""
-        chat = Chat(base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4")
+        chat = Chat(
+            base_url="https://api.example.com/v1", api_key="test-key", model="gpt-4"
+        )
 
         responses.add(
             responses.POST,

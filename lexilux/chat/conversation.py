@@ -15,7 +15,11 @@ from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING, Any, Callable, Literal, overload
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk
-from lexilux.chat.streaming import AsyncStreamingIterator, StreamingIterator, StreamingResult
+from lexilux.chat.streaming import (
+    AsyncStreamingIterator,
+    StreamingIterator,
+    StreamingResult,
+)
 from lexilux.usage import Usage
 
 if TYPE_CHECKING:
@@ -52,7 +56,9 @@ class Conversation:
 
     @staticmethod
     def _filter_empty_results(results: list[ChatResult]) -> None:
-        results[:] = [r for r in results if not (r.text == "" and r.finish_reason is None)]
+        results[:] = [
+            r for r in results if not (r.text == "" and r.finish_reason is None)
+        ]
 
     @staticmethod
     def _merged_streaming_result(
@@ -60,7 +66,9 @@ class Conversation:
         all_results: list[ChatResult],
     ) -> StreamingResult:
         merged_result = (
-            Conversation.merge_results(*all_results) if len(all_results) > 1 else initial_result
+            Conversation.merge_results(*all_results)
+            if len(all_results) > 1
+            else initial_result
         )
         streaming_result = StreamingResult()
         streaming_result._text = merged_result.text
@@ -117,8 +125,8 @@ class Conversation:
         if on_progress:
             try:
                 on_progress(continue_count, max_continues, current_result, all_results)
+            # Catch any exception from user-provided callback to avoid breaking main flow
             except Exception as e:
-                # Callback failure should not affect main flow
                 logger.warning(f"Progress callback failed: {e}")
 
     @staticmethod
@@ -351,7 +359,9 @@ class Conversation:
                     original_prompt = msg.get("content", "")
                     break
 
-        while current_result.finish_reason == "length" and continue_count < max_continues:
+        while (
+            current_result.finish_reason == "length" and continue_count < max_continues
+        ):
             continue_count += 1
 
             # Apply delay if needed (not for first continue)
@@ -433,13 +443,19 @@ class Conversation:
 
         # Merge usage
         total_input_tokens = sum(
-            r.usage.input_tokens or 0 for r in results if r.usage.input_tokens is not None
+            r.usage.input_tokens or 0
+            for r in results
+            if r.usage.input_tokens is not None
         )
         total_output_tokens = sum(
-            r.usage.output_tokens or 0 for r in results if r.usage.output_tokens is not None
+            r.usage.output_tokens or 0
+            for r in results
+            if r.usage.output_tokens is not None
         )
         total_tokens = sum(
-            r.usage.total_tokens or 0 for r in results if r.usage.total_tokens is not None
+            r.usage.total_tokens or 0
+            for r in results
+            if r.usage.total_tokens is not None
         )
 
         # Use last result's finish_reason (most recent)
@@ -567,7 +583,10 @@ class Conversation:
             continue_count = 0
             accumulated_text = last_result.text
 
-            while current_result.finish_reason == "length" and continue_count < max_continues:
+            while (
+                current_result.finish_reason == "length"
+                and continue_count < max_continues
+            ):
                 continue_count += 1
 
                 # Apply delay if needed (not for first continue)
@@ -575,7 +594,11 @@ class Conversation:
 
                 # Call progress callback
                 Conversation._call_progress_callback(
-                    on_progress, continue_count, max_continues, current_result, all_results
+                    on_progress,
+                    continue_count,
+                    max_continues,
+                    current_result,
+                    all_results,
                 )
 
                 try:
@@ -593,7 +616,9 @@ class Conversation:
                         working_history.add_user(prompt)
 
                     # Stream continue request
-                    continue_iterator = chat.stream(working_history.get_messages(), **params)
+                    continue_iterator = chat.stream(
+                        working_history.get_messages(), **params
+                    )
 
                     # Yield all chunks from this continue request
                     yield from continue_iterator
@@ -647,7 +672,9 @@ class Conversation:
                     )
                 return self._merged_result
 
-        return MergedContinueIterator(_continue_chunk_generator(), last_result, all_results)
+        return MergedContinueIterator(
+            _continue_chunk_generator(), last_result, all_results
+        )
 
     # =========================================================================
     # Async Methods
@@ -746,11 +773,15 @@ class Conversation:
                     original_prompt = msg.get("content", "")
                     break
 
-        while current_result.finish_reason == "length" and continue_count < max_continues:
+        while (
+            current_result.finish_reason == "length" and continue_count < max_continues
+        ):
             continue_count += 1
 
             # Apply async delay
-            await Conversation._apply_continue_delay_async(continue_delay, continue_count)
+            await Conversation._apply_continue_delay_async(
+                continue_delay, continue_count
+            )
 
             # Call progress callback
             Conversation._call_progress_callback(
@@ -770,7 +801,9 @@ class Conversation:
                     working_history.add_user(prompt)
 
                 # Use async acall
-                continue_result = await chat.acall(working_history.get_messages(), **params)
+                continue_result = await chat.acall(
+                    working_history.get_messages(), **params
+                )
                 all_results.append(continue_result)
                 current_result = continue_result
                 accumulated_text += continue_result.text
@@ -874,13 +907,22 @@ class Conversation:
             continue_count = 0
             accumulated_text = last_result.text
 
-            while current_result.finish_reason == "length" and continue_count < max_continues:
+            while (
+                current_result.finish_reason == "length"
+                and continue_count < max_continues
+            ):
                 continue_count += 1
 
-                await Conversation._apply_continue_delay_async(continue_delay, continue_count)
+                await Conversation._apply_continue_delay_async(
+                    continue_delay, continue_count
+                )
 
                 Conversation._call_progress_callback(
-                    on_progress, continue_count, max_continues, current_result, all_results
+                    on_progress,
+                    continue_count,
+                    max_continues,
+                    current_result,
+                    all_results,
                 )
 
                 try:
@@ -896,7 +938,9 @@ class Conversation:
                         working_history.add_user(prompt)
 
                     # Use async astream
-                    continue_iterator = await chat.astream(working_history.get_messages(), **params)
+                    continue_iterator = await chat.astream(
+                        working_history.get_messages(), **params
+                    )
 
                     # Yield all chunks from this continue request
                     async for chunk in continue_iterator:

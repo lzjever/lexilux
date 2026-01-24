@@ -8,7 +8,7 @@ supporting text, images, and tool calls in a unified structure.
 from __future__ import annotations
 
 import sys
-from typing import Literal, TypedDict, Union
+from typing import Literal, TypedDict
 
 # Conditionally import NotRequired for Python 3.11+
 if sys.version_info >= (3, 11):
@@ -119,7 +119,6 @@ class ToolCallBlock(TypedDict):
 
 
 # Union type for all content block types
-ContentBlock = Union[TextContentBlock, ImageContentBlock, ToolCallBlock]
-
+ContentBlock = TextContentBlock | ImageContentBlock | ToolCallBlock
 # Type alias for content in messages (string or list of blocks)
-MessageContent = Union[str, list[ContentBlock]]
+MessageContent = str | list[ContentBlock]

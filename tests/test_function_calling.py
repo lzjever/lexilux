@@ -46,7 +46,7 @@ class TestContentBlocks:
             "type": "image_url",
             "image_url": {"url": "https://example.com/image.jpg", "detail": "high"},
         }
-        assert block["image_url"]["detail"] == "high"
+        assert block["image_url"].get("detail") == "high"
 
 
 class TestToolCall:
@@ -55,7 +55,10 @@ class TestToolCall:
     def test_tool_call_creation(self):
         """Test creating a ToolCall."""
         tc = ToolCall(
-            id="call_123", call_id="call_123", name="get_weather", arguments='{"location": "Paris"}'
+            id="call_123",
+            call_id="call_123",
+            name="get_weather",
+            arguments='{"location": "Paris"}',
         )
         assert tc.id == "call_123"
         assert tc.call_id == "call_123"
@@ -76,7 +79,10 @@ class TestToolCall:
     def test_tool_call_to_dict(self):
         """Test converting ToolCall to API format."""
         tc = ToolCall(
-            id="call_123", call_id="call_123", name="get_weather", arguments='{"location": "Paris"}'
+            id="call_123",
+            call_id="call_123",
+            name="get_weather",
+            arguments='{"location": "Paris"}',
         )
         result = tc.to_dict()
         assert result["id"] == "call_123"
@@ -143,6 +149,7 @@ class TestToolChoice:
         """Test ToolChoice with specific function."""
         choice = ToolChoice(type="function", name="get_weather")
         result = choice.to_dict()
+        assert isinstance(result, dict), "Result should be a dict for function type"
         assert result["type"] == "function"
         assert result["name"] == "get_weather"
 
@@ -184,7 +191,10 @@ class TestChatResult:
     def test_chat_result_with_tool_calls(self):
         """Test ChatResult with tool_calls."""
         tool_call = ToolCall(
-            id="call_1", call_id="call_1", name="get_weather", arguments='{"location": "Paris"}'
+            id="call_1",
+            call_id="call_1",
+            name="get_weather",
+            arguments='{"location": "Paris"}',
         )
         result = ChatResult(text="", usage=Usage(), tool_calls=[tool_call])
         assert result.has_tool_calls is True
@@ -241,7 +251,10 @@ class TestNormalizeMessages:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": "What's in this image?"},
-                    {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://example.com/image.jpg"},
+                    },
                 ],
             }
         ]
@@ -270,7 +283,10 @@ class TestNormalizeMessages:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": "Second message"},
-                    {"type": "image_url", "image_url": {"url": "https://example.com/img.jpg"}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://example.com/img.jpg"},
+                    },
                 ],
             },
         ]
@@ -290,7 +306,10 @@ class TestToolHelpers:
             return f"Weather in {location}: 22°C"
 
         tool_call = ToolCall(
-            id="call_1", call_id="call_1", name="get_weather", arguments='{"location": "Paris"}'
+            id="call_1",
+            call_id="call_1",
+            name="get_weather",
+            arguments='{"location": "Paris"}',
         )
 
         result = ChatResult(text="", usage=Usage(), tool_calls=[tool_call])
@@ -303,7 +322,9 @@ class TestToolHelpers:
 
     def test_execute_tool_calls_unknown_function(self):
         """Test executing tool calls with unknown function."""
-        tool_call = ToolCall(id="call_1", call_id="call_1", name="unknown_func", arguments="{}")
+        tool_call = ToolCall(
+            id="call_1", call_id="call_1", name="unknown_func", arguments="{}"
+        )
 
         result = ChatResult(text="", usage=Usage(), tool_calls=[tool_call])
 
@@ -313,18 +334,29 @@ class TestToolHelpers:
     def test_create_conversation_history(self):
         """Test creating complete conversation history."""
         tool_call = ToolCall(
-            id="call_1", call_id="call_1", name="get_weather", arguments='{"location": "Paris"}'
+            id="call_1",
+            call_id="call_1",
+            name="get_weather",
+            arguments='{"location": "Paris"}',
         )
 
         tool_result = ChatResult(
-            text="I'll check the weather for you.", usage=Usage(), tool_calls=[tool_call]
+            text="I'll check the weather for you.",
+            usage=Usage(),
+            tool_calls=[tool_call],
         )
 
-        tool_outputs = [{"role": "tool", "tool_call_id": "call_1", "content": "22°C in Paris"}]
+        tool_outputs = [
+            {"role": "tool", "tool_call_id": "call_1", "content": "22°C in Paris"}
+        ]
 
-        original_messages = [{"role": "user", "content": "What's the weather in Paris?"}]
+        original_messages = [
+            {"role": "user", "content": "What's the weather in Paris?"}
+        ]
 
-        history = create_conversation_history(original_messages, tool_result, tool_outputs)
+        history = create_conversation_history(
+            original_messages, tool_result, tool_outputs
+        )
 
         assert len(history) == 3
         assert history[0]["role"] == "user"
@@ -352,7 +384,10 @@ class TestToolCallHelper:
             return f"Weather in {location}: 22°C"
 
         tool_call = ToolCall(
-            id="call_1", call_id="call_1", name="get_weather", arguments='{"location": "Paris"}'
+            id="call_1",
+            call_id="call_1",
+            name="get_weather",
+            arguments='{"location": "Paris"}',
         )
 
         result = ChatResult(text="", usage=Usage(), tool_calls=[tool_call])
