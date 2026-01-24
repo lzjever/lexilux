@@ -149,6 +149,11 @@ def parse_chat_completion_response(
     text = message.get("content", "") or ""
 
     tool_calls_list = _parse_tool_calls(message.get("tool_calls"))
+
+    # Side patch: fallback to text-based tool call parsing for flawed providers
+    if not tool_calls_list and text:
+        tool_calls_list = _parse_text_tool_calls(text)
+
     finish_reason = normalize_finish_reason(choice.get("finish_reason"))
     usage = parse_usage(response_data)
 
@@ -213,9 +218,50 @@ def _parse_stream_tool_calls(raw_tool_calls: Any) -> list[ToolCall]:
     return tool_calls
 
 
+def _parse_text_tool_calls(text: str) -> list[ToolCall]:
+    """
+    Side patch: Parse tool calls from text format for flawed API providers.
+
+    Handles formats like: <tool_call>function_name</tool_call>
+    This is a non-invasive fallback for providers that don't follow OpenAI format.
+    """
+    import re
+
+    if not text:
+        return []
+
+    tool_calls: list[ToolCall] = []
+
+    # Pattern to match <tool_call>function_name</tool_call>
+    # Also handles potential arguments inside
+    pattern = r"<tool_call>\s*([^<\n]+)(?:\n\n?([^<]*?))?\s*</tool_call>"
+
+    matches = re.findall(pattern, text, re.DOTALL)
+
+    for i, match in enumerate(matches):
+        function_name = match[0].strip()
+        arguments_text = match[1].strip() if len(match) > 1 and match[1] else "{}"
+
+        # Generate a simple call ID
+        call_id = f"text_call_{i + 1}"
+
+        if function_name:
+            tool_calls.append(
+                ToolCall(
+                    id=call_id,
+                    call_id=call_id,
+                    name=function_name,
+                    arguments=arguments_text if arguments_text else "{}",
+                )
+            )
+
+    return tool_calls
+
+
 class SSEChatStreamParser:
-    def __init__(self, *, return_raw_events: bool):
+    def __init__(self, *, return_raw_events: bool, include_reasoning: bool = False):
         self._return_raw_events = return_raw_events
+        self._include_reasoning = include_reasoning  # ✅ NEW
         self._final_usage: Usage | None = None
         self._final_finish_reason: str | None = None
         self._done = False
@@ -243,6 +289,8 @@ class SSEChatStreamParser:
                 usage=final_usage,
                 finish_reason=self._final_finish_reason,
                 raw={"done": True} if self._return_raw_events else {},
+                reasoning_content=None,  # ✅ NEW: No reasoning in [DONE]
+                reasoning_tokens=None,  # ✅ NEW
             )
 
         try:
@@ -278,6 +326,15 @@ class SSEChatStreamParser:
         else:
             usage = Usage()
 
+        # ✅ NEW: Parse reasoning fields if enabled
+        reasoning_content = None
+        reasoning_tokens = None
+        if self._include_reasoning:
+            if "reasoning_content" in delta:
+                reasoning_content = delta["reasoning_content"]
+            if "reasoning_tokens" in delta:
+                reasoning_tokens = delta["reasoning_tokens"]
+
         return ChatStreamChunk(
             delta=content,
             done=done,
@@ -285,4 +342,6 @@ class SSEChatStreamParser:
             finish_reason=finish_reason,
             tool_calls=tool_calls_list,
             raw=event_data if self._return_raw_events else {},
+            reasoning_content=reasoning_content,  # ✅ NEW
+            reasoning_tokens=reasoning_tokens,  # ✅ NEW
         )

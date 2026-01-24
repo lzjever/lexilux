@@ -151,7 +151,7 @@ class TestToolChoice:
         result = choice.to_dict()
         assert isinstance(result, dict), "Result should be a dict for function type"
         assert result["type"] == "function"
-        assert result["name"] == "get_weather"
+        assert result["function"]["name"] == "get_weather"
 
 
 class TestChatParams:
@@ -397,3 +397,59 @@ class TestToolCallHelper:
 
         assert len(responses) == 1
         assert responses[0]["content"] == "Weather in Paris: 22°C"
+
+
+class TestTextToolCallParsing:
+    """Test side patch for text-based tool call parsing."""
+
+    def test_parse_text_tool_calls_simple(self):
+        """Test parsing simple text-based tool calls"""
+        from lexilux.chat._request import _parse_text_tool_calls
+
+        text = "<tool_call>get_weather\n\n</tool_call>"
+        result = _parse_text_tool_calls(text)
+
+        assert len(result) == 1
+        assert result[0].name == "get_weather"
+        assert result[0].id == "text_call_1"
+        assert result[0].arguments == "{}"
+
+    def test_parse_text_tool_calls_with_args(self):
+        """Test parsing text-based tool calls with arguments"""
+        from lexilux.chat._request import _parse_text_tool_calls
+
+        text = '<tool_call>get_weather\n\n{"location": "Paris"}</tool_call>'
+        result = _parse_text_tool_calls(text)
+
+        assert len(result) == 1
+        assert result[0].name == "get_weather"
+        assert '{"location": "Paris"}' in result[0].arguments
+
+    def test_parse_text_tool_calls_multiple(self):
+        """Test parsing multiple text-based tool calls"""
+        from lexilux.chat._request import _parse_text_tool_calls
+
+        text = "<tool_call>get_weather</tool_call> and <tool_call>get_time</tool_call>"
+        result = _parse_text_tool_calls(text)
+
+        assert len(result) == 2
+        assert result[0].name == "get_weather"
+        assert result[1].name == "get_time"
+        assert result[0].id == "text_call_1"
+        assert result[1].id == "text_call_2"
+
+    def test_parse_text_tool_calls_none_found(self):
+        """Test parsing text with no tool calls"""
+        from lexilux.chat._request import _parse_text_tool_calls
+
+        text = "This is just regular text with no tool calls."
+        result = _parse_text_tool_calls(text)
+
+        assert len(result) == 0
+
+    def test_parse_text_tool_calls_empty(self):
+        """Test parsing empty text"""
+        from lexilux.chat._request import _parse_text_tool_calls
+
+        result = _parse_text_tool_calls("")
+        assert len(result) == 0

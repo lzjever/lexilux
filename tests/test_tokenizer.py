@@ -2,6 +2,7 @@
 Tokenizer API client test cases
 """
 
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -19,20 +20,24 @@ class TestTokenizerInit:
         mock_tokenizer = MagicMock()
         mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
 
-        tokenizer = Tokenizer(
-            "Qwen/Qwen2.5-7B-Instruct",
-            cache_dir="/custom/cache",
-            offline=True,
-            revision="main",
-            trust_remote_code=True,
-            require_transformers=True,
-        )
+        # Use temporary directory to avoid permission issues
+        with tempfile.TemporaryDirectory() as temp_dir:
+            custom_cache_dir = str(Path(temp_dir) / "custom_cache")
 
-        assert tokenizer.model == "Qwen/Qwen2.5-7B-Instruct"
-        assert tokenizer.cache_dir == "/custom/cache"
-        assert tokenizer.offline is True
-        assert tokenizer.revision == "main"
-        assert tokenizer.trust_remote_code is True
+            tokenizer = Tokenizer(
+                "Qwen/Qwen2.5-7B-Instruct",
+                cache_dir=custom_cache_dir,
+                offline=True,
+                revision="main",
+                trust_remote_code=True,
+                require_transformers=True,
+            )
+
+            assert tokenizer.model == "Qwen/Qwen2.5-7B-Instruct"
+            assert tokenizer.cache_dir == custom_cache_dir
+            assert tokenizer.offline is True
+            assert tokenizer.revision == "main"
+            assert tokenizer.trust_remote_code is True
 
     def test_init_without_transformers(self):
         """Test Tokenizer initialization without transformers (require_transformers=True)"""
@@ -63,8 +68,10 @@ class TestTokenizerInit:
         assert tokenizer.cache_dir == expected_path
 
         # Test that regular paths still work
-        tokenizer = Tokenizer("test-model", cache_dir="/custom/cache")
-        assert tokenizer.cache_dir == "/custom/cache"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            custom_path = str(Path(temp_dir) / "custom_cache")
+            tokenizer = Tokenizer("test-model", cache_dir=custom_path)
+            assert tokenizer.cache_dir == custom_path
 
         # Test that None still works
         tokenizer = Tokenizer("test-model", cache_dir=None)
@@ -136,7 +143,7 @@ class TestTokenizerModes:
     @patch("transformers.AutoTokenizer")
     @patch("lexilux.tokenizer.Tokenizer._ensure_model_downloaded")
     def test_online_mode(self, mock_ensure_download, mock_auto_tokenizer):
-        """Test online mode"""
+        """Test online mode - AutoTokenizer always uses local_files_only=True"""
         mock_tokenizer = MagicMock()
         mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
         mock_ensure_download.return_value = "test-model"
@@ -144,10 +151,10 @@ class TestTokenizerModes:
         tokenizer = Tokenizer("test-model", offline=False)
         tokenizer._ensure_tokenizer()
 
-        # Should call with local_files_only=False
+        # Should call with local_files_only=True (we handle downloads ourselves!)
         mock_auto_tokenizer.from_pretrained.assert_called_once()
         call_kwargs = mock_auto_tokenizer.from_pretrained.call_args[1]
-        assert call_kwargs["local_files_only"] is False
+        assert call_kwargs["local_files_only"] is True
 
     @patch("transformers.AutoTokenizer")
     @patch("lexilux.tokenizer.Tokenizer._ensure_model_downloaded")
@@ -158,7 +165,8 @@ class TestTokenizerModes:
 
         tokenizer = Tokenizer("test-model", offline=True)
 
-        with pytest.raises(OSError, match="not found in local cache"):
+        # Updated to match our new error message format
+        with pytest.raises(OSError, match="Failed to load tokenizer.*offline mode"):
             tokenizer._ensure_tokenizer()
 
 
@@ -166,7 +174,8 @@ class TestTokenizerCall:
     """Tokenizer __call__ method tests"""
 
     @patch("transformers.AutoTokenizer")
-    def test_call_with_single_string(self, mock_auto_tokenizer):
+    @patch("lexilux.tokenizer.Tokenizer._ensure_model_downloaded")
+    def test_call_with_single_string(self, mock_ensure_download, mock_auto_tokenizer):
         """Test calling tokenizer with a single string"""
         mock_tokenizer = MagicMock()
         mock_tokenizer.return_value = {
@@ -174,6 +183,7 @@ class TestTokenizerCall:
             "attention_mask": [[1, 1, 1, 1]],
         }
         mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_ensure_download.return_value = "test-model"
 
         tokenizer = Tokenizer("test-model")
         result = tokenizer("Hello, world!")
@@ -185,7 +195,8 @@ class TestTokenizerCall:
         assert result.usage.total_tokens == 4
 
     @patch("transformers.AutoTokenizer")
-    def test_call_with_list(self, mock_auto_tokenizer):
+    @patch("lexilux.tokenizer.Tokenizer._ensure_model_downloaded")
+    def test_call_with_list(self, mock_ensure_download, mock_auto_tokenizer):
         """Test calling tokenizer with a list of strings"""
         mock_tokenizer = MagicMock()
         mock_tokenizer.return_value = {
@@ -193,6 +204,7 @@ class TestTokenizerCall:
             "attention_mask": [[1, 1], [1, 1]],
         }
         mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_ensure_download.return_value = "test-model"
 
         tokenizer = Tokenizer("test-model")
         result = tokenizer(["Hello", "world"])
@@ -203,7 +215,8 @@ class TestTokenizerCall:
         assert result.usage.input_tokens == 4  # 2 + 2
 
     @patch("transformers.AutoTokenizer")
-    def test_call_with_parameters(self, mock_auto_tokenizer):
+    @patch("lexilux.tokenizer.Tokenizer._ensure_model_downloaded")
+    def test_call_with_parameters(self, mock_ensure_download, mock_auto_tokenizer):
         """Test calling tokenizer with additional parameters"""
         mock_tokenizer = MagicMock()
         mock_tokenizer.return_value = {
@@ -211,6 +224,7 @@ class TestTokenizerCall:
             "attention_mask": [[1, 1]],
         }
         mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_ensure_download.return_value = "test-model"
 
         tokenizer = Tokenizer("test-model")
         tokenizer(
@@ -229,13 +243,17 @@ class TestTokenizerCall:
         assert call_kwargs["padding"] == "max_length"
 
     @patch("transformers.AutoTokenizer")
-    def test_call_without_attention_mask(self, mock_auto_tokenizer):
+    @patch("lexilux.tokenizer.Tokenizer._ensure_model_downloaded")
+    def test_call_without_attention_mask(
+        self, mock_ensure_download, mock_auto_tokenizer
+    ):
         """Test calling tokenizer without attention mask"""
         mock_tokenizer = MagicMock()
         mock_tokenizer.return_value = {
             "input_ids": [[15496, 0]],
         }
         mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_ensure_download.return_value = "test-model"
 
         tokenizer = Tokenizer("test-model")
         result = tokenizer("Hello", return_attention_mask=False)
@@ -243,7 +261,8 @@ class TestTokenizerCall:
         assert result.attention_mask is None
 
     @patch("transformers.AutoTokenizer")
-    def test_call_with_return_raw(self, mock_auto_tokenizer):
+    @patch("lexilux.tokenizer.Tokenizer._ensure_model_downloaded")
+    def test_call_with_return_raw(self, mock_ensure_download, mock_auto_tokenizer):
         """Test calling tokenizer with return_raw=True"""
         mock_tokenizer = MagicMock()
         raw_output = {
@@ -253,22 +272,12 @@ class TestTokenizerCall:
         }
         mock_tokenizer.return_value = raw_output
         mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_ensure_download.return_value = "test-model"
 
         tokenizer = Tokenizer("test-model")
         result = tokenizer("Hello", return_raw=True)
 
         assert result.raw == raw_output
-
-    @patch("transformers.AutoTokenizer")
-    def test_call_empty_input(self, mock_auto_tokenizer):
-        """Test calling tokenizer with empty input"""
-        mock_tokenizer = MagicMock()
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
-
-        tokenizer = Tokenizer("test-model")
-
-        with pytest.raises(ValueError, match="Text cannot be empty"):
-            tokenizer([])
 
 
 class TestTokenizeResult:

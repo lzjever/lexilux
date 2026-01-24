@@ -157,6 +157,32 @@ class RerankModeHandler(ABC):
         """
         pass
 
+    @staticmethod
+    def _parse_common_results(
+        results_data: list[Json], include_docs: bool
+    ) -> list[tuple[int, float, str | None]]:
+        """Parse common rerank result format."""
+        parsed_results: list[tuple[int, float, str | None]] = []
+        for item in results_data:
+            if not isinstance(item, dict):
+                raise ValueError(
+                    f"Unexpected result format: {item} (type: {type(item)})"
+                )
+
+            index = item.get("index", 0)
+            score = item.get("relevance_score", 0.0)
+
+            doc = None
+            if include_docs:
+                doc_obj = item.get("document")
+                if isinstance(doc_obj, dict):
+                    doc = doc_obj.get("text") or doc_obj.get("content")
+                elif isinstance(doc_obj, str):
+                    doc = doc_obj
+
+            parsed_results.append((index, score, doc))
+        return parsed_results
+
     def make_request(self, url: str, payload: Json) -> Json:
         """
         Make HTTP request.
@@ -294,27 +320,7 @@ class OpenAICompatibleHandler(RerankModeHandler):
         if not results_data:
             raise ValueError("No results in API response")
 
-        parsed_results: list[tuple[int, float, str | None]] = []
-        for item in results_data:
-            if not isinstance(item, dict):
-                raise ValueError(
-                    f"Unexpected result format: {item} (type: {type(item)})"
-                )
-
-            index = item.get("index", 0)
-            score = item.get("relevance_score", 0.0)
-
-            # Extract document text if available
-            doc = None
-            if include_docs:
-                doc_obj = item.get("document")
-                if isinstance(doc_obj, dict):
-                    doc = doc_obj.get("text") or doc_obj.get("content")
-                elif isinstance(doc_obj, str):
-                    doc = doc_obj
-
-            parsed_results.append((index, score, doc))
-
+        parsed_results = self._parse_common_results(results_data, include_docs)
         usage = parse_usage(response_data)
         return parsed_results, usage
 
@@ -377,27 +383,7 @@ class DashScopeHandler(RerankModeHandler):
         if not results_data:
             raise ValueError("No results in API response")
 
-        parsed_results: list[tuple[int, float, str | None]] = []
-        for item in results_data:
-            if not isinstance(item, dict):
-                raise ValueError(
-                    f"Unexpected result format: {item} (type: {type(item)})"
-                )
-
-            index = item.get("index", 0)
-            score = item.get("relevance_score", 0.0)
-
-            # Extract document text if available
-            doc = None
-            if include_docs:
-                doc_obj = item.get("document")
-                if isinstance(doc_obj, dict):
-                    doc = doc_obj.get("text") or doc_obj.get("content")
-                elif isinstance(doc_obj, str):
-                    doc = doc_obj
-
-            parsed_results.append((index, score, doc))
-
+        parsed_results = self._parse_common_results(results_data, include_docs)
         usage = parse_usage(response_data)
         return parsed_results, usage
 
@@ -497,6 +483,81 @@ class Rerank:
         # Async client (lazy initialization)
         self._async_client: httpx.AsyncClient | None = None
 
+    def _get_handler_for_call(self, mode: str | None) -> RerankModeHandler:
+        """Get or create handler for a specific call."""
+        use_mode = mode or self.mode
+        if use_mode not in self._HANDLERS:
+            available = ", ".join(f'"{m}"' for m in self._HANDLERS.keys())
+            raise ValueError(f'Mode must be one of {available}, got "{use_mode}"')
+
+        if use_mode == self.mode:
+            return self._handler
+
+        # Create temporary handler for mode override
+        handler_class = self._HANDLERS[use_mode]
+        return handler_class(
+            base_url=self.base_url,
+            api_key=self.api_key,
+            headers=self.headers,
+            timeout_s=self.timeout_s,
+            proxies=self.proxies,
+        )
+
+    def _prepare_rerank(
+        self,
+        query: str,
+        docs: Sequence[str],
+        model: str | None,
+        top_k: int | None,
+        include_docs: bool,
+        extra: Json | None,
+        mode: str | None,
+    ) -> tuple[RerankModeHandler, str, Json]:
+        """Prepare for a rerank request, returning handler, URL, and payload."""
+        if not docs:
+            raise ValueError("Docs cannot be empty")
+
+        final_model = model or self.model
+        if not final_model:
+            raise ValueError("Model must be specified (either in __init__ or in call)")
+
+        handler = self._get_handler_for_call(mode)
+
+        url, payload = handler.build_request(
+            query=query,
+            docs=docs,
+            model=final_model,
+            top_k=top_k,
+            include_docs=include_docs,
+            extra=extra,
+        )
+        return handler, url, payload
+
+    def _process_response(
+        self,
+        handler: RerankModeHandler,
+        response_data: Json,
+        docs: Sequence[str],
+        include_docs: bool,
+        top_k: int | None,
+        return_raw: bool,
+    ) -> RerankResult:
+        """Process the raw response data into a RerankResult."""
+        parsed_results, usage = handler.parse_response(
+            response_data=response_data,
+            docs=docs,
+            include_docs=include_docs,
+            top_k=top_k,
+        )
+
+        results = handler._normalize_results(parsed_results, include_docs, top_k)
+
+        return RerankResult(
+            results=results,
+            usage=usage,
+            raw=response_data if return_raw else {},
+        )
+
     def __call__(
         self,
         query: str,
@@ -529,62 +590,14 @@ class Rerank:
             requests.RequestException: On network or HTTP errors.
             ValueError: On invalid input or response format.
         """
-        if not docs:
-            raise ValueError("Docs cannot be empty")
-
-        # Prepare request
-        model = model or self.model
-        if not model:
-            raise ValueError("Model must be specified (either in __init__ or __call__)")
-
-        # Determine which mode to use
-        use_mode = mode or self.mode
-        if use_mode not in self._HANDLERS:
-            available = ", ".join(f'"{m}"' for m in self._HANDLERS.keys())
-            raise ValueError(f'Mode must be one of {available}, got "{use_mode}"')
-
-        # Get or create handler for this call
-        if use_mode == self.mode:
-            handler = self._handler
-        else:
-            # Create temporary handler for mode override
-            handler_class = self._HANDLERS[use_mode]
-            handler = handler_class(
-                base_url=self.base_url,
-                api_key=self.api_key,
-                headers=self.headers,
-                timeout_s=self.timeout_s,
-            )
-
-        # Build request
-        url, payload = handler.build_request(
-            query=query,
-            docs=docs,
-            model=model,
-            top_k=top_k,
-            include_docs=include_docs,
-            extra=extra,
+        handler, url, payload = self._prepare_rerank(
+            query, docs, model, top_k, include_docs, extra, mode
         )
 
-        # Make request
         response_data = handler.make_request(url, payload)
 
-        # Parse response
-        parsed_results, usage = handler.parse_response(
-            response_data=response_data,
-            docs=docs,
-            include_docs=include_docs,
-            top_k=top_k,
-        )
-
-        # Normalize results to unified format
-        results = handler._normalize_results(parsed_results, include_docs, top_k)
-
-        # Return result
-        return RerankResult(
-            results=results,
-            usage=usage,
-            raw=response_data if return_raw else {},
+        return self._process_response(
+            handler, response_data, docs, include_docs, top_k, return_raw
         )
 
     # =========================================================================
@@ -597,6 +610,7 @@ class Rerank:
             self._async_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(self.timeout_s),
                 headers=self.headers,
+                proxies=self.proxies,
             )
         return self._async_client
 
@@ -641,59 +655,15 @@ class Rerank:
             >>> tasks = [rerank.acall(q, docs) for q in queries]
             >>> results = await asyncio.gather(*tasks)
         """
-        if not docs:
-            raise ValueError("Docs cannot be empty")
-
-        model = model or self.model
-        if not model:
-            raise ValueError("Model must be specified (either in __init__ or acall)")
-
-        use_mode = mode or self.mode
-        if use_mode not in self._HANDLERS:
-            available = ", ".join(f'"{m}"' for m in self._HANDLERS.keys())
-            raise ValueError(f'Mode must be one of {available}, got "{use_mode}"')
-
-        # Get or create handler
-        if use_mode == self.mode:
-            handler = self._handler
-        else:
-            handler_class = self._HANDLERS[use_mode]
-            handler = handler_class(
-                base_url=self.base_url,
-                api_key=self.api_key,
-                headers=self.headers,
-                timeout_s=self.timeout_s,
-            )
-
-        # Build request
-        url, payload = handler.build_request(
-            query=query,
-            docs=docs,
-            model=model,
-            top_k=top_k,
-            include_docs=include_docs,
-            extra=extra,
+        handler, url, payload = self._prepare_rerank(
+            query, docs, model, top_k, include_docs, extra, mode
         )
 
-        # Make async request
         client = self._get_async_client()
         response_data = await handler.amake_request(url, payload, client)
 
-        # Parse response
-        parsed_results, usage = handler.parse_response(
-            response_data=response_data,
-            docs=docs,
-            include_docs=include_docs,
-            top_k=top_k,
-        )
-
-        # Normalize results
-        results = handler._normalize_results(parsed_results, include_docs, top_k)
-
-        return RerankResult(
-            results=results,
-            usage=usage,
-            raw=response_data if return_raw else {},
+        return self._process_response(
+            handler, response_data, docs, include_docs, top_k, return_raw
         )
 
     async def aclose(self) -> None:

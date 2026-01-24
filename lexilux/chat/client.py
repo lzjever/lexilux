@@ -9,13 +9,8 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any
+
 from lexilux._base import BaseAPIClient
-from lexilux.chat._complete import (
-    acomplete as _acomplete_impl,
-    acomplete_stream as _acomplete_stream_impl,
-    complete as _complete_impl,
-    complete_stream as _complete_stream_impl,
-)
 from lexilux.chat._request import (
     SSEChatStreamParser,
     build_params_dict,
@@ -23,6 +18,8 @@ from lexilux.chat._request import (
     parse_chat_completion_response,
     prepare_messages_for_request,
 )
+from lexilux.chat.conversation import Conversation
+from lexilux.chat.exceptions import ChatIncompleteResponseError
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike
 from lexilux.chat.params import ChatParams
@@ -35,6 +32,75 @@ from lexilux.usage import Json
 
 if TYPE_CHECKING:
     from lexilux.chat.tools import Tool
+
+
+def _get_working_history(history: ChatHistory | None) -> ChatHistory:
+    return history.clone() if history is not None else ChatHistory()
+
+
+def _get_original_prompt(messages: MessagesLike) -> str:
+    return messages if isinstance(messages, str) else str(messages)
+
+
+class _CompleteStreamingIterator(StreamingIterator):
+    """StreamingIterator wrapper that checks for truncation after iteration."""
+
+    def __init__(
+        self,
+        chunk_gen: Iterator[ChatStreamChunk],
+        max_continues: int,
+        ensure_complete: bool,
+    ):
+        super().__init__(chunk_gen)
+        self._max_continues = max_continues
+        self._ensure_complete = ensure_complete
+
+    def __iter__(self) -> Iterator[ChatStreamChunk]:
+        for chunk in self._iterator:
+            self._result.update(chunk)
+            yield chunk
+
+        if self._ensure_complete:
+            final_result = self.result.to_chat_result()
+            if final_result.finish_reason == "length":
+                raise ChatIncompleteResponseError(
+                    f"Response still truncated after {self._max_continues} continues. "
+                    f"Consider increasing max_continues or max_tokens.",
+                    final_result=final_result,
+                    continue_count=self._max_continues,
+                    max_continues=self._max_continues,
+                )
+
+
+class _AsyncCompleteStreamingIterator(AsyncStreamingIterator):
+    """AsyncStreamingIterator wrapper that checks for truncation on completion."""
+
+    def __init__(
+        self,
+        chunk_gen: AsyncIterator[ChatStreamChunk],
+        max_continues: int,
+        ensure_complete: bool,
+    ):
+        super().__init__(chunk_gen)
+        self._max_continues = max_continues
+        self._ensure_complete = ensure_complete
+
+    async def __anext__(self) -> ChatStreamChunk:
+        try:
+            chunk = await self._iterator.__anext__()
+            self._result.update(chunk)
+            return chunk
+        except StopAsyncIteration:
+            if self._ensure_complete:
+                final_result = self.result.to_chat_result()
+                if final_result.finish_reason == "length":
+                    raise ChatIncompleteResponseError(
+                        f"Response still truncated after {self._max_continues} continues.",
+                        final_result=final_result,
+                        continue_count=self._max_continues,
+                        max_continues=self._max_continues,
+                    )
+            raise
 
 
 class Chat(BaseAPIClient):
@@ -122,6 +188,60 @@ class Chat(BaseAPIClient):
             return self.timeout[1]  # Return read timeout
         return self.timeout
 
+    def _prepare_chat_request(
+        self,
+        messages: MessagesLike,
+        *,
+        history: ChatHistory | None,
+        model: str | None,
+        system: str | None,
+        params: ChatParams | None,
+        extra: Json | None,
+        stream: bool,
+        include_usage: bool,
+        **kwargs: Any,
+    ) -> tuple[Json, ChatHistory | None]:
+        """Prepares the request payload and working history."""
+        normalized_messages, working_history, user_messages_to_add = (
+            prepare_messages_for_request(
+                messages,
+                system=system,
+                history=history,
+            )
+        )
+
+        final_model = model or self.model
+        if not final_model:
+            raise ValueError("Model must be specified (either in __init__ or in call)")
+
+        param_dict = build_params_dict(params=params, **kwargs)
+        payload = build_payload(
+            model=final_model,
+            messages=normalized_messages,
+            params=param_dict,
+            stream=stream,
+            include_usage=include_usage,
+            extra=extra,
+        )
+
+        if working_history:
+            for user_msg in user_messages_to_add:
+                working_history.add_user(user_msg)
+
+        return payload, working_history
+
+    def _process_chat_response(
+        self,
+        response_data: Json,
+        working_history: ChatHistory | None,
+        return_raw: bool,
+    ) -> ChatResult:
+        """Processes the JSON response and updates history."""
+        result = parse_chat_completion_response(response_data, return_raw=return_raw)
+        if working_history:
+            working_history.append_result(result)
+        return result
+
     def __call__(
         self,
         messages: MessagesLike,
@@ -147,94 +267,16 @@ class Chat(BaseAPIClient):
     ) -> ChatResult:
         """
         Make a single chat completion request.
-
-        **Behavior**: Returns the response from a single API call, even if truncated.
-        Does NOT automatically continue if the response is cut off.
-
-        **History Immutability**: If history is provided, a clone is created and used internally.
-        The original history is never modified.
-
-        Use this when:
-        - You accept partial responses
-        - You want to handle truncation manually
-        - Performance is more important than completeness
-
-        For complete responses, use `chat.complete()` instead.
-
-        Supports both direct parameter passing (backward compatible) and ChatParams
-        dataclass for structured configuration.
-
-        Args:
-            messages: Messages in various formats (str, list of str, list of dict).
-            history: Optional ChatHistory instance. If provided, history.messages are
-                prepended to messages, and a clone is automatically updated with the
-                user message and assistant response after successful completion.
-                The original history is never modified.
-            model: Model to use (overrides default).
-            system: Optional system message.
-            temperature: Sampling temperature (0.0-2.0). Higher values make output
-                more random, lower values more focused. Default: 0.7
-            top_p: Nucleus sampling parameter (0.0-1.0). Alternative to temperature.
-                Default: 1.0
-            max_tokens: Maximum tokens to generate. Default: None (no limit)
-            stop: Stop sequences (str or list of str). API stops at these sequences.
-            presence_penalty: Penalty for new topics (-2.0 to 2.0). Positive values
-                encourage new topics. Default: 0.0
-            frequency_penalty: Penalty for repetition (-2.0 to 2.0). Positive values
-                reduce repetition. Default: 0.0
-            logit_bias: Modify token likelihood. Dict mapping token IDs to bias
-                values (-100 to 100). Default: None
-            user: Unique identifier for end-user (for monitoring/rate limiting).
-            n: Number of chat completion choices to generate. Default: 1
-            tools: List of tools (functions) that the model may call.
-                Enables function calling capabilities. Default: None (no tools)
-            tool_choice: Controls when the model uses tools. Can be "auto", "required",
-                or a specific tool configuration. Default: None (auto mode)
-            parallel_tool_calls: Whether to enable parallel function calling.
-                Default: None (provider default)
-            params: ChatParams dataclass instance. If provided, overrides individual
-                parameters above. Useful for structured configuration.
-            extra: Additional custom parameters for non-standard providers.
-                Merged with params if both are provided.
-            return_raw: Whether to include full raw response.
-
-        Returns:
-            ChatResult with text and usage. May be truncated if finish_reason == "length".
-
-        Examples:
-            Basic usage (may be truncated):
-            >>> result = chat("Hello", temperature=0.5, max_tokens=100)
-            >>> if result.finish_reason == "length":
-            ...     print("Response was truncated")
-
-            With explicit history (immutable):
-            >>> history = ChatHistory()
-            >>> result = chat("Hello", history=history)
-            >>> # Original history is not modified, working copy is used internally
-
-        Raises:
-            requests.RequestException: On network or HTTP errors (connection timeout,
-                connection reset, DNS resolution failure, etc.). When this exception
-                is raised during streaming, the iterator will stop and no more chunks
-                will be yielded. If the stream was interrupted before receiving a
-                done=True chunk, finish_reason will not be available. This indicates
-                a network/connection problem, not a normal completion.
-            ValueError: On invalid input or response format.
         """
-        normalized_messages, working_history, user_messages_to_add = (
-            prepare_messages_for_request(
-                messages,
-                system=system,
-                history=history,
-            )
-        )
-
-        model = model or self.model
-        if not model:
-            raise ValueError("Model must be specified (either in __init__ or __call__)")
-
-        param_dict = build_params_dict(
+        payload, working_history = self._prepare_chat_request(
+            messages=messages,
+            history=history,
+            model=model,
+            system=system,
             params=params,
+            extra=extra,
+            stream=False,
+            include_usage=False,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
@@ -248,33 +290,11 @@ class Chat(BaseAPIClient):
             tool_choice=tool_choice,
             parallel_tool_calls=parallel_tool_calls,
         )
-        payload = build_payload(
-            model=model,
-            messages=normalized_messages,
-            params=param_dict,
-            stream=False,
-            include_usage=False,
-            extra=extra,
-        )
-
-        # Update working history BEFORE request (add user messages)
-        # This ensures user messages are recorded even if request fails
-        # Note: working_history is a clone, original history is never modified
-        if working_history is not None:
-            for user_msg in user_messages_to_add:
-                working_history.add_user(user_msg)
-
-        # Make request (may raise exception)
         response = self._make_request("chat/completions", payload)
         response_data = response.json()
-        result = parse_chat_completion_response(response_data, return_raw=return_raw)
-
-        # Add assistant response to working history ONLY on success (after all exceptions are handled)
-        # Note: working_history is a clone, original history is never modified
-        if working_history is not None:
-            working_history.append_result(result)
-
-        return result
+        return self._process_chat_response(
+            response_data, working_history, return_raw=return_raw
+        )
 
     def stream(
         self,
@@ -298,89 +318,21 @@ class Chat(BaseAPIClient):
         extra: Json | None = None,
         include_usage: bool = True,
         return_raw_events: bool = False,
+        # ✅ NEW: Add reasoning parameter
+        include_reasoning: bool = False,
     ) -> StreamingIterator:
         """
         Stream a single chat completion response.
-
-        **Behavior**: Streams the response from a single API call, even if truncated.
-        Does NOT automatically continue if the response is cut off.
-
-        **History Immutability**: If history is provided, a clone is created and used internally.
-        The original history is never modified.
-
-        Use this when:
-        - You want real-time output
-        - You accept partial responses
-        - You want to handle truncation manually
-
-        For complete streaming responses, use `chat.complete_stream()` instead.
-
-        Supports both direct parameter passing (backward compatible) and ChatParams
-        dataclass for structured configuration.
-
-        Args:
-            messages: Messages in various formats.
-            history: Optional ChatHistory instance. If provided, history.messages are
-                prepended to messages, and a clone is automatically updated with the
-                user message and assistant response during streaming.
-                The original history is never modified.
-            model: Model to use (overrides default).
-            system: Optional system message.
-            temperature: Sampling temperature (0.0-2.0). Higher values make output
-                more random, lower values more focused. Default: 0.7
-            top_p: Nucleus sampling parameter (0.0-1.0). Alternative to temperature.
-                Default: 1.0
-            max_tokens: Maximum tokens to generate. Default: None (no limit)
-            stop: Stop sequences (str or list of str). API stops at these sequences.
-            presence_penalty: Penalty for new topics (-2.0 to 2.0). Positive values
-                encourage new topics. Default: 0.0
-            frequency_penalty: Penalty for repetition (-2.0 to 2.0). Positive values
-                reduce repetition. Default: 0.0
-            logit_bias: Modify token likelihood. Dict mapping token IDs to bias
-                values (-100 to 100). Default: None
-            user: Unique identifier for end-user (for monitoring/rate limiting).
-            params: ChatParams dataclass instance. If provided, overrides individual
-                parameters above. Useful for structured configuration.
-            extra: Additional custom parameters for non-standard providers.
-                Merged with params if both are provided.
-            include_usage: Whether to request usage in the final chunk (OpenAI-style).
-            return_raw_events: Whether to include raw event data in chunks.
-
-        Returns:
-            StreamingIterator: Iterator that yields ChatStreamChunk objects.
-                    Access accumulated result via iterator.result.
-
-        Raises:
-            requests.RequestException: On network or HTTP errors (connection timeout,
-                connection reset, DNS resolution failure, etc.). When this exception
-                is raised during streaming, the iterator will stop and no more chunks
-                will be yielded. If the stream was interrupted before receiving a
-                done=True chunk, finish_reason will not be available. This indicates
-                a network/connection problem, not a normal completion.
-            ValueError: On invalid input or response format.
-
-        Examples:
-            Basic streaming (may be truncated):
-            >>> for chunk in chat.stream("Hello", temperature=0.5):
-            ...     print(chunk.delta, end="")
-            >>> result = iterator.result.to_chat_result()
-            >>> if result.finish_reason == "length":
-            ...     print("Response was truncated")
         """
-        # Normalize messages
-        normalized_messages, working_history, user_messages_to_add = (
-            prepare_messages_for_request(
-                messages,
-                system=system,
-                history=history,
-            )
-        )
-        model = model or self.model
-        if not model:
-            raise ValueError("Model must be specified (either in __init__ or stream)")
-
-        param_dict = build_params_dict(
+        payload, working_history = self._prepare_chat_request(
+            messages=messages,
+            history=history,
+            model=model,
+            system=system,
             params=params,
+            extra=extra,
+            stream=True,
+            include_usage=include_usage,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
@@ -389,22 +341,11 @@ class Chat(BaseAPIClient):
             frequency_penalty=frequency_penalty,
             logit_bias=logit_bias,
             user=user,
+            n=None,  # n>1 is not supported in streaming
             tools=tools,
             tool_choice=tool_choice,
             parallel_tool_calls=parallel_tool_calls,
         )
-        payload = build_payload(
-            model=model,
-            messages=normalized_messages,
-            params=param_dict,
-            stream=True,
-            include_usage=include_usage,
-            extra=extra,
-        )
-
-        if working_history is not None:
-            for user_msg in user_messages_to_add:
-                working_history.add_user(user_msg)
 
         # Make streaming request
         response = self._make_streaming_request("chat/completions", payload)
@@ -412,7 +353,10 @@ class Chat(BaseAPIClient):
         # Create internal chunk generator
         def _chunk_generator() -> Iterator[ChatStreamChunk]:
             """Internal generator for streaming chunks."""
-            parser = SSEChatStreamParser(return_raw_events=return_raw_events)
+            parser = SSEChatStreamParser(
+                return_raw_events=return_raw_events,
+                include_reasoning=include_reasoning,  # ✅ NEW
+            )
             for line in response.iter_lines():
                 if not line:
                     continue
@@ -432,7 +376,6 @@ class Chat(BaseAPIClient):
         streaming_iterator = StreamingIterator(chunk_iterator)
 
         # If working history is provided, wrap iterator to update working history
-        # Note: working_history is a clone, original history is never modified
         if working_history is not None:
             streaming_iterator = self._wrap_streaming_with_history(
                 streaming_iterator, working_history
@@ -529,63 +472,16 @@ class Chat(BaseAPIClient):
     ) -> ChatResult:
         """
         Make an async chat completion request.
-
-        This is the async version of ``__call__()``. All parameters and behavior
-        are identical to the sync version.
-
-        **Behavior**: Returns the response from a single API call, even if truncated.
-        Does NOT automatically continue if the response is cut off.
-
-        **History Immutability**: If history is provided, a clone is created and used internally.
-        The original history is never modified.
-
-        Args:
-            messages: Messages in various formats (str, list of str, list of dict).
-            history: Optional ChatHistory instance.
-            model: Model to use (overrides default).
-            system: Optional system message.
-            temperature: Sampling temperature (0.0-2.0).
-            top_p: Nucleus sampling parameter (0.0-1.0).
-            max_tokens: Maximum tokens to generate.
-            stop: Stop sequences (str or list of str).
-            presence_penalty: Penalty for new topics (-2.0 to 2.0).
-            frequency_penalty: Penalty for repetition (-2.0 to 2.0).
-            logit_bias: Modify token likelihood.
-            user: Unique identifier for end-user.
-            n: Number of chat completion choices to generate.
-            tools: List of tools (functions) that the model may call.
-            tool_choice: Controls when the model uses tools.
-            parallel_tool_calls: Whether to enable parallel function calling.
-            params: ChatParams dataclass instance.
-            extra: Additional custom parameters.
-            return_raw: Whether to include full raw response.
-
-        Returns:
-            ChatResult with text and usage.
-
-        Examples:
-            Basic async usage:
-            >>> result = await chat.acall("Hello", temperature=0.5)
-            >>> print(result.text)
-
-            Concurrent requests:
-            >>> import asyncio
-            >>> tasks = [chat.acall(f"Question {i}") for i in range(5)]
-            >>> results = await asyncio.gather(*tasks)
         """
-        normalized_messages, working_history, user_messages_to_add = (
-            prepare_messages_for_request(
-                messages,
-                system=system,
-                history=history,
-            )
-        )
-        model = model or self.model
-        if not model:
-            raise ValueError("Model must be specified (either in __init__ or acall)")
-
-        param_dict = build_params_dict(
+        payload, working_history = self._prepare_chat_request(
+            messages=messages,
+            history=history,
+            model=model,
+            system=system,
             params=params,
+            extra=extra,
+            stream=False,
+            include_usage=False,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
@@ -599,29 +495,13 @@ class Chat(BaseAPIClient):
             tool_choice=tool_choice,
             parallel_tool_calls=parallel_tool_calls,
         )
-        payload = build_payload(
-            model=model,
-            messages=normalized_messages,
-            params=param_dict,
-            stream=False,
-            include_usage=False,
-            extra=extra,
-        )
-
-        # Update working history BEFORE request
-        if working_history is not None:
-            for user_msg in user_messages_to_add:
-                working_history.add_user(user_msg)
 
         # Make async request
         response = await self._amake_request("chat/completions", payload)
         response_data = response.json()
-        result = parse_chat_completion_response(response_data, return_raw=return_raw)
-
-        if working_history is not None:
-            working_history.append_result(result)
-
-        return result
+        return self._process_chat_response(
+            response_data, working_history, return_raw=return_raw
+        )
 
     async def astream(
         self,
@@ -645,72 +525,21 @@ class Chat(BaseAPIClient):
         extra: Json | None = None,
         include_usage: bool = True,
         return_raw_events: bool = False,
+        # ✅ NEW: Add reasoning parameter
+        include_reasoning: bool = False,
     ) -> AsyncStreamingIterator:
         """
         Stream an async chat completion response.
-
-        This is the async version of ``stream()``. All parameters and behavior
-        are identical to the sync version.
-
-        **Behavior**: Streams the response from a single API call, even if truncated.
-        Does NOT automatically continue if the response is cut off.
-
-        **History Immutability**: If history is provided, a clone is created and used internally.
-        The original history is never modified.
-
-        Args:
-            messages: Messages in various formats.
-            history: Optional ChatHistory instance.
-            model: Model to use (overrides default).
-            system: Optional system message.
-            temperature: Sampling temperature (0.0-2.0).
-            top_p: Nucleus sampling parameter (0.0-1.0).
-            max_tokens: Maximum tokens to generate.
-            stop: Stop sequences (str or list of str).
-            presence_penalty: Penalty for new topics (-2.0 to 2.0).
-            frequency_penalty: Penalty for repetition (-2.0 to 2.0).
-            logit_bias: Modify token likelihood.
-            user: Unique identifier for end-user.
-            tools: List of tools (functions) that the model may call.
-            tool_choice: Controls when the model uses tools.
-            parallel_tool_calls: Whether to enable parallel function calling.
-            params: ChatParams dataclass instance.
-            extra: Additional custom parameters.
-            include_usage: Whether to request usage in the final chunk.
-            return_raw_events: Whether to include raw event data in chunks.
-
-        Returns:
-            AsyncStreamingIterator: Async iterator that yields ChatStreamChunk objects.
-                Access accumulated result via iterator.result.
-
-        Examples:
-            Basic async streaming:
-            >>> async for chunk in chat.astream("Hello"):
-            ...     print(chunk.delta, end="")
-
-            Using collect() for convenience:
-            >>> result = await chat.astream("Hello").collect()
-            >>> print(result.text)
-
-            Accessing result during streaming:
-            >>> iterator = chat.astream("Hello")
-            >>> async for chunk in iterator:
-            ...     print(chunk.delta, end="")
-            >>> print(f"Total: {iterator.result.usage.total_tokens}")
         """
-        normalized_messages, working_history, user_messages_to_add = (
-            prepare_messages_for_request(
-                messages,
-                system=system,
-                history=history,
-            )
-        )
-        model = model or self.model
-        if not model:
-            raise ValueError("Model must be specified (either in __init__ or astream)")
-
-        param_dict = build_params_dict(
+        payload, working_history = self._prepare_chat_request(
+            messages=messages,
+            history=history,
+            model=model,
+            system=system,
             params=params,
+            extra=extra,
+            stream=True,
+            include_usage=include_usage,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
@@ -719,25 +548,17 @@ class Chat(BaseAPIClient):
             frequency_penalty=frequency_penalty,
             logit_bias=logit_bias,
             user=user,
+            n=None,  # n>1 is not supported in streaming
             tools=tools,
             tool_choice=tool_choice,
             parallel_tool_calls=parallel_tool_calls,
         )
-        payload = build_payload(
-            model=model,
-            messages=normalized_messages,
-            params=param_dict,
-            stream=True,
-            include_usage=include_usage,
-            extra=extra,
-        )
-
-        if working_history is not None:
-            for user_msg in user_messages_to_add:
-                working_history.add_user(user_msg)
 
         async def _async_chunk_generator() -> AsyncIterator[ChatStreamChunk]:
-            parser = SSEChatStreamParser(return_raw_events=return_raw_events)
+            parser = SSEChatStreamParser(
+                return_raw_events=return_raw_events,
+                include_reasoning=include_reasoning,  # ✅ NEW
+            )
             async for line in self._amake_streaming_request(
                 "chat/completions", payload
             ):
@@ -892,19 +713,45 @@ class Chat(BaseAPIClient):
             ...     print(f"继续生成 {count}/{max_count}...")
             >>> result = chat.complete("Write JSON", on_progress=on_progress)
         """
-        return _complete_impl(
-            self,
-            messages,
-            history=history,
-            max_continues=max_continues,
-            ensure_complete=ensure_complete,
-            continue_prompt=continue_prompt,
-            on_progress=on_progress,
-            continue_delay=continue_delay,
-            on_error=on_error,
-            on_error_callback=on_error_callback,
-            params=params,
-        )
+        working_history = _get_working_history(history)
+        original_prompt = _get_original_prompt(messages)
+
+        result = self(messages, history=working_history, **params)
+        if result.finish_reason == "length":
+            try:
+                result = Conversation.continue_request(
+                    self,
+                    result,
+                    history=working_history,
+                    max_continues=max_continues,
+                    continue_prompt=continue_prompt,
+                    on_progress=on_progress,
+                    continue_delay=continue_delay,
+                    on_error=on_error,
+                    on_error_callback=on_error_callback,
+                    original_prompt=original_prompt,
+                    **params,
+                )
+            except Exception as e:
+                if ensure_complete:
+                    raise ChatIncompleteResponseError(
+                        f"Failed to get complete response after {max_continues} continues: {e}",
+                        final_result=result,
+                        continue_count=0,
+                        max_continues=max_continues,
+                    ) from e
+                raise
+
+        if ensure_complete and result.finish_reason == "length" and on_error == "raise":
+            raise ChatIncompleteResponseError(
+                f"Response still truncated after {max_continues} continues. "
+                f"Consider increasing max_continues or max_tokens.",
+                final_result=result,
+                continue_count=max_continues,
+                max_continues=max_continues,
+            )
+
+        return result
 
     def complete_stream(
         self,
@@ -981,18 +828,47 @@ class Chat(BaseAPIClient):
             >>> iterator1 = chat.complete_stream("First question", history=history)
             >>> iterator2 = chat.complete_stream("Follow-up", history=history)
         """
-        return _complete_stream_impl(
-            self,
-            messages,
-            history=history,
+        working_history = _get_working_history(history)
+        original_prompt = _get_original_prompt(messages)
+
+        def _complete_stream_generator() -> Iterator[ChatStreamChunk]:
+            initial_iterator = self.stream(messages, history=working_history, **params)
+            yield from initial_iterator
+
+            initial_result = initial_iterator.result.to_chat_result()
+            if initial_result.finish_reason != "length":
+                return
+
+            try:
+                continue_iterator = Conversation.continue_request_stream(
+                    self,
+                    initial_result,
+                    history=working_history,
+                    max_continues=max_continues,
+                    continue_prompt=continue_prompt,
+                    on_progress=on_progress,
+                    continue_delay=continue_delay,
+                    on_error=on_error,
+                    on_error_callback=on_error_callback,
+                    original_prompt=original_prompt,
+                    **params,
+                )
+            except Exception as e:
+                if ensure_complete:
+                    raise ChatIncompleteResponseError(
+                        f"Failed to get complete response after {max_continues} continues: {e}",
+                        final_result=initial_result,
+                        continue_count=0,
+                        max_continues=max_continues,
+                    ) from e
+                raise
+
+            yield from continue_iterator
+
+        return _CompleteStreamingIterator(
+            _complete_stream_generator(),
             max_continues=max_continues,
             ensure_complete=ensure_complete,
-            continue_prompt=continue_prompt,
-            on_progress=on_progress,
-            continue_delay=continue_delay,
-            on_error=on_error,
-            on_error_callback=on_error_callback,
-            params=params,
         )
 
     async def acomplete(
@@ -1045,19 +921,45 @@ class Chat(BaseAPIClient):
             >>> tasks = [chat.acomplete(f"Write story {i}") for i in range(3)]
             >>> results = await asyncio.gather(*tasks)
         """
-        return await _acomplete_impl(
-            self,
-            messages,
-            history=history,
-            max_continues=max_continues,
-            ensure_complete=ensure_complete,
-            continue_prompt=continue_prompt,
-            on_progress=on_progress,
-            continue_delay=continue_delay,
-            on_error=on_error,
-            on_error_callback=on_error_callback,
-            params=params,
-        )
+        working_history = _get_working_history(history)
+        original_prompt = _get_original_prompt(messages)
+
+        result = await self.acall(messages, history=working_history, **params)
+        if result.finish_reason == "length":
+            try:
+                result = await Conversation.acontinue_request(
+                    self,
+                    result,
+                    history=working_history,
+                    max_continues=max_continues,
+                    continue_prompt=continue_prompt,
+                    on_progress=on_progress,
+                    continue_delay=continue_delay,
+                    on_error=on_error,
+                    on_error_callback=on_error_callback,
+                    original_prompt=original_prompt,
+                    **params,
+                )
+            except Exception as e:
+                if ensure_complete:
+                    raise ChatIncompleteResponseError(
+                        f"Failed to get complete response after {max_continues} continues: {e}",
+                        final_result=result,
+                        continue_count=0,
+                        max_continues=max_continues,
+                    ) from e
+                raise
+
+        if ensure_complete and result.finish_reason == "length" and on_error == "raise":
+            raise ChatIncompleteResponseError(
+                f"Response still truncated after {max_continues} continues. "
+                f"Consider increasing max_continues or max_tokens.",
+                final_result=result,
+                continue_count=max_continues,
+                max_continues=max_continues,
+            )
+
+        return result
 
     async def acomplete_stream(
         self,
@@ -1105,18 +1007,51 @@ class Chat(BaseAPIClient):
             ...     print(chunk.delta, end="", flush=True)
             >>> result = iterator.result.to_chat_result()
         """
-        return await _acomplete_stream_impl(
-            self,
-            messages,
-            history=history,
+        working_history = _get_working_history(history)
+        original_prompt = _get_original_prompt(messages)
+
+        async def _async_complete_stream_generator() -> AsyncIterator[ChatStreamChunk]:
+            initial_iterator = await self.astream(
+                messages, history=working_history, **params
+            )
+            async for chunk in initial_iterator:
+                yield chunk
+
+            initial_result = initial_iterator.result.to_chat_result()
+            if initial_result.finish_reason != "length":
+                return
+
+            try:
+                continue_iterator = await Conversation.acontinue_request_stream(
+                    self,
+                    initial_result,
+                    history=working_history,
+                    max_continues=max_continues,
+                    continue_prompt=continue_prompt,
+                    on_progress=on_progress,
+                    continue_delay=continue_delay,
+                    on_error=on_error,
+                    on_error_callback=on_error_callback,
+                    original_prompt=original_prompt,
+                    **params,
+                )
+            except Exception as e:
+                if ensure_complete:
+                    raise ChatIncompleteResponseError(
+                        f"Failed to get complete response after {max_continues} continues: {e}",
+                        final_result=initial_result,
+                        continue_count=0,
+                        max_continues=max_continues,
+                    ) from e
+                raise
+
+            async for chunk in continue_iterator:
+                yield chunk
+
+        return _AsyncCompleteStreamingIterator(
+            _async_complete_stream_generator(),
             max_continues=max_continues,
             ensure_complete=ensure_complete,
-            continue_prompt=continue_prompt,
-            on_progress=on_progress,
-            continue_delay=continue_delay,
-            on_error=on_error,
-            on_error_callback=on_error_callback,
-            params=params,
         )
 
     def chat_with_history(

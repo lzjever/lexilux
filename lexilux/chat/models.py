@@ -263,6 +263,9 @@ class ChatStreamChunk(ResultBase):
         finish_reason: str | None = None,
         tool_calls: list[ToolCall] | None = None,
         raw: Json | None = None,
+        # ✅ NEW: Add reasoning fields for OpenAI o1/Claude 3.5/DeepSeek R1
+        reasoning_content: str | None = None,
+        reasoning_tokens: int | None = None,
     ):
         """
         Initialize ChatStreamChunk.
@@ -274,12 +277,17 @@ class ChatStreamChunk(ResultBase):
             finish_reason: Reason why generation stopped.
             tool_calls: List of incremental tool call data.
             raw: Raw chunk data.
+            reasoning_content: Reasoning/thinking content (OpenAI o1/Claude 3.5/DeepSeek).
+            reasoning_tokens: Token count for reasoning content.
         """
         super().__init__(usage=usage, raw=raw)
         self.delta = delta
         self.done = done
         self.finish_reason = finish_reason
         self.tool_calls = tool_calls or []
+        # ✅ NEW: Assign reasoning fields
+        self.reasoning_content = reasoning_content
+        self.reasoning_tokens = reasoning_tokens
 
     @property
     def has_content(self) -> bool:
@@ -318,4 +326,9 @@ class ChatStreamChunk(ResultBase):
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"ChatStreamChunk(delta={self.delta!r}, done={self.done}, finish_reason={self.finish_reason!r}, usage={self.usage!r}, tool_calls={len(self.tool_calls)})"
+        reasoning_info = (
+            f", reasoning={self.reasoning_content is not None}"
+            if self.reasoning_content
+            else ""
+        )
+        return f"ChatStreamChunk(delta={self.delta!r}, done={self.done}, finish_reason={self.finish_reason!r}, usage={self.usage!r}, tool_calls={len(self.tool_calls)}{reasoning_info})"

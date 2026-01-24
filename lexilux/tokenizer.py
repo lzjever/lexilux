@@ -199,131 +199,118 @@ class Tokenizer:
 
         return sorted(tokenizer_files)
 
-    def _ensure_model_downloaded(self) -> str:
+    def _check_tokenizer_files_exist(self) -> tuple[bool, str | None]:
         """
-        Ensure model is downloaded to cache_dir.
+        Check if tokenizer files exist in cache using direct filesystem check.
 
-        This function checks if the model is already cached locally.
-        If not cached and offline=False, it downloads the model using huggingface_hub.
-        The download logic is independent of AutoTokenizer.
+        This avoids potential network requests or hanging from huggingface_hub functions.
 
         Returns:
-            Path to the model (can be model_id or local path)
-
-        Raises:
-            OSError: If offline=True and model not found in cache, or download failed.
+            Tuple of (files_exist: bool, cache_path: str | None)
         """
-        if self.offline:
-            # Offline mode: only check cache, don't download
-            return self.model
-
-        # Online mode: check cache first, download if needed
         try:
-            from huggingface_hub import snapshot_download
-        except ImportError:
-            # If huggingface_hub is not available, fall back to AutoTokenizer download
-            return self.model
+            from pathlib import Path
 
-        cache_path = Path(self.cache_dir) if self.cache_dir else None
-        if cache_path is None:
-            # No cache_dir specified, let AutoTokenizer handle it
-            return self.model
-
-        cache_path.mkdir(parents=True, exist_ok=True)
-
-        # Check if model is already cached (HuggingFace Hub cache structure)
-        model_cache_name = self.model.replace("/", "--")
-        model_cache_path = cache_path / f"models--{model_cache_name}"
-
-        # Check for existing snapshots
-        cached_snapshot_path = None
-        if model_cache_path.exists():
-            snapshots_dir = model_cache_path / "snapshots"
-            if snapshots_dir.exists():
-                # Find the first valid snapshot directory
-                snapshots = sorted(snapshots_dir.iterdir())
-                for snapshot in snapshots:
-                    if snapshot.is_dir():
-                        # Verify it's a valid snapshot (has tokenizer files)
-                        tokenizer_files = list(snapshot.glob("tokenizer*.json"))
-                        if tokenizer_files:
-                            cached_snapshot_path = snapshot
-                            break
-
-        # Return cached path if found
-        if cached_snapshot_path:
-            return str(cached_snapshot_path)
-
-        # Download only tokenizer files (not model weights)
-        # Use list_tokenizer_files to identify which files to download
-        try:
-            from huggingface_hub import hf_hub_download
-
-            # Get list of tokenizer files for this model
-            tokenizer_files = self.list_tokenizer_files(
-                self.model,
-                revision=self.revision,
-            )
-
-            if not tokenizer_files:
-                # Fallback: if no tokenizer files found, let AutoTokenizer handle it
-                return self.model
-
-            # Download each tokenizer file to the cache directory
-            # hf_hub_download will place files in the standard HuggingFace cache structure
-            # under the specified cache_dir, which AutoTokenizer can then find
-            for file in tokenizer_files:
+            # Determine cache directory
+            if self.cache_dir:
+                base_cache_dir = Path(self.cache_dir)
+            else:
+                # Use default HuggingFace cache location
                 try:
-                    hf_hub_download(
-                        repo_id=self.model,
-                        filename=file,
-                        cache_dir=str(cache_path),
-                        revision=self.revision,
-                        local_files_only=False,
-                    )
-                except Exception as e:
-                    # Log warning but continue with other files
-                    # Some files might not exist for all models (e.g., merges.txt for WordPiece)
-                    import warnings
+                    from huggingface_hub import HF_HUB_CACHE
 
-                    warnings.warn(
-                        f"Failed to download {file}: {e}. Continuing with other files.",
-                        UserWarning,
-                    )
+                    base_cache_dir = Path(HF_HUB_CACHE)
+                except ImportError:
+                    # Fallback to common default location
+                    base_cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
 
-            # Return the model ID - AutoTokenizer will find the files in the HuggingFace cache
-            # The files are now cached in the standard HuggingFace cache structure
+            # HuggingFace cache structure: models--{repo_id}--{revision}/snapshots/{hash}/
+            model_cache_name = self.model.replace("/", "--")
+            model_cache_path = base_cache_dir / f"models--{model_cache_name}"
+
+            if not model_cache_path.exists():
+                return False, None
+
+            # Check for snapshots directory
+            snapshots_dir = model_cache_path / "snapshots"
+            if not snapshots_dir.exists():
+                return False, None
+
+            # Look for any snapshot directory that contains tokenizer files
+            required_files = ["tokenizer_config.json", "tokenizer.json"]
+
+            for snapshot_dir in snapshots_dir.iterdir():
+                if snapshot_dir.is_dir():
+                    # Check if this snapshot has tokenizer files
+                    has_tokenizer_files = any(
+                        (snapshot_dir / filename).exists()
+                        for filename in required_files
+                    )
+                    if has_tokenizer_files:
+                        return True, str(snapshot_dir)
+
+            return False, None
+
+        except Exception as e:
+            # If filesystem check fails for any reason, fail fast
+            import warnings
+
+            warnings.warn(
+                f"Failed to check local cache for model '{self.model}': {e}. "
+                "Assuming files don't exist.",
+                UserWarning,
+            )
+            return False, None
+
+    def _ensure_model_downloaded(self) -> str:
+        """
+        Ensure tokenizer files are available.
+
+        In offline mode: Check for necessary files and throw exception if not found.
+        In online mode: Check files first, only download if missing.
+        """
+        # First, check if tokenizer files already exist in cache
+        files_exist, cached_path = self._check_tokenizer_files_exist()
+
+        if self.offline:
+            # Offline mode: files must exist, throw exception if not found
+            if not files_exist:
+                raise OSError(
+                    f"Model '{self.model}' tokenizer files not found in cache. "
+                    f"Offline mode requires tokenizer files to be pre-downloaded. "
+                    f"Cache dir: {self.cache_dir or 'default HuggingFace cache'}. "
+                    f"Please download the model first in online mode."
+                )
+            # Files exist, return cached path or model ID
+            return cached_path if cached_path else self.model
+
+        # Online mode: if files exist, use them directly
+        if files_exist and cached_path:
+            return cached_path
+
+        # Files don't exist or couldn't be found, need to download
+        try:
+            from huggingface_hub import snapshot_download
+        except ImportError:
+            # If huggingface_hub is not available, let AutoTokenizer handle downloads.
             return self.model
 
-        except ImportError:
-            # If huggingface_hub functions are not available, fall back to snapshot_download
-            from huggingface_hub import snapshot_download
-
-            downloaded_path = snapshot_download(
+        try:
+            # Download only files relevant for tokenization, ignoring model weights.
+            # The returned path points to a local directory with the downloaded files.
+            return snapshot_download(
                 repo_id=self.model,
-                cache_dir=str(cache_path),
+                cache_dir=self.cache_dir,
                 revision=self.revision,
-                local_files_only=False,
-                ignore_patterns=[
-                    "*.safetensors",
-                    "*.bin",
-                    "*.pt",
-                    "*.pth",
-                    "*.h5",
-                    "*.ckpt",
-                    "*.pb",
-                    "*.onnx",
-                    "model*.safetensors",
-                    "pytorch_model*.bin",
-                    "tf_model*.h5",
-                    "flax_model*.msgpack",
-                ],
+                local_files_only=False,  # Ensure we download if not present
+                allow_patterns=["tokenizer*", "*.json", "*.txt", "vocab.*", "merges.*"],
+                ignore_patterns=["*.safetensors", "*.bin", "*.pt", "*.onnx"],
             )
-            return downloaded_path
         except Exception as e:
-            # If download failed, raise error
+            # If download fails, provide a clear error message.
             raise OSError(
-                f"Failed to download model '{self.model}': {e}. Cache dir: {self.cache_dir}"
+                f"Failed to download tokenizer files for model '{self.model}'. "
+                f"Cache dir: {self.cache_dir or 'default'}. Error: {e}"
             ) from e
 
     def _ensure_tokenizer(self):
@@ -359,35 +346,31 @@ class Tokenizer:
         model_path = self._ensure_model_downloaded()
 
         # Load tokenizer
-        # If model_path is a local path (from snapshot_download), use it directly
-        # Otherwise, it's the model_id and AutoTokenizer will handle it
-        if self.offline:
-            # Offline: only use local cache
-            try:
-                self._tokenizer = AutoTokenizer.from_pretrained(
-                    model_path,
-                    cache_dir=self.cache_dir,
-                    revision=self.revision,
-                    trust_remote_code=self.trust_remote_code,
-                    local_files_only=True,
-                )
-            except (OSError, ValueError) as e:
-                raise OSError(
-                    f"Model '{self.model}' not found in local cache. "
-                    f"Offline mode requires the model to be pre-downloaded. "
-                    f"Cache dir: {self.cache_dir or 'default HuggingFace cache'}"
-                ) from e
-        else:
-            # Online: allow network access
-            # If model_path is a local snapshot path, it's already downloaded
-            # If it's model_id, AutoTokenizer will download if needed
+        # Since we handle all downloads ourselves in _ensure_model_downloaded(),
+        # we ALWAYS use local_files_only=True for AutoTokenizer.
+        # This ensures:
+        # 1. No duplicate downloads
+        # 2. Complete control over download process
+        # 3. Consistent behavior regardless of online/offline mode
+        # 4. Better error messages from our own logic
+        try:
             self._tokenizer = AutoTokenizer.from_pretrained(
                 model_path,
                 cache_dir=self.cache_dir,
                 revision=self.revision,
                 trust_remote_code=self.trust_remote_code,
-                local_files_only=False,
+                local_files_only=True,  # Always True - we handle downloads ourselves!
             )
+        except (OSError, ValueError) as e:
+            # This should rarely happen since _ensure_model_downloaded()
+            # already verified files exist, but provide helpful error anyway
+            mode_text = "offline" if self.offline else "online"
+            raise OSError(
+                f"Failed to load tokenizer for model '{self.model}' in {mode_text} mode. "
+                f"Files should have been prepared by _ensure_model_downloaded(). "
+                f"Cache dir: {self.cache_dir or 'default HuggingFace cache'}. "
+                f"Original error: {e}"
+            ) from e
 
     def __call__(
         self,

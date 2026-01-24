@@ -128,6 +128,65 @@ class Embed:
         # Async client (lazy initialization)
         self._async_client: httpx.AsyncClient | None = None
 
+    def _build_payload(
+        self,
+        input: str | Sequence[str],
+        model: str | None,
+        dimensions: int | None,
+        encoding_format: Literal["float", "base64"] | None,
+        user: str | None,
+        params: EmbedParams | None,
+        extra: Json | None,
+    ) -> tuple[Json, bool]:
+        """Build the payload for the embeddings request and identify input type."""
+        is_single = isinstance(input, str)
+        input_list = [input] if is_single else list(input)
+        if not input_list:
+            raise ValueError("Input cannot be empty")
+
+        final_model = model or self.model
+        if not final_model:
+            raise ValueError("Model must be specified (either in __init__ or in call)")
+
+        # Start with params object if provided
+        param_dict = params.to_dict(exclude_none=True) if params else {}
+
+        # Individual arguments override what's in params
+        if dimensions is not None:
+            param_dict["dimensions"] = dimensions
+        if encoding_format is not None:
+            param_dict["encoding_format"] = encoding_format
+        if user is not None:
+            param_dict["user"] = user
+
+        # Build final payload
+        payload: Json = {"model": final_model, "input": input_list, **param_dict}
+
+        # Merge extra parameters, which have the highest precedence
+        if extra:
+            payload.update(extra)
+
+        return payload, is_single
+
+    def _process_response(
+        self, response_data: Json, is_single: bool, return_raw: bool
+    ) -> EmbedResult:
+        """Process the raw API response into an EmbedResult."""
+        data_list = response_data.get("data", [])
+        if not data_list:
+            raise ValueError("No data in API response")
+
+        vectors: list[Vector] = [item["embedding"] for item in data_list]
+
+        result_vectors: Vector | list[Vector] = vectors[0] if is_single else vectors
+        usage = parse_usage(response_data)
+
+        return EmbedResult(
+            vectors=result_vectors,
+            usage=usage,
+            raw=response_data if return_raw else {},
+        )
+
     def __call__(
         self,
         input: str | Sequence[str],
@@ -179,51 +238,10 @@ class Embed:
             Combining params and extra:
             >>> result = embed("Hello", params=params, extra={"custom": "value"})
         """
-        # Normalize input to list
-        is_single = isinstance(input, str)
-        input_list = [input] if is_single else list(input)
+        payload, is_single = self._build_payload(
+            input, model, dimensions, encoding_format, user, params, extra
+        )
 
-        if not input_list:
-            raise ValueError("Input cannot be empty")
-
-        # Prepare request
-        model = model or self.model
-        if not model:
-            raise ValueError("Model must be specified (either in __init__ or __call__)")
-
-        # Build parameters from EmbedParams or individual args
-        if params is not None:
-            # Use EmbedParams as base, override with individual args if provided
-            param_dict = params.to_dict(exclude_none=True)
-            # Override with explicit parameters if provided
-            if dimensions is not None:
-                param_dict["dimensions"] = dimensions
-            if encoding_format is not None:
-                param_dict["encoding_format"] = encoding_format
-            if user is not None:
-                param_dict["user"] = user
-        else:
-            # Build from individual parameters (backward compatible)
-            param_dict: Json = {}
-            if dimensions is not None:
-                param_dict["dimensions"] = dimensions
-            if encoding_format is not None:
-                param_dict["encoding_format"] = encoding_format
-            if user is not None:
-                param_dict["user"] = user
-
-        # Build payload
-        payload: Json = {
-            "model": model,
-            "input": input_list,
-            **param_dict,
-        }
-
-        # Merge extra parameters (highest priority)
-        if extra:
-            payload.update(extra)
-
-        # Make request
         url = f"{self.base_url}/embeddings"
         response = requests.post(
             url,
@@ -235,27 +253,7 @@ class Embed:
         response.raise_for_status()
 
         response_data = response.json()
-
-        # Parse response
-        data_list = response_data.get("data", [])
-        if not data_list:
-            raise ValueError("No data in API response")
-
-        # Extract vectors
-        vectors: list[Vector] = [item["embedding"] for item in data_list]
-
-        # Return single vector or list of vectors based on input
-        result_vectors: Vector | list[Vector] = vectors[0] if is_single else vectors
-
-        # Parse usage
-        usage = parse_usage(response_data)
-
-        # Return result
-        return EmbedResult(
-            vectors=result_vectors,
-            usage=usage,
-            raw=response_data if return_raw else {},
-        )
+        return self._process_response(response_data, is_single, return_raw)
 
     # =========================================================================
     # Async Methods
@@ -267,6 +265,7 @@ class Embed:
             self._async_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(self.timeout_s),
                 headers=self.headers,
+                proxies=self.proxies,
             )
         return self._async_client
 
@@ -310,73 +309,17 @@ class Embed:
             >>> tasks = [embed.acall(text) for text in texts]
             >>> results = await asyncio.gather(*tasks)
         """
-        # Normalize input to list
-        is_single = isinstance(input, str)
-        input_list = [input] if is_single else list(input)
+        payload, is_single = self._build_payload(
+            input, model, dimensions, encoding_format, user, params, extra
+        )
 
-        if not input_list:
-            raise ValueError("Input cannot be empty")
-
-        # Prepare request
-        model = model or self.model
-        if not model:
-            raise ValueError("Model must be specified (either in __init__ or acall)")
-
-        # Build parameters from EmbedParams or individual args
-        if params is not None:
-            param_dict = params.to_dict(exclude_none=True)
-            if dimensions is not None:
-                param_dict["dimensions"] = dimensions
-            if encoding_format is not None:
-                param_dict["encoding_format"] = encoding_format
-            if user is not None:
-                param_dict["user"] = user
-        else:
-            param_dict: Json = {}
-            if dimensions is not None:
-                param_dict["dimensions"] = dimensions
-            if encoding_format is not None:
-                param_dict["encoding_format"] = encoding_format
-            if user is not None:
-                param_dict["user"] = user
-
-        # Build payload
-        payload: Json = {
-            "model": model,
-            "input": input_list,
-            **param_dict,
-        }
-
-        if extra:
-            payload.update(extra)
-
-        # Make async request
         url = f"{self.base_url}/embeddings"
         client = self._get_async_client()
         response = await client.post(url, json=payload)
         response.raise_for_status()
 
         response_data = response.json()
-
-        # Parse response
-        data_list = response_data.get("data", [])
-        if not data_list:
-            raise ValueError("No data in API response")
-
-        # Extract vectors
-        vectors: list[Vector] = [item["embedding"] for item in data_list]
-
-        # Return single vector or list of vectors based on input
-        result_vectors: Vector | list[Vector] = vectors[0] if is_single else vectors
-
-        # Parse usage
-        usage = parse_usage(response_data)
-
-        return EmbedResult(
-            vectors=result_vectors,
-            usage=usage,
-            raw=response_data if return_raw else {},
-        )
+        return self._process_response(response_data, is_single, return_raw)
 
     async def aclose(self) -> None:
         """Close the async client and release resources."""

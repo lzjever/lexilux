@@ -12,14 +12,14 @@ import pytest
 
 # PIL is optional for multimodal tests
 try:
-    from PIL import Image
+    from PIL import Image  # noqa: F401  # Used in conditional test code
 
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
+    Image = None  # type: ignore[misc,assignment]
 
 from lexilux import Chat, FunctionTool, ToolChoice
-from lexilux.chat.models import ToolCall
 from lexilux.chat.tool_helpers import (
     ToolCallHelper,
     create_conversation_history,

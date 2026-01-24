@@ -88,8 +88,33 @@ class ChatParams:
 
         extra: Additional custom parameters for OpenAI-compatible servers that may
             accept non-standard parameters. These will be merged into the request
-            payload. Useful for provider-specific features.
+            payload.
+
+            Common use cases:
+            - Provider-specific experimental features
+            - Custom provider options not in OpenAI standard
+            - Specialized model behaviors (e.g., response format, seed)
+
+            For parameter name mapping, use param_aliases instead of extra when
+            the provider uses standard OpenAI-compatible parameters with different keys.
+
             Default: None (empty dict)
+
+        param_aliases: Parameter name mapping for edge cases where providers
+            use different names for standard OpenAI parameters.
+            Most providers won't need this feature.
+
+            Maps standard OpenAI parameter names to provider-specific names.
+            Applied after standard parameter processing but before extra merging.
+
+            Example (rare cases):
+                >>> params = ChatParams(
+                ...     temperature=0.7,
+                ...     param_aliases={"temperature": "temp"}
+                ... )
+                # Sends: {"temp": 0.7} instead of {"temperature": 0.7}
+
+            Default: None (no mapping needed for standard providers)
 
     Examples:
         Basic usage with defaults:
@@ -120,10 +145,21 @@ class ChatParams:
         ...     ]
         ... )
 
-        With custom parameters:
+        With custom provider features:
         >>> params = ChatParams(
         ...     temperature=0.8,
-        ...     extra={"custom_param": "value", "another_param": 123}
+        ...     extra={
+        ...         "response_format": {"type": "json_object"},
+        ...         "seed": 12345,
+        ...         "logprobs": True,
+        ...         "top_logprobs": 5
+        ...     }
+        ... )
+
+        With parameter aliases (rare cases):
+        >>> params = ChatParams(
+        ...     temperature=0.7,
+        ...     param_aliases={"temperature": "temp"}
         ... )
     """
 
@@ -145,6 +181,9 @@ class ChatParams:
     # Extra parameters
     extra: dict[str, Any] | None = None
 
+    # ✅ NEW: Parameter alias mapping
+    param_aliases: dict[str, str] | None = None
+
     def to_dict(self, exclude_none: bool = True) -> dict[str, Any]:
         """
         Convert parameters to dictionary for API request.
@@ -157,13 +196,18 @@ class ChatParams:
             Dictionary of parameters ready for API request.
 
         Examples:
+            Basic usage:
             >>> params = ChatParams(temperature=0.5, max_tokens=100)
             >>> params.to_dict()
             {'temperature': 0.5, 'top_p': 1.0, 'max_tokens': 100, ...}
 
-            >>> params = ChatParams(tools=[FunctionTool(...)])
+            With parameter aliases:
+            >>> params = ChatParams(
+            ...     temperature=0.8,
+            ...     param_aliases={"temperature": "temp"}  # Some providers use "temp"
+            ... )
             >>> params.to_dict()
-            {'temperature': 0.7, 'tools': [...], ...}
+            {'temp': 0.8, 'top_p': 1.0, ...}
         """
         result: dict[str, Any] = {}
 
@@ -208,6 +252,16 @@ class ChatParams:
         if not exclude_none or self.parallel_tool_calls is not None:
             if self.parallel_tool_calls is not None:
                 result["parallel_tool_calls"] = self.parallel_tool_calls
+
+        # ✅ NEW: Apply parameter aliases
+        if self.param_aliases:
+            aliased_params = {}
+            for standard_key, provider_key in self.param_aliases.items():
+                if standard_key in result:
+                    # Move parameter to provider-specific key
+                    aliased_params[provider_key] = result[standard_key]
+                    del result[standard_key]
+            result.update(aliased_params)
 
         # Merge extra parameters (lowest priority)
         if self.extra:
