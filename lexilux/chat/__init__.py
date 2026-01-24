@@ -11,7 +11,6 @@ from lexilux.chat.content_blocks import (
     ImageUrlDetail,
     TextContentBlock,
 )
-from lexilux.chat.continue_ import ChatContinue
 from lexilux.chat.exceptions import ChatIncompleteResponseError, ChatStreamInterruptedError
 from lexilux.chat.formatters import ChatHistoryFormatter
 from lexilux.chat.history import (

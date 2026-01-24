@@ -1401,7 +1401,7 @@ class Chat(BaseAPIClient):
             ...     print(f"继续生成 {count}/{max_count}...")
             >>> result = chat.complete("Write JSON", on_progress=on_progress)
         """
-        from lexilux.chat.continue_ import ChatContinue
+        from lexilux.chat.conversation import Conversation
         from lexilux.chat.exceptions import ChatIncompleteResponseError
 
         # Create working history (immutable - clone if provided, otherwise create new)
@@ -1416,7 +1416,7 @@ class Chat(BaseAPIClient):
         # If truncated, continue with customizable strategy
         if result.finish_reason == "length":
             try:
-                result = ChatContinue.continue_request(
+                result = Conversation.continue_request(
                     self,
                     result,
                     history=working_history,
@@ -1529,7 +1529,7 @@ class Chat(BaseAPIClient):
             >>> iterator1 = chat.complete_stream("First question", history=history)
             >>> iterator2 = chat.complete_stream("Follow-up", history=history)
         """
-        from lexilux.chat.continue_ import ChatContinue
+        from lexilux.chat.conversation import Conversation
         from lexilux.chat.exceptions import ChatIncompleteResponseError
 
         # Create working history (immutable - clone if provided, otherwise create new)
@@ -1554,7 +1554,7 @@ class Chat(BaseAPIClient):
             # If truncated, continue with streaming
             if initial_result.finish_reason == "length":
                 try:
-                    continue_iterator = ChatContinue.continue_request_stream(
+                    continue_iterator = Conversation.continue_request_stream(
                         self,
                         initial_result,
                         history=working_history,
@@ -1673,7 +1673,7 @@ class Chat(BaseAPIClient):
             >>> tasks = [chat.acomplete(f"Write story {i}") for i in range(3)]
             >>> results = await asyncio.gather(*tasks)
         """
-        from lexilux.chat.continue_ import ChatContinue
+        from lexilux.chat.conversation import Conversation
         from lexilux.chat.exceptions import ChatIncompleteResponseError
 
         working_history = history.clone() if history is not None else ChatHistory()
@@ -1685,7 +1685,7 @@ class Chat(BaseAPIClient):
         # If truncated, continue with customizable strategy
         if result.finish_reason == "length":
             try:
-                result = await ChatContinue.acontinue_request(
+                result = await Conversation.acontinue_request(
                     self,
                     result,
                     history=working_history,
@@ -1765,7 +1765,7 @@ class Chat(BaseAPIClient):
             ...     print(chunk.delta, end="", flush=True)
             >>> result = iterator.result.to_chat_result()
         """
-        from lexilux.chat.continue_ import ChatContinue
+        from lexilux.chat.conversation import Conversation
         from lexilux.chat.exceptions import ChatIncompleteResponseError
 
         working_history = history.clone() if history is not None else ChatHistory()
@@ -1786,7 +1786,7 @@ class Chat(BaseAPIClient):
             # If truncated, continue with async streaming
             if initial_result.finish_reason == "length":
                 try:
-                    continue_iterator = await ChatContinue.acontinue_request_stream(
+                    continue_iterator = await Conversation.acontinue_request_stream(
                         self,
                         initial_result,
                         history=working_history,

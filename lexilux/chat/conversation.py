@@ -1,7 +1,7 @@
 """
 Continue functionality for chat completions.
 
-Provides ChatContinue class for handling continuation requests when generation
+Provides Conversation class for handling continuation requests when generation
 is stopped due to max_tokens limit.
 """
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ChatContinue:
+class Conversation:
     """
     Continue functionality handler (user is responsible for determining if continue is needed).
 
@@ -46,8 +46,8 @@ class ChatContinue:
 
         Examples:
             >>> result = chat("Write a story", max_tokens=50)
-            >>> if ChatContinue.needs_continue(result):
-            ...     full_result = ChatContinue.continue_request(chat, result, history=history)
+            >>> if Conversation.needs_continue(result):
+            ...     full_result = Conversation.continue_request(chat, result, history=history)
         """
         return result.finish_reason == "length"
 
@@ -159,7 +159,7 @@ class ChatContinue:
                     action = response.get("action", "raise")
                     if action == "return_partial":
                         if len(all_results) > 1:
-                            return ChatContinue.merge_results(*all_results)
+                            return Conversation.merge_results(*all_results)
                         return partial_result
                     elif action == "retry":
                         # Retry not implemented yet
@@ -171,7 +171,7 @@ class ChatContinue:
 
         if on_error == "return_partial":
             if len(all_results) > 1:
-                return ChatContinue.merge_results(*all_results)
+                return Conversation.merge_results(*all_results)
             return partial_result
         else:  # "raise"
             raise
@@ -276,13 +276,13 @@ class ChatContinue:
             >>> history = ChatHistory()
             >>> result = chat("Write a long story", history=history, max_tokens=50)
             >>> if result.finish_reason == "length":
-            ...     full_result = ChatContinue.continue_request(chat, result, history=history)
+            ...     full_result = Conversation.continue_request(chat, result, history=history)
             ...     print(full_result.text)  # Complete merged text
 
             With progress tracking:
             >>> def on_progress(count, max_count, current, all_results):
             ...     print(f"继续生成 {count}/{max_count}...")
-            >>> full_result = ChatContinue.continue_request(
+            >>> full_result = Conversation.continue_request(
             ...     chat, result, history=history,
             ...     on_progress=on_progress
             ... )
@@ -290,7 +290,7 @@ class ChatContinue:
             With custom prompt and delay:
             >>> def smart_prompt(count, max_count, current_text, original_prompt):
             ...     return f"请继续完成（第 {count}/{max_count} 次）"
-            >>> full_result = ChatContinue.continue_request(
+            >>> full_result = Conversation.continue_request(
             ...     chat, result, history=history,
             ...     continue_prompt=smart_prompt,
             ...     continue_delay=(1.0, 2.0)  # Random delay 1-2 seconds
@@ -327,16 +327,16 @@ class ChatContinue:
             continue_count += 1
 
             # Apply delay if needed (not for first continue)
-            ChatContinue._apply_continue_delay(continue_delay, continue_count)
+            Conversation._apply_continue_delay(continue_delay, continue_count)
 
             # Call progress callback
-            ChatContinue._call_progress_callback(
+            Conversation._call_progress_callback(
                 on_progress, continue_count, max_continues, current_result, all_results
             )
 
             try:
                 # Get continue prompt (supports string or callable)
-                prompt = ChatContinue._get_continue_prompt(
+                prompt = Conversation._get_continue_prompt(
                     continue_prompt,
                     continue_count,
                     max_continues,
@@ -358,7 +358,7 @@ class ChatContinue:
             except Exception as e:
                 # Handle error based on strategy
                 try:
-                    result = ChatContinue._handle_continue_error(
+                    result = Conversation._handle_continue_error(
                         e, current_result, all_results, on_error, on_error_callback
                     )
                     return result if auto_merge else all_results
@@ -371,7 +371,7 @@ class ChatContinue:
         if current_result.finish_reason == "length":
             if auto_merge:
                 # Return merged result even if truncated
-                return ChatContinue.merge_results(*all_results)
+                return Conversation.merge_results(*all_results)
             else:
                 # Return all results, let user decide
                 return all_results
@@ -380,7 +380,7 @@ class ChatContinue:
         if auto_merge:
             if len(all_results) == 1:
                 return all_results[0]
-            return ChatContinue.merge_results(*all_results)
+            return Conversation.merge_results(*all_results)
         else:
             return all_results
 
@@ -398,7 +398,7 @@ class ChatContinue:
         Examples:
             >>> result1 = chat("Write a story", max_tokens=50)
             >>> result2 = chat.continue_request(...)
-            >>> full_result = ChatContinue.merge_results(result1, result2)
+            >>> full_result = Conversation.merge_results(result1, result2)
         """
         if not results:
             raise ValueError("At least one result is required")
@@ -500,7 +500,7 @@ class ChatContinue:
             >>> history = ChatHistory()
             >>> result = chat("Write a long story", history=history, max_tokens=50)
             >>> if result.finish_reason == "length":
-            ...     iterator = ChatContinue.continue_request_stream(chat, result, history=history)
+            ...     iterator = Conversation.continue_request_stream(chat, result, history=history)
             ...     for chunk in iterator:
             ...         print(chunk.delta, end="", flush=True)
             ...     full_result = iterator.result.to_chat_result()
@@ -508,7 +508,7 @@ class ChatContinue:
             With progress tracking:
             >>> def on_progress(count, max_count, current, all_results):
             ...     print(f"继续生成 {count}/{max_count}...")
-            >>> iterator = ChatContinue.continue_request_stream(
+            >>> iterator = Conversation.continue_request_stream(
             ...     chat, result, history=history,
             ...     on_progress=on_progress
             ... )
@@ -549,16 +549,16 @@ class ChatContinue:
                 continue_count += 1
 
                 # Apply delay if needed (not for first continue)
-                ChatContinue._apply_continue_delay(continue_delay, continue_count)
+                Conversation._apply_continue_delay(continue_delay, continue_count)
 
                 # Call progress callback
-                ChatContinue._call_progress_callback(
+                Conversation._call_progress_callback(
                     on_progress, continue_count, max_continues, current_result, all_results
                 )
 
                 try:
                     # Get continue prompt (supports string or callable)
-                    prompt = ChatContinue._get_continue_prompt(
+                    prompt = Conversation._get_continue_prompt(
                         continue_prompt,
                         continue_count,
                         max_continues,
@@ -587,7 +587,7 @@ class ChatContinue:
                 except Exception as e:
                     # Handle error based on strategy
                     try:
-                        ChatContinue._handle_continue_error(
+                        Conversation._handle_continue_error(
                             e, current_result, all_results, on_error, on_error_callback
                         )
                         # If returning partial, stop iteration
@@ -634,7 +634,7 @@ class ChatContinue:
                 if self._merged_result is None:
                     # Merge all results
                     if len(self._all_results_ref) > 1:
-                        merged = ChatContinue.merge_results(*self._all_results_ref)
+                        merged = Conversation.merge_results(*self._all_results_ref)
                         self._merged_result = StreamingResult()
                         self._merged_result._text = merged.text
                         self._merged_result._finish_reason = merged.finish_reason
@@ -726,7 +726,7 @@ class ChatContinue:
         Examples:
             >>> result = await chat.acall("Write a story", max_tokens=50)
             >>> if result.finish_reason == "length":
-            ...     full_result = await ChatContinue.acontinue_request(
+            ...     full_result = await Conversation.acontinue_request(
             ...         chat, result, history=history
             ...     )
         """
@@ -759,15 +759,15 @@ class ChatContinue:
             continue_count += 1
 
             # Apply async delay
-            await ChatContinue._apply_continue_delay_async(continue_delay, continue_count)
+            await Conversation._apply_continue_delay_async(continue_delay, continue_count)
 
             # Call progress callback
-            ChatContinue._call_progress_callback(
+            Conversation._call_progress_callback(
                 on_progress, continue_count, max_continues, current_result, all_results
             )
 
             try:
-                prompt = ChatContinue._get_continue_prompt(
+                prompt = Conversation._get_continue_prompt(
                     continue_prompt,
                     continue_count,
                     max_continues,
@@ -788,7 +788,7 @@ class ChatContinue:
 
             except Exception as e:
                 try:
-                    result = ChatContinue._handle_continue_error(
+                    result = Conversation._handle_continue_error(
                         e, current_result, all_results, on_error, on_error_callback
                     )
                     return result if auto_merge else all_results
@@ -799,14 +799,14 @@ class ChatContinue:
 
         if current_result.finish_reason == "length":
             if auto_merge:
-                return ChatContinue.merge_results(*all_results)
+                return Conversation.merge_results(*all_results)
             else:
                 return all_results
 
         if auto_merge:
             if len(all_results) == 1:
                 return all_results[0]
-            return ChatContinue.merge_results(*all_results)
+            return Conversation.merge_results(*all_results)
         else:
             return all_results
 
@@ -855,7 +855,7 @@ class ChatContinue:
         Examples:
             >>> result = await chat.acall("Write a story", max_tokens=50)
             >>> if result.finish_reason == "length":
-            ...     async for chunk in ChatContinue.acontinue_request_stream(
+            ...     async for chunk in Conversation.acontinue_request_stream(
             ...         chat, result, history=history
             ...     ):
             ...         print(chunk.delta, end="")
@@ -892,14 +892,14 @@ class ChatContinue:
             while current_result.finish_reason == "length" and continue_count < max_continues:
                 continue_count += 1
 
-                await ChatContinue._apply_continue_delay_async(continue_delay, continue_count)
+                await Conversation._apply_continue_delay_async(continue_delay, continue_count)
 
-                ChatContinue._call_progress_callback(
+                Conversation._call_progress_callback(
                     on_progress, continue_count, max_continues, current_result, all_results
                 )
 
                 try:
-                    prompt = ChatContinue._get_continue_prompt(
+                    prompt = Conversation._get_continue_prompt(
                         continue_prompt,
                         continue_count,
                         max_continues,
@@ -927,7 +927,7 @@ class ChatContinue:
 
                 except Exception as e:
                     try:
-                        ChatContinue._handle_continue_error(
+                        Conversation._handle_continue_error(
                             e, current_result, all_results, on_error, on_error_callback
                         )
                         break
@@ -971,7 +971,7 @@ class ChatContinue:
                 """Get merged result from all continues."""
                 if self._merged_result is None:
                     if len(self._all_results_ref) > 1:
-                        merged = ChatContinue.merge_results(*self._all_results_ref)
+                        merged = Conversation.merge_results(*self._all_results_ref)
                         self._merged_result = StreamingResult()
                         self._merged_result._text = merged.text
                         self._merged_result._finish_reason = merged.finish_reason
