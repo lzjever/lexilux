@@ -311,7 +311,7 @@ def test_multimodal_image_url():
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": "https://img01.llllkkll.com/api/v1/files/6084544472379400512?x-oss-process=image/resize,w_800/format,webp"
+                        "url": "https://www.nasa.gov/wp-content/uploads/2026/01/suni-williams-portrait.jpg"
                     },
                 },
             ],

@@ -7,15 +7,16 @@ is stopped due to max_tokens limit.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING, Any, Callable, Literal, overload
 
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk
-from lexilux.chat.streaming import StreamingIterator, StreamingResult
+from lexilux.chat.streaming import AsyncStreamingIterator, StreamingIterator, StreamingResult
 from lexilux.usage import Usage
 
 if TYPE_CHECKING:
@@ -361,8 +362,9 @@ class ChatContinue:
                         e, current_result, all_results, on_error, on_error_callback
                     )
                     return result if auto_merge else all_results
-                except Exception:
-                    # Re-raise if strategy is "raise"
+                except LexiluxError as e:
+                    # Log warning for continuation errors
+                    logger.warning(f"Continuation request failed: {e.message}")
                     raise
 
         # Check if still truncated after max_continues
@@ -590,8 +592,9 @@ class ChatContinue:
                         )
                         # If returning partial, stop iteration
                         break
-                    except Exception:
-                        # Re-raise if strategy is "raise"
+                    except LexiluxError as e:
+                        # Log warning for continuation errors
+                        logger.warning(f"Continuation request failed: {e.message}")
                         raise
 
         # Create StreamingIterator with custom result that merges all continues
@@ -647,3 +650,341 @@ class ChatContinue:
                 return self._merged_result
 
         return MergedContinueIterator(_continue_chunk_generator(), last_result, all_results)
+
+    # =========================================================================
+    # Async Methods
+    # =========================================================================
+
+    @staticmethod
+    async def _apply_continue_delay_async(
+        continue_delay: float | tuple[float, float],
+        continue_count: int,
+    ) -> None:
+        """
+        Apply continue delay asynchronously.
+
+        Args:
+            continue_delay: Fixed delay (seconds) or tuple (min, max) for random delay.
+            continue_count: Current continue count (delay only applied if count > 1).
+        """
+        if continue_count <= 1:
+            return  # No delay for first continue
+
+        if isinstance(continue_delay, tuple):
+            delay = random.uniform(continue_delay[0], continue_delay[1])
+        else:
+            delay = continue_delay
+
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+    @staticmethod
+    async def acontinue_request(
+        chat: Chat,
+        last_result: ChatResult,
+        *,
+        history: ChatHistory | None = None,
+        add_continue_prompt: bool = True,
+        continue_prompt: str | Callable = "continue",
+        max_continues: int = 1,
+        auto_merge: bool = True,
+        on_progress: Callable | None = None,
+        continue_delay: float | tuple[float, float] = 0.0,
+        on_error: str = "raise",
+        on_error_callback: Callable | None = None,
+        original_prompt: str | None = None,
+        **params: Any,
+    ) -> ChatResult | list[ChatResult]:
+        """
+        Async version of continue_request.
+
+        Automatically handles continuation when finish_reason == "length", with support
+        for multiple continues, automatic merging, and customizable strategies.
+
+        **History Immutability**: If history is provided, a clone is created and used internally.
+        The original history is never modified.
+
+        Args:
+            chat: Chat client instance.
+            last_result: Last result (must have finish_reason == "length").
+            history: Conversation history (required).
+            add_continue_prompt: Whether to add a user continue instruction round.
+            continue_prompt: User prompt when add_continue_prompt=True.
+            max_continues: Maximum number of continuation attempts.
+            auto_merge: If True, automatically merge all results into a single ChatResult.
+            on_progress: Optional progress callback function.
+            continue_delay: Delay between continue requests (seconds).
+            on_error: Error handling strategy: "raise" (default) or "return_partial".
+            on_error_callback: Optional error callback function.
+            original_prompt: Original user prompt.
+            **params: Additional parameters to pass to chat.
+
+        Returns:
+            If auto_merge=True: Merged ChatResult.
+            If auto_merge=False: List of ChatResult instances.
+
+        Examples:
+            >>> result = await chat.acall("Write a story", max_tokens=50)
+            >>> if result.finish_reason == "length":
+            ...     full_result = await ChatContinue.acontinue_request(
+            ...         chat, result, history=history
+            ...     )
+        """
+        if last_result.finish_reason != "length":
+            raise ValueError(
+                f"acontinue_request requires finish_reason='length', "
+                f"got '{last_result.finish_reason}'"
+            )
+
+        if history is None:
+            raise ValueError(
+                "History is required. Provide history explicitly when calling acontinue_request."
+            )
+
+        working_history = history.clone()
+
+        all_results = [last_result]
+        current_result = last_result
+        continue_count = 0
+        accumulated_text = last_result.text
+
+        if original_prompt is None:
+            history_messages = working_history.get_messages()
+            for msg in reversed(history_messages):
+                if msg.get("role") == "user":
+                    original_prompt = msg.get("content", "")
+                    break
+
+        while current_result.finish_reason == "length" and continue_count < max_continues:
+            continue_count += 1
+
+            # Apply async delay
+            await ChatContinue._apply_continue_delay_async(continue_delay, continue_count)
+
+            # Call progress callback
+            ChatContinue._call_progress_callback(
+                on_progress, continue_count, max_continues, current_result, all_results
+            )
+
+            try:
+                prompt = ChatContinue._get_continue_prompt(
+                    continue_prompt,
+                    continue_count,
+                    max_continues,
+                    accumulated_text,
+                    original_prompt or "",
+                )
+
+                if add_continue_prompt:
+                    working_history.add_user(prompt)
+
+                # Use async acall
+                continue_result = await chat.acall(
+                    working_history.get_messages(), history=working_history, **params
+                )
+                all_results.append(continue_result)
+                current_result = continue_result
+                accumulated_text += continue_result.text
+
+            except Exception as e:
+                try:
+                    result = ChatContinue._handle_continue_error(
+                        e, current_result, all_results, on_error, on_error_callback
+                    )
+                    return result if auto_merge else all_results
+                except LexiluxError as e:
+                    # Log error for continuation failures
+                    logger.error(f"Unexpected continuation error: {e.message}")
+                    raise
+
+        if current_result.finish_reason == "length":
+            if auto_merge:
+                return ChatContinue.merge_results(*all_results)
+            else:
+                return all_results
+
+        if auto_merge:
+            if len(all_results) == 1:
+                return all_results[0]
+            return ChatContinue.merge_results(*all_results)
+        else:
+            return all_results
+
+    @staticmethod
+    async def acontinue_request_stream(
+        chat: Chat,
+        last_result: ChatResult,
+        *,
+        history: ChatHistory,
+        add_continue_prompt: bool = True,
+        continue_prompt: str | Callable = "continue",
+        max_continues: int = 1,
+        on_progress: Callable | None = None,
+        continue_delay: float | tuple[float, float] = 0.0,
+        on_error: str = "raise",
+        on_error_callback: Callable | None = None,
+        original_prompt: str | None = None,
+        **params: Any,
+    ) -> AsyncStreamingIterator:
+        """
+        Async version of continue_request_stream.
+
+        This is the async streaming version of `continue_request()`. It returns an
+        AsyncStreamingIterator that yields chunks for all continuation requests.
+
+        **History Immutability**: If history is provided, a clone is created and used internally.
+        The original history is never modified.
+
+        Args:
+            chat: Chat client instance.
+            last_result: Last result (must have finish_reason == "length").
+            history: Conversation history (required).
+            add_continue_prompt: Whether to add a user continue instruction round.
+            continue_prompt: User prompt when add_continue_prompt=True.
+            max_continues: Maximum number of continuation attempts.
+            on_progress: Optional progress callback function.
+            continue_delay: Delay between continue requests (seconds).
+            on_error: Error handling strategy: "raise" (default) or "return_partial".
+            on_error_callback: Optional error callback function.
+            original_prompt: Original user prompt.
+            **params: Additional parameters to pass to continue requests.
+
+        Returns:
+            AsyncStreamingIterator: Async iterator that yields ChatStreamChunk objects.
+
+        Examples:
+            >>> result = await chat.acall("Write a story", max_tokens=50)
+            >>> if result.finish_reason == "length":
+            ...     async for chunk in ChatContinue.acontinue_request_stream(
+            ...         chat, result, history=history
+            ...     ):
+            ...         print(chunk.delta, end="")
+        """
+        if last_result.finish_reason != "length":
+            raise ValueError(
+                f"acontinue_request_stream requires finish_reason='length', "
+                f"got '{last_result.finish_reason}'"
+            )
+
+        if history is None:
+            raise ValueError(
+                "History is required. Provide history explicitly when calling acontinue_request_stream."
+            )
+
+        working_history = history.clone()
+
+        if original_prompt is None:
+            history_messages = working_history.get_messages()
+            for msg in reversed(history_messages):
+                if msg.get("role") == "user":
+                    original_prompt = msg.get("content", "")
+                    break
+
+        all_results: list[ChatResult] = [last_result]
+
+        async def _async_continue_chunk_generator() -> AsyncIterator[ChatStreamChunk]:
+            """Async generator that yields chunks from all continue requests."""
+            nonlocal all_results
+            current_result = last_result
+            continue_count = 0
+            accumulated_text = last_result.text
+
+            while current_result.finish_reason == "length" and continue_count < max_continues:
+                continue_count += 1
+
+                await ChatContinue._apply_continue_delay_async(continue_delay, continue_count)
+
+                ChatContinue._call_progress_callback(
+                    on_progress, continue_count, max_continues, current_result, all_results
+                )
+
+                try:
+                    prompt = ChatContinue._get_continue_prompt(
+                        continue_prompt,
+                        continue_count,
+                        max_continues,
+                        accumulated_text,
+                        original_prompt or "",
+                    )
+
+                    if add_continue_prompt:
+                        working_history.add_user(prompt)
+
+                    # Use async astream
+                    continue_iterator = await chat.astream(
+                        working_history.get_messages(), history=working_history, **params
+                    )
+
+                    # Yield all chunks from this continue request
+                    async for chunk in continue_iterator:
+                        yield chunk
+
+                    # Get continue result for next iteration
+                    continue_result = continue_iterator.result.to_chat_result()
+                    all_results.append(continue_result)
+                    current_result = continue_result
+                    accumulated_text += continue_result.text
+
+                except Exception as e:
+                    try:
+                        ChatContinue._handle_continue_error(
+                            e, current_result, all_results, on_error, on_error_callback
+                        )
+                        break
+                    except LexiluxError as e:
+                        # Log error for continuation failures
+                        logger.error(f"Unexpected continuation error: {e.message}")
+                        raise
+
+        # Create AsyncStreamingIterator with custom result
+        class AsyncMergedContinueIterator(AsyncStreamingIterator):
+            """Async iterator that merges results from all continue requests."""
+
+            def __init__(
+                self,
+                chunk_gen: AsyncIterator[ChatStreamChunk],
+                initial_result: ChatResult,
+                all_results_ref: list[ChatResult],
+            ):
+                super().__init__(chunk_gen)
+                self._initial_result = initial_result
+                self._all_results_ref = all_results_ref
+                self._merged_result: StreamingResult | None = None
+
+            async def __anext__(self) -> ChatStreamChunk:
+                try:
+                    chunk = await self._iterator.__anext__()
+                    self._result.update(chunk)
+                    return chunk
+                except StopAsyncIteration:
+                    # Filter out empty results
+                    if self._all_results_ref:
+                        self._all_results_ref[:] = [
+                            r
+                            for r in self._all_results_ref
+                            if not (r.text == "" and r.finish_reason is None)
+                        ]
+                    raise
+
+            @property
+            def result(self) -> StreamingResult:
+                """Get merged result from all continues."""
+                if self._merged_result is None:
+                    if len(self._all_results_ref) > 1:
+                        merged = ChatContinue.merge_results(*self._all_results_ref)
+                        self._merged_result = StreamingResult()
+                        self._merged_result._text = merged.text
+                        self._merged_result._finish_reason = merged.finish_reason
+                        self._merged_result._usage = merged.usage
+                        self._merged_result._done = True
+                    else:
+                        self._merged_result = StreamingResult()
+                        self._merged_result._text = self._initial_result.text
+                        self._merged_result._finish_reason = self._initial_result.finish_reason
+                        self._merged_result._usage = self._initial_result.usage
+                        self._merged_result._done = True
+                return self._merged_result
+
+        return AsyncMergedContinueIterator(
+            _async_continue_chunk_generator(), last_result, all_results
+        )

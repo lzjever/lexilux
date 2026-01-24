@@ -8,14 +8,16 @@ Provides common functionality:
 - Authentication handling
 - Unified error handling
 - Logging for debugging and monitoring
+- Async support via httpx
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
+import httpx
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -117,6 +119,10 @@ class BaseAPIClient:
 
         # Prepare headers
         self.headers = self._prepare_headers(headers, api_key)
+
+        # Async client (lazy initialization)
+        self._async_client: httpx.AsyncClient | None = None
+        self._max_retries = max_retries
 
     def _create_session(
         self,
@@ -375,6 +381,243 @@ class BaseAPIClient:
         )
         return response
 
+    # =========================================================================
+    # Async Methods (using httpx)
+    # =========================================================================
+
+    def _get_async_client(self) -> httpx.AsyncClient:
+        """
+        Get or create the async HTTP client (lazy initialization).
+
+        Returns:
+            httpx.AsyncClient instance configured with connection pooling and retry.
+        """
+        if self._async_client is None:
+            # Configure timeout
+            if isinstance(self.timeout, tuple):
+                timeout = httpx.Timeout(
+                    connect=self.timeout[0],
+                    read=self.timeout[1],
+                    write=self.timeout[1],
+                    pool=self.timeout[0],
+                )
+            else:
+                timeout = httpx.Timeout(self.timeout)
+
+            # Configure transport with retries
+            # httpx uses transport for connection pooling and retries
+            transport = httpx.AsyncHTTPTransport(
+                retries=self._max_retries,
+            )
+
+            # Create async client
+            self._async_client = httpx.AsyncClient(
+                timeout=timeout,
+                headers=self.headers,
+                transport=transport,
+            )
+
+        return self._async_client
+
+    def _handle_async_response_error(self, response: httpx.Response) -> None:
+        """
+        Handle HTTP error responses from httpx and raise appropriate Lexilux exceptions.
+
+        Args:
+            response: The error response from the API.
+
+        Raises:
+            AuthenticationError: For 401 status codes.
+            RateLimitError: For 429 status codes.
+            NotFoundError: For 404 status codes.
+            ValidationError: For 400 status codes.
+            ServerError: For 5xx status codes.
+            APIError: For other error status codes.
+        """
+        status_code = response.status_code
+
+        # Try to extract error message from response body
+        error_message = f"HTTP {status_code}"
+        try:
+            error_data = response.json()
+            if isinstance(error_data, dict):
+                # OpenAI-style error
+                if "error" in error_data:
+                    error_info = error_data["error"]
+                    if isinstance(error_info, dict):
+                        error_message = error_info.get("message", error_message)
+                    else:
+                        error_message = str(error_info)
+                else:
+                    error_message = error_data.get("message", error_message)
+        except (ValueError, KeyError):
+            # Not JSON or no error field, use default message
+            pass
+
+        # Map status codes to specific exceptions
+        if status_code == 401:
+            raise AuthenticationError(error_message)
+        elif status_code == 429:
+            raise RateLimitError(error_message)
+        elif status_code == 404:
+            raise NotFoundError(error_message)
+        elif status_code == 400:
+            raise ValidationError(error_message)
+        elif 500 <= status_code < 600:
+            raise ServerError(error_message)
+        else:
+            raise APIError(
+                message=error_message,
+                status_code=status_code,
+                code="http_error",
+                retryable=False,
+            )
+
+    async def _amake_request(
+        self,
+        endpoint: str,
+        payload: dict[str, Any],
+    ) -> httpx.Response:
+        """
+        Send async POST request to API endpoint.
+
+        Args:
+            endpoint: API endpoint (e.g., "chat/completions").
+            payload: Request body as dict.
+
+        Returns:
+            httpx.Response object.
+
+        Raises:
+            LexiluxTimeoutError: On timeout.
+            LexiluxConnectionError: On connection failure.
+            AuthenticationError: On authentication failure.
+            RateLimitError: On rate limit exceeded.
+            APIError: On other API errors.
+            ValidationError: On invalid input.
+        """
+        url = f"{self.base_url}/{endpoint}"
+        start_time = time.time()
+
+        logger.debug("Making async POST request to %s", url)
+
+        client = self._get_async_client()
+
+        try:
+            response = await client.post(
+                url,
+                json=payload,
+            )
+        except httpx.TimeoutException as e:
+            elapsed = time.time() - start_time
+            logger.error("Async request timeout after %.2fs: %s", elapsed, url)
+            raise LexiluxTimeoutError(f"Request timeout: {e}") from e
+        except httpx.ConnectError as e:
+            elapsed = time.time() - start_time
+            logger.error("Async connection failed after %.2fs: %s", elapsed, url)
+            raise LexiluxConnectionError(f"Connection failed: {e}") from e
+        except httpx.HTTPError as e:
+            elapsed = time.time() - start_time
+            logger.error("Async request failed after %.2fs: %s - %s", elapsed, url, e)
+            raise APIError(f"Request failed: {e}") from e
+
+        elapsed = time.time() - start_time
+
+        # Handle HTTP error status codes
+        if not response.is_success:
+            logger.warning(
+                "Async request failed with status %d after %.2fs: %s",
+                response.status_code,
+                elapsed,
+                url,
+            )
+            self._handle_async_response_error(response)
+
+        logger.info(
+            "Async request completed in %.2fs with status %d: %s",
+            elapsed,
+            response.status_code,
+            url,
+        )
+        return response
+
+    async def _amake_streaming_request(
+        self,
+        endpoint: str,
+        payload: dict[str, Any],
+    ) -> AsyncIterator[str]:
+        """
+        Send async streaming POST request to API endpoint.
+
+        Args:
+            endpoint: API endpoint (e.g., "chat/completions").
+            payload: Request body as dict.
+
+        Yields:
+            Lines from the SSE stream.
+
+        Raises:
+            LexiluxTimeoutError: On timeout.
+            LexiluxConnectionError: On connection failure.
+            AuthenticationError: On authentication failure.
+            RateLimitError: On rate limit exceeded.
+            APIError: On other API errors.
+            ValidationError: On invalid input.
+        """
+        url = f"{self.base_url}/{endpoint}"
+        start_time = time.time()
+
+        logger.debug("Making async streaming POST request to %s", url)
+
+        client = self._get_async_client()
+
+        try:
+            async with client.stream("POST", url, json=payload) as response:
+                elapsed = time.time() - start_time
+
+                # Handle HTTP error status codes
+                if not response.is_success:
+                    # Read the body to get error message
+                    await response.aread()
+                    logger.warning(
+                        "Async streaming request failed with status %d after %.2fs: %s",
+                        response.status_code,
+                        elapsed,
+                        url,
+                    )
+                    self._handle_async_response_error(response)
+
+                logger.info(
+                    "Async streaming request initiated in %.2fs with status %d: %s",
+                    elapsed,
+                    response.status_code,
+                    url,
+                )
+
+                # Yield lines from the stream
+                async for line in response.aiter_lines():
+                    if line:
+                        yield line
+
+        except httpx.TimeoutException as e:
+            elapsed = time.time() - start_time
+            logger.error("Async streaming request timeout after %.2fs: %s", elapsed, url)
+            raise LexiluxTimeoutError(f"Request timeout: {e}") from e
+        except httpx.ConnectError as e:
+            elapsed = time.time() - start_time
+            logger.error("Async streaming connection failed after %.2fs: %s", elapsed, url)
+            raise LexiluxConnectionError(f"Connection failed: {e}") from e
+        except httpx.HTTPError as e:
+            elapsed = time.time() - start_time
+            logger.error("Async streaming request failed after %.2fs: %s - %s", elapsed, url, e)
+            raise APIError(f"Request failed: {e}") from e
+
+    async def aclose(self) -> None:
+        """Close the async client and release resources."""
+        if self._async_client is not None:
+            await self._async_client.aclose()
+            self._async_client = None
+
     def close(self):
         """Close the session and release resources."""
         self.session.close()
@@ -386,3 +629,11 @@ class BaseAPIClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.close()
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.aclose()

@@ -2,6 +2,7 @@
 Embedding API client.
 
 Provides a simple, function-like API for text embeddings with unified usage tracking.
+Supports both sync and async operations.
 """
 
 from __future__ import annotations
@@ -9,10 +10,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
 
+import httpx
 import requests
 
 from lexilux.embed_params import EmbedParams
+from lexilux.embed_params import EmbedParams
 from lexilux.usage import Json, ResultBase, Usage
+from lexilux.chat.utils import parse_usage
 
 if TYPE_CHECKING:
     pass
@@ -119,6 +123,9 @@ class Embed:
         if self.api_key:
             self.headers.setdefault("Authorization", f"Bearer {self.api_key}")
         self.headers.setdefault("Content-Type", "application/json")
+
+        # Async client (lazy initialization)
+        self._async_client: httpx.AsyncClient | None = None
 
     def _parse_usage(self, response_data: Json) -> Usage:
         """
@@ -258,7 +265,7 @@ class Embed:
         result_vectors: Vector | list[Vector] = vectors[0] if is_single else vectors
 
         # Parse usage
-        usage = self._parse_usage(response_data)
+        usage = parse_usage(response_data)
 
         # Return result
         return EmbedResult(
@@ -266,3 +273,150 @@ class Embed:
             usage=usage,
             raw=response_data if return_raw else {},
         )
+
+    # =========================================================================
+    # Async Methods
+    # =========================================================================
+
+    def _get_async_client(self) -> httpx.AsyncClient:
+        """Get or create the async HTTP client."""
+        if self._async_client is None:
+            self._async_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout_s),
+                headers=self.headers,
+            )
+        return self._async_client
+
+    async def acall(
+        self,
+        input: str | Sequence[str],
+        *,
+        model: str | None = None,
+        dimensions: int | None = None,
+        encoding_format: Literal["float", "base64"] | None = None,
+        user: str | None = None,
+        params: EmbedParams | None = None,
+        extra: Json | None = None,
+        return_raw: bool = False,
+    ) -> EmbedResult:
+        """
+        Make an async embedding request.
+
+        This is the async version of ``__call__()``. All parameters and behavior
+        are identical to the sync version.
+
+        Args:
+            input: Single text string or sequence of text strings.
+            model: Model to use (overrides default).
+            dimensions: Number of dimensions for output embeddings.
+            encoding_format: Format to return embeddings.
+            user: Unique identifier for end-user.
+            params: EmbedParams dataclass instance.
+            extra: Additional custom parameters.
+            return_raw: Whether to include full raw response.
+
+        Returns:
+            EmbedResult with vectors and usage.
+
+        Examples:
+            >>> result = await embed.acall("Hello")
+            >>> vector = result.vectors
+
+            Concurrent embedding requests:
+            >>> texts = ["Hello", "World", "Test"]
+            >>> tasks = [embed.acall(text) for text in texts]
+            >>> results = await asyncio.gather(*tasks)
+        """
+        # Normalize input to list
+        is_single = isinstance(input, str)
+        input_list = [input] if is_single else list(input)
+
+        if not input_list:
+            raise ValueError("Input cannot be empty")
+
+        # Prepare request
+        model = model or self.model
+        if not model:
+            raise ValueError("Model must be specified (either in __init__ or acall)")
+
+        # Build parameters from EmbedParams or individual args
+        if params is not None:
+            param_dict = params.to_dict(exclude_none=True)
+            if dimensions is not None:
+                param_dict["dimensions"] = dimensions
+            if encoding_format is not None:
+                param_dict["encoding_format"] = encoding_format
+            if user is not None:
+                param_dict["user"] = user
+        else:
+            param_dict: Json = {}
+            if dimensions is not None:
+                param_dict["dimensions"] = dimensions
+            if encoding_format is not None:
+                param_dict["encoding_format"] = encoding_format
+            if user is not None:
+                param_dict["user"] = user
+
+        # Build payload
+        payload: Json = {
+            "model": model,
+            "input": input_list,
+            **param_dict,
+        }
+
+        if extra:
+            payload.update(extra)
+
+        # Make async request
+        url = f"{self.base_url}/embeddings"
+        client = self._get_async_client()
+        response = await client.post(url, json=payload)
+        response.raise_for_status()
+
+        response_data = response.json()
+
+        # Parse response
+        data_list = response_data.get("data", [])
+        if not data_list:
+            raise ValueError("No data in API response")
+
+        # Extract vectors
+        vectors: list[Vector] = [item["embedding"] for item in data_list]
+
+        # Return single vector or list of vectors based on input
+        result_vectors: Vector | list[Vector] = vectors[0] if is_single else vectors
+
+        # Parse usage
+        usage = parse_usage(response_data)
+
+        return EmbedResult(
+            vectors=result_vectors,
+            usage=usage,
+            raw=response_data if return_raw else {},
+        )
+
+    async def aclose(self) -> None:
+        """Close the async client and release resources."""
+        if self._async_client is not None:
+            await self._async_client.aclose()
+            self._async_client = None
+
+    def close(self) -> None:
+        """Close sync resources (placeholder for consistency)."""
+        pass
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.close()
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.aclose()

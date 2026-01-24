@@ -3,14 +3,20 @@ Streaming result accumulation.
 
 Provides StreamingResult and StreamingIterator for automatic text accumulation
 during streaming, allowing history to be updated in real-time.
+
+Also provides async versions: AsyncStreamingIterator for async streaming.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from typing import TYPE_CHECKING
 
 from lexilux.chat.models import ChatResult, ChatStreamChunk
 from lexilux.usage import Usage
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class StreamingResult:
@@ -102,3 +108,63 @@ class StreamingIterator:
     def result(self) -> StreamingResult:
         """Get currently accumulated result (accessible at any time)."""
         return self._result
+
+
+class AsyncStreamingIterator:
+    """
+    Async streaming iterator (wraps async iterator, provides accumulated result).
+
+    Automatically updates accumulated result on each iteration, user can access
+    current state at any time.
+
+    Examples:
+        >>> async for chunk in chat.astream("Hello"):
+        ...     print(chunk.delta, end="")
+        >>> result = iterator.result.to_chat_result()
+    """
+
+    def __init__(self, chunk_iterator: AsyncIterator[ChatStreamChunk]) -> None:
+        """
+        Initialize async streaming iterator.
+
+        Args:
+            chunk_iterator: Async iterator yielding ChatStreamChunk objects.
+        """
+        self._iterator = chunk_iterator
+        self._result = StreamingResult()
+
+    def __aiter__(self) -> AsyncIterator[ChatStreamChunk]:
+        """Return self as async iterator."""
+        return self
+
+    async def __anext__(self) -> ChatStreamChunk:
+        """Get next chunk and update accumulated result."""
+        try:
+            chunk = await self._iterator.__anext__()
+            self._result.update(chunk)
+            return chunk
+        except StopAsyncIteration:
+            raise
+
+    @property
+    def result(self) -> StreamingResult:
+        """Get currently accumulated result (accessible at any time)."""
+        return self._result
+
+    async def collect(self) -> ChatResult:
+        """
+        Consume all chunks and return final ChatResult.
+
+        This is a convenience method to consume the entire stream
+        and get the final result.
+
+        Returns:
+            ChatResult with accumulated text and usage.
+
+        Examples:
+            >>> result = await chat.astream("Hello").collect()
+            >>> print(result.text)
+        """
+        async for _ in self:
+            pass
+        return self._result.to_chat_result()

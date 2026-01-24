@@ -5,6 +5,7 @@ Provides Chat, Embedding, Rerank, and Tokenizer support with a simple, function-
 """
 
 from lexilux.chat import (
+    AsyncStreamingIterator,
     Chat,
     ChatContinue,
     ChatHistory,
@@ -90,6 +91,7 @@ __all__ = [
     "ChatContinue",
     "StreamingResult",
     "StreamingIterator",
+    "AsyncStreamingIterator",
     "TokenAnalysis",
     # Tool calling and multimodal
     "Tool",

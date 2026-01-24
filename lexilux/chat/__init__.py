@@ -31,7 +31,7 @@ from lexilux.chat.models import (
     ToolCall,
 )
 from lexilux.chat.params import ChatParams
-from lexilux.chat.streaming import StreamingIterator, StreamingResult
+from lexilux.chat.streaming import AsyncStreamingIterator, StreamingIterator, StreamingResult
 from lexilux.chat.tool_helpers import (
     ToolCallHelper,
     create_conversation_history,
@@ -51,6 +51,7 @@ __all__ = [
     "ChatContinue",
     "StreamingResult",
     "StreamingIterator",
+    "AsyncStreamingIterator",
     "TokenAnalysis",
     # Types
     "Role",

@@ -3,6 +3,7 @@ Rerank API client.
 
 Provides a simple, function-like API for document reranking with unified usage tracking.
 Supports multiple provider modes: OpenAI-compatible and DashScope.
+Supports both sync and async operations.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+import httpx
 import requests
 
 from lexilux.usage import Json, ResultBase, Usage
@@ -176,24 +178,26 @@ class RerankModeHandler(ABC):
         response.raise_for_status()
         return response.json()
 
-    @staticmethod
-    def _parse_usage(response_data: Json) -> Usage:
+    async def amake_request(
+        self, url: str, payload: Json, async_client: httpx.AsyncClient
+    ) -> Json:
         """
-        Parse usage information from API response.
+        Make async HTTP request.
 
         Args:
-            response_data: API response data.
+            url: Request URL.
+            payload: Request payload.
+            async_client: httpx.AsyncClient instance.
 
         Returns:
-            Usage object.
+            Response JSON data.
+
+        Raises:
+            httpx.HTTPError: On network or HTTP errors.
         """
-        usage_data = response_data.get("usage", {})
-        return Usage(
-            input_tokens=usage_data.get("prompt_tokens") or usage_data.get("input_tokens"),
-            output_tokens=usage_data.get("completion_tokens") or usage_data.get("output_tokens"),
-            total_tokens=usage_data.get("total_tokens"),
-            details=usage_data,
-        )
+        response = await async_client.post(url, json=payload)
+        response.raise_for_status()
+        return response.json()
 
     @staticmethod
     def _normalize_results(
@@ -304,7 +308,7 @@ class OpenAICompatibleHandler(RerankModeHandler):
 
             parsed_results.append((index, score, doc))
 
-        usage = self._parse_usage(response_data)
+        usage = parse_usage(response_data)
         return parsed_results, usage
 
 
@@ -385,7 +389,7 @@ class DashScopeHandler(RerankModeHandler):
 
             parsed_results.append((index, score, doc))
 
-        usage = self._parse_usage(response_data)
+        usage = parse_usage(response_data)
         return parsed_results, usage
 
 
@@ -481,6 +485,9 @@ class Rerank:
             proxies=self.proxies,
         )
 
+        # Async client (lazy initialization)
+        self._async_client: httpx.AsyncClient | None = None
+
     def __call__(
         self,
         query: str,
@@ -570,3 +577,138 @@ class Rerank:
             usage=usage,
             raw=response_data if return_raw else {},
         )
+
+    # =========================================================================
+    # Async Methods
+    # =========================================================================
+
+    def _get_async_client(self) -> httpx.AsyncClient:
+        """Get or create the async HTTP client."""
+        if self._async_client is None:
+            self._async_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout_s),
+                headers=self.headers,
+            )
+        return self._async_client
+
+    async def acall(
+        self,
+        query: str,
+        docs: Sequence[str],
+        *,
+        model: str | None = None,
+        top_k: int | None = None,
+        include_docs: bool = False,
+        extra: Json | None = None,
+        return_raw: bool = False,
+        mode: str | None = None,
+    ) -> RerankResult:
+        """
+        Make an async rerank request.
+
+        This is the async version of ``__call__()``. All parameters and behavior
+        are identical to the sync version.
+
+        Args:
+            query: Query string.
+            docs: Sequence of document strings to rerank.
+            model: Model to use (overrides default).
+            top_k: Number of top results to return (optional).
+            include_docs: Whether to include documents in results.
+            extra: Additional parameters to include in the request.
+            return_raw: Whether to include full raw response.
+            mode: Override mode for this call.
+
+        Returns:
+            RerankResult with ranked results and usage.
+
+        Examples:
+            >>> result = await rerank.acall("python http", ["urllib", "requests"])
+            >>> ranked = result.results
+
+            Concurrent rerank requests:
+            >>> queries = ["python http", "python json", "python async"]
+            >>> docs = ["requests", "json", "asyncio", "urllib"]
+            >>> tasks = [rerank.acall(q, docs) for q in queries]
+            >>> results = await asyncio.gather(*tasks)
+        """
+        if not docs:
+            raise ValueError("Docs cannot be empty")
+
+        model = model or self.model
+        if not model:
+            raise ValueError("Model must be specified (either in __init__ or acall)")
+
+        use_mode = mode or self.mode
+        if use_mode not in self._HANDLERS:
+            available = ", ".join(f'"{m}"' for m in self._HANDLERS.keys())
+            raise ValueError(f'Mode must be one of {available}, got "{use_mode}"')
+
+        # Get or create handler
+        if use_mode == self.mode:
+            handler = self._handler
+        else:
+            handler_class = self._HANDLERS[use_mode]
+            handler = handler_class(
+                base_url=self.base_url,
+                api_key=self.api_key,
+                headers=self.headers,
+                timeout_s=self.timeout_s,
+            )
+
+        # Build request
+        url, payload = handler.build_request(
+            query=query,
+            docs=docs,
+            model=model,
+            top_k=top_k,
+            include_docs=include_docs,
+            extra=extra,
+        )
+
+        # Make async request
+        client = self._get_async_client()
+        response_data = await handler.amake_request(url, payload, client)
+
+        # Parse response
+        parsed_results, usage = handler.parse_response(
+            response_data=response_data,
+            docs=docs,
+            include_docs=include_docs,
+            top_k=top_k,
+        )
+
+        # Normalize results
+        results = handler._normalize_results(parsed_results, include_docs, top_k)
+
+        return RerankResult(
+            results=results,
+            usage=usage,
+            raw=response_data if return_raw else {},
+        )
+
+    async def aclose(self) -> None:
+        """Close the async client and release resources."""
+        if self._async_client is not None:
+            await self._async_client.aclose()
+            self._async_client = None
+
+    def close(self) -> None:
+        """Close sync resources (placeholder for consistency)."""
+        pass
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.close()
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.aclose()
