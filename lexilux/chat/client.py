@@ -7,17 +7,27 @@ both non-streaming and streaming responses.
 
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any
-
 from lexilux._base import BaseAPIClient
+from lexilux.chat._complete import (
+    acomplete as _acomplete_impl,
+    acomplete_stream as _acomplete_stream_impl,
+    complete as _complete_impl,
+    complete_stream as _complete_stream_impl,
+)
+from lexilux.chat._request import (
+    SSEChatStreamParser,
+    build_params_dict,
+    build_payload,
+    parse_chat_completion_response,
+    prepare_messages_for_request,
+)
 from lexilux.chat.history import ChatHistory
-from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike, ToolCall
+from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike
 from lexilux.chat.params import ChatParams
 from lexilux.chat.streaming import AsyncStreamingIterator, StreamingIterator, StreamingResult
-from lexilux.chat.utils import normalize_finish_reason, normalize_messages, parse_usage
-from lexilux.usage import Json, Usage
+from lexilux.usage import Json
 
 if TYPE_CHECKING:
     from lexilux.chat.tools import Tool
@@ -207,111 +217,39 @@ class Chat(BaseAPIClient):
                 a network/connection problem, not a normal completion.
             ValueError: On invalid input or response format.
         """
-        # Normalize messages
-        normalized_messages = normalize_messages(messages, system=system)
+        normalized_messages, working_history, user_messages_to_add = prepare_messages_for_request(
+            messages,
+            system=system,
+            history=history,
+        )
 
-        # If history is provided, create working copy (immutable) and prepend history messages
-        user_messages_to_add: list[str] = []
-        working_history: ChatHistory | None = None
-        if history is not None:
-            # Create working history (immutable - clone original)
-            working_history = history.clone()
-            # Prepend history messages
-            history_messages = working_history.get_messages(include_system=True)
-            normalized_messages = history_messages + normalized_messages
-            # Extract new user messages for history update
-            for msg in normalize_messages(messages, system=system):
-                if msg.get("role") == "user":
-                    user_messages_to_add.append(msg.get("content", ""))
-
-        # Prepare request
         model = model or self.model
         if not model:
             raise ValueError("Model must be specified (either in __init__ or __call__)")
 
-        # Build parameters from ChatParams or individual args
-        if params is not None:
-            # Use ChatParams as base, override with individual args if provided
-            param_dict = params.to_dict(exclude_none=True)
-            # Override with explicit parameters if provided
-            if temperature is not None:
-                param_dict["temperature"] = temperature
-            if top_p is not None:
-                param_dict["top_p"] = top_p
-            if max_tokens is not None:
-                param_dict["max_tokens"] = max_tokens
-            if stop is not None:
-                if isinstance(stop, str):
-                    param_dict["stop"] = [stop]
-                else:
-                    param_dict["stop"] = list(stop)
-            if presence_penalty is not None:
-                param_dict["presence_penalty"] = presence_penalty
-            if frequency_penalty is not None:
-                param_dict["frequency_penalty"] = frequency_penalty
-            if logit_bias is not None:
-                param_dict["logit_bias"] = logit_bias
-            if user is not None:
-                param_dict["user"] = user
-            if n is not None:
-                param_dict["n"] = n
-            # Override tools parameters
-            if tools is not None:
-                param_dict["tools"] = [tool.to_dict() for tool in tools]
-            if tool_choice is not None:
-                if isinstance(tool_choice, str):
-                    param_dict["tool_choice"] = tool_choice
-                else:
-                    param_dict["tool_choice"] = tool_choice.to_dict()
-            if parallel_tool_calls is not None:
-                param_dict["parallel_tool_calls"] = parallel_tool_calls
-        else:
-            # Build from individual parameters (backward compatible)
-            param_dict: Json = {}
-            if temperature is not None:
-                param_dict["temperature"] = temperature
-            else:
-                param_dict["temperature"] = 0.7  # Default
-            if top_p is not None:
-                param_dict["top_p"] = top_p
-            if max_tokens is not None:
-                param_dict["max_tokens"] = max_tokens
-            if stop is not None:
-                if isinstance(stop, str):
-                    param_dict["stop"] = [stop]
-                else:
-                    param_dict["stop"] = list(stop)
-            if presence_penalty is not None:
-                param_dict["presence_penalty"] = presence_penalty
-            if frequency_penalty is not None:
-                param_dict["frequency_penalty"] = frequency_penalty
-            if logit_bias is not None:
-                param_dict["logit_bias"] = logit_bias
-            if user is not None:
-                param_dict["user"] = user
-            if n is not None:
-                param_dict["n"] = n
-            # Add tools parameters
-            if tools is not None:
-                param_dict["tools"] = [tool.to_dict() for tool in tools]
-            if tool_choice is not None:
-                if isinstance(tool_choice, str):
-                    param_dict["tool_choice"] = tool_choice
-                else:
-                    param_dict["tool_choice"] = tool_choice.to_dict()
-            if parallel_tool_calls is not None:
-                param_dict["parallel_tool_calls"] = parallel_tool_calls
-
-        # Build payload
-        payload: Json = {
-            "model": model,
-            "messages": normalized_messages,
-            **param_dict,
-        }
-
-        # Merge extra parameters (highest priority)
-        if extra:
-            payload.update(extra)
+        param_dict = build_params_dict(
+            params=params,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            stop=stop,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            logit_bias=logit_bias,
+            user=user,
+            n=n,
+            tools=tools,
+            tool_choice=tool_choice,
+            parallel_tool_calls=parallel_tool_calls,
+        )
+        payload = build_payload(
+            model=model,
+            messages=normalized_messages,
+            params=param_dict,
+            stream=False,
+            include_usage=False,
+            extra=extra,
+        )
 
         # Update working history BEFORE request (add user messages)
         # This ensures user messages are recorded even if request fails
@@ -323,62 +261,7 @@ class Chat(BaseAPIClient):
         # Make request (may raise exception)
         response = self._make_request("chat/completions", payload)
         response_data = response.json()
-
-        # Parse response
-        choices = response_data.get("choices", [])
-        if not choices:
-            raise ValueError("No choices in API response")
-
-        choice = choices[0]
-        if not isinstance(choice, dict):
-            raise ValueError(f"Invalid choice format: expected dict, got {type(choice)}")
-
-        # Extract text content
-        message = choice.get("message", {})
-        if not isinstance(message, dict):
-            message = {}
-        text = message.get("content", "") or ""
-
-        # Extract tool calls
-        tool_calls_list: list[ToolCall] = []
-        raw_tool_calls = message.get("tool_calls")
-        if raw_tool_calls:
-            if not isinstance(raw_tool_calls, list):
-                raw_tool_calls = []
-            for tc in raw_tool_calls:
-                if not isinstance(tc, dict):
-                    continue
-                try:
-                    # Extract function info
-                    function = tc.get("function", {})
-                    if not isinstance(function, dict):
-                        function = {}
-
-                    tool_call = ToolCall(
-                        id=str(tc.get("id", "")),
-                        call_id=str(tc.get("id", "")),  # OpenAI uses same id for both
-                        name=str(function.get("name", "")),
-                        arguments=str(function.get("arguments", "{}")),
-                    )
-                    tool_calls_list.append(tool_call)
-                except (KeyError, TypeError, ValueError):
-                    # Skip invalid tool call entries (defensive)
-                    continue
-
-        # Normalize finish_reason (defensive against invalid implementations)
-        finish_reason = normalize_finish_reason(choice.get("finish_reason"))
-
-        # Parse usage
-        usage = parse_usage(response_data)
-
-        # Create result
-        result = ChatResult(
-            text=text,
-            usage=usage,
-            finish_reason=finish_reason,
-            tool_calls=tool_calls_list,
-            raw=response_data if return_raw else {},
-        )
+        result = parse_chat_completion_response(response_data, return_raw=return_raw)
 
         # Add assistant response to working history ONLY on success (after all exceptions are handled)
         # Note: working_history is a clone, original history is never modified
@@ -479,111 +362,41 @@ class Chat(BaseAPIClient):
             ...     print("Response was truncated")
         """
         # Normalize messages
-        normalized_messages = normalize_messages(messages, system=system)
-
-        # If history is provided, create working copy (immutable) and prepend history messages
-        user_messages_to_add: list[str] = []
-        working_history: ChatHistory | None = None
-        if history is not None:
-            # Create working history (immutable - clone original)
-            working_history = history.clone()
-            # Prepend history messages
-            history_messages = working_history.get_messages(include_system=True)
-            normalized_messages = history_messages + normalized_messages
-            # Extract new user messages for history update
-            for msg in normalize_messages(messages, system=system):
-                if msg.get("role") == "user":
-                    user_messages_to_add.append(msg.get("content", ""))
-
-        # Prepare request
+        normalized_messages, working_history, user_messages_to_add = prepare_messages_for_request(
+            messages,
+            system=system,
+            history=history,
+        )
         model = model or self.model
         if not model:
-            raise ValueError("Model must be specified (either in __init__ or __call__)")
+            raise ValueError("Model must be specified (either in __init__ or stream)")
 
-        # Build parameters from ChatParams or individual args
-        if params is not None:
-            # Use ChatParams as base, override with individual args if provided
-            param_dict = params.to_dict(exclude_none=True)
-            # Override with explicit parameters if provided
-            if temperature is not None:
-                param_dict["temperature"] = temperature
-            if top_p is not None:
-                param_dict["top_p"] = top_p
-            if max_tokens is not None:
-                param_dict["max_tokens"] = max_tokens
-            if stop is not None:
-                if isinstance(stop, str):
-                    param_dict["stop"] = [stop]
-                else:
-                    param_dict["stop"] = list(stop)
-            if presence_penalty is not None:
-                param_dict["presence_penalty"] = presence_penalty
-            if frequency_penalty is not None:
-                param_dict["frequency_penalty"] = frequency_penalty
-            if logit_bias is not None:
-                param_dict["logit_bias"] = logit_bias
-            if user is not None:
-                param_dict["user"] = user
-            # Override tools parameters
-            if tools is not None:
-                param_dict["tools"] = [tool.to_dict() for tool in tools]
-            if tool_choice is not None:
-                if isinstance(tool_choice, str):
-                    param_dict["tool_choice"] = tool_choice
-                else:
-                    param_dict["tool_choice"] = tool_choice.to_dict()
-            if parallel_tool_calls is not None:
-                param_dict["parallel_tool_calls"] = parallel_tool_calls
-        else:
-            # Build from individual parameters (backward compatible)
-            param_dict: Json = {}
-            if temperature is not None:
-                param_dict["temperature"] = temperature
-            else:
-                param_dict["temperature"] = 0.7  # Default
-            if top_p is not None:
-                param_dict["top_p"] = top_p
-            if max_tokens is not None:
-                param_dict["max_tokens"] = max_tokens
-            if stop is not None:
-                if isinstance(stop, str):
-                    param_dict["stop"] = [stop]
-                else:
-                    param_dict["stop"] = list(stop)
-            if presence_penalty is not None:
-                param_dict["presence_penalty"] = presence_penalty
-            if frequency_penalty is not None:
-                param_dict["frequency_penalty"] = frequency_penalty
-            if logit_bias is not None:
-                param_dict["logit_bias"] = logit_bias
-            if user is not None:
-                param_dict["user"] = user
-            # Add tools parameters
-            if tools is not None:
-                param_dict["tools"] = [tool.to_dict() for tool in tools]
-            if tool_choice is not None:
-                if isinstance(tool_choice, str):
-                    param_dict["tool_choice"] = tool_choice
-                else:
-                    param_dict["tool_choice"] = tool_choice.to_dict()
-            if parallel_tool_calls is not None:
-                param_dict["parallel_tool_calls"] = parallel_tool_calls
+        param_dict = build_params_dict(
+            params=params,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            stop=stop,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            logit_bias=logit_bias,
+            user=user,
+            tools=tools,
+            tool_choice=tool_choice,
+            parallel_tool_calls=parallel_tool_calls,
+        )
+        payload = build_payload(
+            model=model,
+            messages=normalized_messages,
+            params=param_dict,
+            stream=True,
+            include_usage=include_usage,
+            extra=extra,
+        )
 
-        # Build payload
-        payload: Json = {
-            "model": model,
-            "messages": normalized_messages,
-            "stream": True,
-            **param_dict,
-        }
-
-        if include_usage:
-            # OpenAI-style: request usage in final chunk
-            payload["stream_options"] = {"include_usage": True}
-
-        # Merge extra parameters (highest priority)
-        if extra:
-            payload.update(extra)
+        if working_history is not None:
+            for user_msg in user_messages_to_add:
+                working_history.add_user(user_msg)
 
         # Make streaming request
         response = self._make_streaming_request("chat/completions", payload)
@@ -591,122 +404,20 @@ class Chat(BaseAPIClient):
         # Create internal chunk generator
         def _chunk_generator() -> Iterator[ChatStreamChunk]:
             """Internal generator for streaming chunks."""
-            accumulated_text = ""
-            final_usage: Usage | None = None
-            final_finish_reason: str | None = None  # Track finish_reason from chunks
-
+            parser = SSEChatStreamParser(return_raw_events=return_raw_events)
             for line in response.iter_lines():
                 if not line:
                     continue
-
-                line_str = line.decode("utf-8")
-                if not line_str.startswith("data: "):
-                    continue
-
-                data_str = line_str[6:]  # Remove "data: " prefix
-                if data_str == "[DONE]":
-                    # Final chunk with usage (if include_usage=True)
-                    # Use finish_reason from previous chunk if available
-                    if final_usage is None:
-                        # No usage received, create empty usage
-                        final_usage = Usage()
-                    yield ChatStreamChunk(
-                        delta="",
-                        done=True,
-                        usage=final_usage,
-                        finish_reason=final_finish_reason,  # Preserve finish_reason from previous chunk
-                        raw={"done": True} if return_raw_events else {},
-                    )
-                    break
-
                 try:
-                    event_data = json.loads(data_str)
-                except json.JSONDecodeError:
+                    line_str = line.decode("utf-8")
+                except UnicodeDecodeError:
                     continue
-
-                # Parse event
-                choices = event_data.get("choices", [])
-                if not choices:
+                chunk = parser.feed_line(line_str)
+                if chunk is None:
                     continue
-
-                choice = choices[0]
-                if not isinstance(choice, dict):
-                    # Skip invalid choice format
-                    continue
-
-                delta = choice.get("delta") or {}
-                if not isinstance(delta, dict):
-                    delta = {}
-                content = delta.get("content") or ""
-
-                # Parse tool_calls from delta (for streaming tool calls)
-                tool_calls_list: list[ToolCall] = []
-                raw_tool_calls = delta.get("tool_calls")
-                if raw_tool_calls:
-                    if not isinstance(raw_tool_calls, list):
-                        raw_tool_calls = []
-                    for tc in raw_tool_calls:
-                        if not isinstance(tc, dict):
-                            continue
-                        try:
-                            # Extract function info
-                            function = tc.get("function", {})
-                            if not isinstance(function, dict):
-                                function = {}
-
-                            # Build tool call from streaming delta
-                            # Note: In streaming, tool calls come incrementally
-                            # index is used to identify which tool call this chunk belongs to
-                            tc.get("index", 0)
-
-                            # For streaming, we accumulate tool call data
-                            # The id might be in a separate chunk
-                            call_id = tc.get("id", "")
-
-                            tool_call = ToolCall(
-                                id=call_id,
-                                call_id=call_id,
-                                name=str(function.get("name", "")),
-                                arguments=str(function.get("arguments", "{}")),
-                            )
-                            tool_calls_list.append(tool_call)
-                        except (KeyError, TypeError, ValueError):
-                            # Skip invalid tool call entries (defensive)
-                            continue
-
-                # Normalize finish_reason (defensive against invalid implementations)
-                finish_reason = normalize_finish_reason(choice.get("finish_reason"))
-                # done is True when finish_reason is a non-empty string
-                done = finish_reason is not None
-
-                # Track finish_reason for [DONE] chunk
-                if finish_reason is not None:
-                    final_finish_reason = finish_reason
-
-                # Accumulate text
-                accumulated_text += content
-
-                # Parse usage if present (usually only in final chunk when include_usage=True)
-                usage = None
-                if "usage" in event_data:
-                    usage = parse_usage(event_data)
-                    final_usage = usage
-                elif done and final_usage is None:
-                    # Final chunk but no usage yet - create empty usage
-                    usage = Usage()
-                    final_usage = usage
-                else:
-                    # Intermediate chunk - empty usage
-                    usage = Usage()
-
-                yield ChatStreamChunk(
-                    delta=content,
-                    done=done,
-                    usage=usage,
-                    finish_reason=finish_reason,
-                    tool_calls=tool_calls_list,
-                    raw=event_data if return_raw_events else {},
-                )
+                yield chunk
+                if parser.done:
+                    break
 
         # Create StreamingIterator
         chunk_iterator = _chunk_generator()
@@ -715,9 +426,6 @@ class Chat(BaseAPIClient):
         # If working history is provided, wrap iterator to update working history
         # Note: working_history is a clone, original history is never modified
         if working_history is not None:
-            # Add user messages to working history before streaming
-            for user_msg in user_messages_to_add:
-                working_history.add_user(user_msg)
             streaming_iterator = self._wrap_streaming_with_history(
                 streaming_iterator, working_history
             )
@@ -855,91 +563,38 @@ class Chat(BaseAPIClient):
             >>> tasks = [chat.acall(f"Question {i}") for i in range(5)]
             >>> results = await asyncio.gather(*tasks)
         """
-        # Normalize messages
-        normalized_messages = normalize_messages(messages, system=system)
-
-        # If history is provided, create working copy (immutable) and prepend history messages
-        user_messages_to_add: list[str] = []
-        working_history: ChatHistory | None = None
-        if history is not None:
-            working_history = history.clone()
-            history_messages = working_history.get_messages(include_system=True)
-            normalized_messages = history_messages + normalized_messages
-            for msg in normalize_messages(messages, system=system):
-                if msg.get("role") == "user":
-                    user_messages_to_add.append(msg.get("content", ""))
-
-        # Prepare request
+        normalized_messages, working_history, user_messages_to_add = prepare_messages_for_request(
+            messages,
+            system=system,
+            history=history,
+        )
         model = model or self.model
         if not model:
             raise ValueError("Model must be specified (either in __init__ or acall)")
 
-        # Build parameters from ChatParams or individual args
-        if params is not None:
-            param_dict = params.to_dict(exclude_none=True)
-            if temperature is not None:
-                param_dict["temperature"] = temperature
-            if top_p is not None:
-                param_dict["top_p"] = top_p
-            if max_tokens is not None:
-                param_dict["max_tokens"] = max_tokens
-            if stop is not None:
-                param_dict["stop"] = [stop] if isinstance(stop, str) else list(stop)
-            if presence_penalty is not None:
-                param_dict["presence_penalty"] = presence_penalty
-            if frequency_penalty is not None:
-                param_dict["frequency_penalty"] = frequency_penalty
-            if logit_bias is not None:
-                param_dict["logit_bias"] = logit_bias
-            if user is not None:
-                param_dict["user"] = user
-            if n is not None:
-                param_dict["n"] = n
-            if tools is not None:
-                param_dict["tools"] = [tool.to_dict() for tool in tools]
-            if tool_choice is not None:
-                param_dict["tool_choice"] = (
-                    tool_choice if isinstance(tool_choice, str) else tool_choice.to_dict()
-                )
-            if parallel_tool_calls is not None:
-                param_dict["parallel_tool_calls"] = parallel_tool_calls
-        else:
-            param_dict: Json = {}
-            param_dict["temperature"] = temperature if temperature is not None else 0.7
-            if top_p is not None:
-                param_dict["top_p"] = top_p
-            if max_tokens is not None:
-                param_dict["max_tokens"] = max_tokens
-            if stop is not None:
-                param_dict["stop"] = [stop] if isinstance(stop, str) else list(stop)
-            if presence_penalty is not None:
-                param_dict["presence_penalty"] = presence_penalty
-            if frequency_penalty is not None:
-                param_dict["frequency_penalty"] = frequency_penalty
-            if logit_bias is not None:
-                param_dict["logit_bias"] = logit_bias
-            if user is not None:
-                param_dict["user"] = user
-            if n is not None:
-                param_dict["n"] = n
-            if tools is not None:
-                param_dict["tools"] = [tool.to_dict() for tool in tools]
-            if tool_choice is not None:
-                param_dict["tool_choice"] = (
-                    tool_choice if isinstance(tool_choice, str) else tool_choice.to_dict()
-                )
-            if parallel_tool_calls is not None:
-                param_dict["parallel_tool_calls"] = parallel_tool_calls
-
-        # Build payload
-        payload: Json = {
-            "model": model,
-            "messages": normalized_messages,
-            **param_dict,
-        }
-
-        if extra:
-            payload.update(extra)
+        param_dict = build_params_dict(
+            params=params,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            stop=stop,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            logit_bias=logit_bias,
+            user=user,
+            n=n,
+            tools=tools,
+            tool_choice=tool_choice,
+            parallel_tool_calls=parallel_tool_calls,
+        )
+        payload = build_payload(
+            model=model,
+            messages=normalized_messages,
+            params=param_dict,
+            stream=False,
+            include_usage=False,
+            extra=extra,
+        )
 
         # Update working history BEFORE request
         if working_history is not None:
@@ -949,54 +604,7 @@ class Chat(BaseAPIClient):
         # Make async request
         response = await self._amake_request("chat/completions", payload)
         response_data = response.json()
-
-        # Parse response
-        choices = response_data.get("choices", [])
-        if not choices:
-            raise ValueError("No choices in API response")
-
-        choice = choices[0]
-        if not isinstance(choice, dict):
-            raise ValueError(f"Invalid choice format: expected dict, got {type(choice)}")
-
-        message = choice.get("message", {})
-        if not isinstance(message, dict):
-            message = {}
-        text = message.get("content", "") or ""
-
-        # Extract tool calls
-        tool_calls_list: list[ToolCall] = []
-        raw_tool_calls = message.get("tool_calls")
-        if raw_tool_calls:
-            if not isinstance(raw_tool_calls, list):
-                raw_tool_calls = []
-            for tc in raw_tool_calls:
-                if not isinstance(tc, dict):
-                    continue
-                try:
-                    function = tc.get("function", {})
-                    if not isinstance(function, dict):
-                        function = {}
-                    tool_call = ToolCall(
-                        id=str(tc.get("id", "")),
-                        call_id=str(tc.get("id", "")),
-                        name=str(function.get("name", "")),
-                        arguments=str(function.get("arguments", "{}")),
-                    )
-                    tool_calls_list.append(tool_call)
-                except (KeyError, TypeError, ValueError):
-                    continue
-
-        finish_reason = normalize_finish_reason(choice.get("finish_reason"))
-        usage = parse_usage(response_data)
-
-        result = ChatResult(
-            text=text,
-            usage=usage,
-            finish_reason=finish_reason,
-            tool_calls=tool_calls_list,
-            raw=response_data if return_raw else {},
-        )
+        result = parse_chat_completion_response(response_data, return_raw=return_raw)
 
         if working_history is not None:
             working_history.append_result(result)
@@ -1078,187 +686,51 @@ class Chat(BaseAPIClient):
             ...     print(chunk.delta, end="")
             >>> print(f"Total: {iterator.result.usage.total_tokens}")
         """
-        # Normalize messages
-        normalized_messages = normalize_messages(messages, system=system)
-
-        # If history is provided, create working copy and prepend history messages
-        user_messages_to_add: list[str] = []
-        working_history: ChatHistory | None = None
-        if history is not None:
-            working_history = history.clone()
-            history_messages = working_history.get_messages(include_system=True)
-            normalized_messages = history_messages + normalized_messages
-            for msg in normalize_messages(messages, system=system):
-                if msg.get("role") == "user":
-                    user_messages_to_add.append(msg.get("content", ""))
-
-        # Prepare request
+        normalized_messages, working_history, user_messages_to_add = prepare_messages_for_request(
+            messages,
+            system=system,
+            history=history,
+        )
         model = model or self.model
         if not model:
             raise ValueError("Model must be specified (either in __init__ or astream)")
 
-        # Build parameters from ChatParams or individual args
-        if params is not None:
-            param_dict = params.to_dict(exclude_none=True)
-            if temperature is not None:
-                param_dict["temperature"] = temperature
-            if top_p is not None:
-                param_dict["top_p"] = top_p
-            if max_tokens is not None:
-                param_dict["max_tokens"] = max_tokens
-            if stop is not None:
-                param_dict["stop"] = [stop] if isinstance(stop, str) else list(stop)
-            if presence_penalty is not None:
-                param_dict["presence_penalty"] = presence_penalty
-            if frequency_penalty is not None:
-                param_dict["frequency_penalty"] = frequency_penalty
-            if logit_bias is not None:
-                param_dict["logit_bias"] = logit_bias
-            if user is not None:
-                param_dict["user"] = user
-            if tools is not None:
-                param_dict["tools"] = [tool.to_dict() for tool in tools]
-            if tool_choice is not None:
-                param_dict["tool_choice"] = (
-                    tool_choice if isinstance(tool_choice, str) else tool_choice.to_dict()
-                )
-            if parallel_tool_calls is not None:
-                param_dict["parallel_tool_calls"] = parallel_tool_calls
-        else:
-            param_dict: Json = {}
-            param_dict["temperature"] = temperature if temperature is not None else 0.7
-            if top_p is not None:
-                param_dict["top_p"] = top_p
-            if max_tokens is not None:
-                param_dict["max_tokens"] = max_tokens
-            if stop is not None:
-                param_dict["stop"] = [stop] if isinstance(stop, str) else list(stop)
-            if presence_penalty is not None:
-                param_dict["presence_penalty"] = presence_penalty
-            if frequency_penalty is not None:
-                param_dict["frequency_penalty"] = frequency_penalty
-            if logit_bias is not None:
-                param_dict["logit_bias"] = logit_bias
-            if user is not None:
-                param_dict["user"] = user
-            if tools is not None:
-                param_dict["tools"] = [tool.to_dict() for tool in tools]
-            if tool_choice is not None:
-                param_dict["tool_choice"] = (
-                    tool_choice if isinstance(tool_choice, str) else tool_choice.to_dict()
-                )
-            if parallel_tool_calls is not None:
-                param_dict["parallel_tool_calls"] = parallel_tool_calls
+        param_dict = build_params_dict(
+            params=params,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            stop=stop,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            logit_bias=logit_bias,
+            user=user,
+            tools=tools,
+            tool_choice=tool_choice,
+            parallel_tool_calls=parallel_tool_calls,
+        )
+        payload = build_payload(
+            model=model,
+            messages=normalized_messages,
+            params=param_dict,
+            stream=True,
+            include_usage=include_usage,
+            extra=extra,
+        )
 
-        # Build payload
-        payload: Json = {
-            "model": model,
-            "messages": normalized_messages,
-            "stream": True,
-            **param_dict,
-        }
-
-        if include_usage:
-            payload["stream_options"] = {"include_usage": True}
-
-        if extra:
-            payload.update(extra)
-
-        # Update working history before streaming
         if working_history is not None:
             for user_msg in user_messages_to_add:
                 working_history.add_user(user_msg)
 
-        # Create async chunk generator
         async def _async_chunk_generator() -> AsyncIterator[ChatStreamChunk]:
-            """Internal async generator for streaming chunks."""
-            final_usage: Usage | None = None
-            final_finish_reason: str | None = None
-
+            parser = SSEChatStreamParser(return_raw_events=return_raw_events)
             async for line in self._amake_streaming_request("chat/completions", payload):
-                if not line.startswith("data: "):
+                chunk = parser.feed_line(line)
+                if chunk is None:
                     continue
-
-                data_str = line[6:]  # Remove "data: " prefix
-                if data_str == "[DONE]":
-                    if final_usage is None:
-                        final_usage = Usage()
-                    yield ChatStreamChunk(
-                        delta="",
-                        done=True,
-                        usage=final_usage,
-                        finish_reason=final_finish_reason,
-                        raw={"done": True} if return_raw_events else {},
-                    )
+                yield chunk
+                if parser.done:
                     break
-
-                try:
-                    event_data = json.loads(data_str)
-                except json.JSONDecodeError:
-                    continue
-
-                choices = event_data.get("choices", [])
-                if not choices:
-                    continue
-
-                choice = choices[0]
-                if not isinstance(choice, dict):
-                    continue
-
-                delta = choice.get("delta") or {}
-                if not isinstance(delta, dict):
-                    delta = {}
-                content = delta.get("content") or ""
-
-                # Parse tool_calls from delta
-                tool_calls_list: list[ToolCall] = []
-                raw_tool_calls = delta.get("tool_calls")
-                if raw_tool_calls:
-                    if not isinstance(raw_tool_calls, list):
-                        raw_tool_calls = []
-                    for tc in raw_tool_calls:
-                        if not isinstance(tc, dict):
-                            continue
-                        try:
-                            function = tc.get("function", {})
-                            if not isinstance(function, dict):
-                                function = {}
-                            call_id = tc.get("id", "")
-                            tool_call = ToolCall(
-                                id=call_id,
-                                call_id=call_id,
-                                name=str(function.get("name", "")),
-                                arguments=str(function.get("arguments", "{}")),
-                            )
-                            tool_calls_list.append(tool_call)
-                        except (KeyError, TypeError, ValueError):
-                            continue
-
-                finish_reason = normalize_finish_reason(choice.get("finish_reason"))
-                done = finish_reason is not None
-
-                if finish_reason is not None:
-                    final_finish_reason = finish_reason
-
-                # Parse usage if present
-                usage = None
-                if "usage" in event_data:
-                    usage = parse_usage(event_data)
-                    final_usage = usage
-                elif done and final_usage is None:
-                    usage = Usage()
-                    final_usage = usage
-                else:
-                    usage = Usage()
-
-                yield ChatStreamChunk(
-                    delta=content,
-                    done=done,
-                    usage=usage,
-                    finish_reason=finish_reason,
-                    tool_calls=tool_calls_list,
-                    raw=event_data if return_raw_events else {},
-                )
 
         # Create AsyncStreamingIterator
         chunk_iterator = _async_chunk_generator()
@@ -1389,6 +861,7 @@ class Chat(BaseAPIClient):
         Examples:
             Single-turn conversation (no history needed):
             >>> result = chat.complete("Write a long JSON", max_tokens=100)
+            >>> import json
             >>> json_data = json.loads(result.text)  # Guaranteed complete
 
             Multi-turn conversation (provide history):
@@ -1401,59 +874,19 @@ class Chat(BaseAPIClient):
             ...     print(f"继续生成 {count}/{max_count}...")
             >>> result = chat.complete("Write JSON", on_progress=on_progress)
         """
-        from lexilux.chat.conversation import Conversation
-        from lexilux.chat.exceptions import ChatIncompleteResponseError
-
-        # Create working history (immutable - clone if provided, otherwise create new)
-        working_history = history.clone() if history is not None else ChatHistory()
-
-        # Get original prompt for dynamic continue_prompt generation
-        original_prompt = messages if isinstance(messages, str) else str(messages)
-
-        # Make initial request
-        result = self(messages, history=working_history, **params)
-
-        # If truncated, continue with customizable strategy
-        if result.finish_reason == "length":
-            try:
-                result = Conversation.continue_request(
-                    self,
-                    result,
-                    history=working_history,
-                    max_continues=max_continues,
-                    continue_prompt=continue_prompt,
-                    on_progress=on_progress,
-                    continue_delay=continue_delay,
-                    on_error=on_error,
-                    on_error_callback=on_error_callback,
-                    original_prompt=original_prompt,
-                    **params,
-                )
-            except Exception as e:
-                # If on_error="return_partial", the error handler should have returned partial result
-                # So if we get here, it means on_error="raise" or error handler raised
-                if ensure_complete:
-                    raise ChatIncompleteResponseError(
-                        f"Failed to get complete response after {max_continues} continues: {e}",
-                        final_result=result,
-                        continue_count=0,
-                        max_continues=max_continues,
-                    ) from e
-                # If ensure_complete=False, re-raise the exception
-                raise
-
-        # Check if still truncated after continues
-        # Only raise if ensure_complete=True AND on_error="raise" (not "return_partial")
-        if ensure_complete and result.finish_reason == "length" and on_error == "raise":
-            raise ChatIncompleteResponseError(
-                f"Response still truncated after {max_continues} continues. "
-                f"Consider increasing max_continues or max_tokens.",
-                final_result=result,
-                continue_count=max_continues,
-                max_continues=max_continues,
-            )
-
-        return result
+        return _complete_impl(
+            self,
+            messages,
+            history=history,
+            max_continues=max_continues,
+            ensure_complete=ensure_complete,
+            continue_prompt=continue_prompt,
+            on_progress=on_progress,
+            continue_delay=continue_delay,
+            on_error=on_error,
+            on_error_callback=on_error_callback,
+            params=params,
+        )
 
     def complete_stream(
         self,
@@ -1522,6 +955,7 @@ class Chat(BaseAPIClient):
             >>> for chunk in iterator:
             ...     print(chunk.delta, end="", flush=True)
             >>> result = iterator.result.to_chat_result()
+            >>> import json
             >>> json_data = json.loads(result.text)  # Guaranteed complete
 
             Multi-turn conversation (provide history):
@@ -1529,99 +963,18 @@ class Chat(BaseAPIClient):
             >>> iterator1 = chat.complete_stream("First question", history=history)
             >>> iterator2 = chat.complete_stream("Follow-up", history=history)
         """
-        from lexilux.chat.conversation import Conversation
-        from lexilux.chat.exceptions import ChatIncompleteResponseError
-
-        # Create working history (immutable - clone if provided, otherwise create new)
-        working_history = history.clone() if history is not None else ChatHistory()
-
-        # Get original prompt for dynamic continue_prompt generation
-        original_prompt = messages if isinstance(messages, str) else str(messages)
-
-        # Create generator that yields initial chunks and handles continues
-        def _complete_stream_generator() -> Iterator[ChatStreamChunk]:
-            """Generator that yields chunks from initial request and continues."""
-            # Start with streaming request
-            initial_iterator = self.stream(messages, history=working_history, **params)
-
-            # Yield all chunks from initial request
-            for chunk in initial_iterator:
-                yield chunk
-
-            # Get initial result
-            initial_result = initial_iterator.result.to_chat_result()
-
-            # If truncated, continue with streaming
-            if initial_result.finish_reason == "length":
-                try:
-                    continue_iterator = Conversation.continue_request_stream(
-                        self,
-                        initial_result,
-                        history=working_history,
-                        max_continues=max_continues,
-                        continue_prompt=continue_prompt,
-                        on_progress=on_progress,
-                        continue_delay=continue_delay,
-                        on_error=on_error,
-                        on_error_callback=on_error_callback,
-                        original_prompt=original_prompt,
-                        **params,
-                    )
-                    # Yield all chunks from continue requests
-                    for chunk in continue_iterator:
-                        yield chunk
-                except Exception as e:
-                    if ensure_complete:
-                        # Get final result for error
-                        final_result = initial_result
-                        raise ChatIncompleteResponseError(
-                            f"Failed to get complete response after {max_continues} continues: {e}",
-                            final_result=final_result,
-                            continue_count=0,
-                            max_continues=max_continues,
-                        ) from e
-                    raise
-
-        # Create StreamingIterator with custom result and error checking
-        class CompleteStreamingIterator(StreamingIterator):
-            """Iterator for complete_stream with merged result and error checking."""
-
-            def __init__(
-                self,
-                chunk_gen: Iterator[ChatStreamChunk],
-                max_continues: int,
-                ensure_complete: bool,
-            ):
-                super().__init__(chunk_gen)
-                self._max_continues = max_continues
-                self._ensure_complete = ensure_complete
-                self._iterated = False
-
-            def __iter__(self) -> Iterator[ChatStreamChunk]:
-                """Iterate chunks and check for errors after iteration."""
-                self._iterated = True
-                for chunk in self._iterator:
-                    self._result.update(chunk)
-                    yield chunk
-
-                # After iteration, check if we need to raise error
-                if self._ensure_complete:
-                    final_result = self.result.to_chat_result()
-                    if final_result.finish_reason == "length":
-                        from lexilux.chat.exceptions import ChatIncompleteResponseError
-
-                        raise ChatIncompleteResponseError(
-                            f"Response still truncated after {self._max_continues} continues. "
-                            f"Consider increasing max_continues or max_tokens.",
-                            final_result=final_result,
-                            continue_count=self._max_continues,
-                            max_continues=self._max_continues,
-                        )
-
-        return CompleteStreamingIterator(
-            _complete_stream_generator(),
-            max_continues,
-            ensure_complete,
+        return _complete_stream_impl(
+            self,
+            messages,
+            history=history,
+            max_continues=max_continues,
+            ensure_complete=ensure_complete,
+            continue_prompt=continue_prompt,
+            on_progress=on_progress,
+            continue_delay=continue_delay,
+            on_error=on_error,
+            on_error_callback=on_error_callback,
+            params=params,
         )
 
     async def acomplete(
@@ -1667,57 +1020,26 @@ class Chat(BaseAPIClient):
 
         Examples:
             >>> result = await chat.acomplete("Write a long JSON", max_tokens=100)
+            >>> import json
             >>> json_data = json.loads(result.text)  # Guaranteed complete
 
             Concurrent complete requests:
             >>> tasks = [chat.acomplete(f"Write story {i}") for i in range(3)]
             >>> results = await asyncio.gather(*tasks)
         """
-        from lexilux.chat.conversation import Conversation
-        from lexilux.chat.exceptions import ChatIncompleteResponseError
-
-        working_history = history.clone() if history is not None else ChatHistory()
-        original_prompt = messages if isinstance(messages, str) else str(messages)
-
-        # Make initial async request
-        result = await self.acall(messages, history=working_history, **params)
-
-        # If truncated, continue with customizable strategy
-        if result.finish_reason == "length":
-            try:
-                result = await Conversation.acontinue_request(
-                    self,
-                    result,
-                    history=working_history,
-                    max_continues=max_continues,
-                    continue_prompt=continue_prompt,
-                    on_progress=on_progress,
-                    continue_delay=continue_delay,
-                    on_error=on_error,
-                    on_error_callback=on_error_callback,
-                    original_prompt=original_prompt,
-                    **params,
-                )
-            except Exception as e:
-                if ensure_complete:
-                    raise ChatIncompleteResponseError(
-                        f"Failed to get complete response after {max_continues} continues: {e}",
-                        final_result=result,
-                        continue_count=0,
-                        max_continues=max_continues,
-                    ) from e
-                raise
-
-        if ensure_complete and result.finish_reason == "length" and on_error == "raise":
-            raise ChatIncompleteResponseError(
-                f"Response still truncated after {max_continues} continues. "
-                f"Consider increasing max_continues or max_tokens.",
-                final_result=result,
-                continue_count=max_continues,
-                max_continues=max_continues,
-            )
-
-        return result
+        return await _acomplete_impl(
+            self,
+            messages,
+            history=history,
+            max_continues=max_continues,
+            ensure_complete=ensure_complete,
+            continue_prompt=continue_prompt,
+            on_progress=on_progress,
+            continue_delay=continue_delay,
+            on_error=on_error,
+            on_error_callback=on_error_callback,
+            params=params,
+        )
 
     async def acomplete_stream(
         self,
@@ -1765,87 +1087,18 @@ class Chat(BaseAPIClient):
             ...     print(chunk.delta, end="", flush=True)
             >>> result = iterator.result.to_chat_result()
         """
-        from lexilux.chat.conversation import Conversation
-        from lexilux.chat.exceptions import ChatIncompleteResponseError
-
-        working_history = history.clone() if history is not None else ChatHistory()
-        original_prompt = messages if isinstance(messages, str) else str(messages)
-
-        async def _async_complete_stream_generator() -> AsyncIterator[ChatStreamChunk]:
-            """Async generator that yields chunks from initial request and continues."""
-            # Start with async streaming request
-            initial_iterator = await self.astream(messages, history=working_history, **params)
-
-            # Yield all chunks from initial request
-            async for chunk in initial_iterator:
-                yield chunk
-
-            # Get initial result
-            initial_result = initial_iterator.result.to_chat_result()
-
-            # If truncated, continue with async streaming
-            if initial_result.finish_reason == "length":
-                try:
-                    continue_iterator = await Conversation.acontinue_request_stream(
-                        self,
-                        initial_result,
-                        history=working_history,
-                        max_continues=max_continues,
-                        continue_prompt=continue_prompt,
-                        on_progress=on_progress,
-                        continue_delay=continue_delay,
-                        on_error=on_error,
-                        on_error_callback=on_error_callback,
-                        original_prompt=original_prompt,
-                        **params,
-                    )
-                    async for chunk in continue_iterator:
-                        yield chunk
-                except Exception as e:
-                    if ensure_complete:
-                        raise ChatIncompleteResponseError(
-                            f"Failed to get complete response after {max_continues} continues: {e}",
-                            final_result=initial_result,
-                            continue_count=0,
-                            max_continues=max_continues,
-                        ) from e
-                    raise
-
-        class AsyncCompleteStreamingIterator(AsyncStreamingIterator):
-            """Async iterator for acomplete_stream with error checking."""
-
-            def __init__(
-                self,
-                chunk_gen: AsyncIterator[ChatStreamChunk],
-                max_continues: int,
-                ensure_complete: bool,
-            ):
-                super().__init__(chunk_gen)
-                self._max_continues = max_continues
-                self._ensure_complete = ensure_complete
-
-            async def __anext__(self) -> ChatStreamChunk:
-                try:
-                    chunk = await self._iterator.__anext__()
-                    self._result.update(chunk)
-                    return chunk
-                except StopAsyncIteration:
-                    # Check if we need to raise error
-                    if self._ensure_complete:
-                        final_result = self.result.to_chat_result()
-                        if final_result.finish_reason == "length":
-                            raise ChatIncompleteResponseError(
-                                f"Response still truncated after {self._max_continues} continues.",
-                                final_result=final_result,
-                                continue_count=self._max_continues,
-                                max_continues=self._max_continues,
-                            )
-                    raise
-
-        return AsyncCompleteStreamingIterator(
-            _async_complete_stream_generator(),
-            max_continues,
-            ensure_complete,
+        return await _acomplete_stream_impl(
+            self,
+            messages,
+            history=history,
+            max_continues=max_continues,
+            ensure_complete=ensure_complete,
+            continue_prompt=continue_prompt,
+            on_progress=on_progress,
+            continue_delay=continue_delay,
+            on_error=on_error,
+            on_error_callback=on_error_callback,
+            params=params,
         )
 
     def chat_with_history(

@@ -13,7 +13,6 @@ import random
 import time
 from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING, Any, Callable, Literal, overload
-
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk
 from lexilux.chat.streaming import AsyncStreamingIterator, StreamingIterator, StreamingResult
@@ -50,6 +49,25 @@ class Conversation:
             ...     full_result = Conversation.continue_request(chat, result, history=history)
         """
         return result.finish_reason == "length"
+
+    @staticmethod
+    def _filter_empty_results(results: list[ChatResult]) -> None:
+        results[:] = [r for r in results if not (r.text == "" and r.finish_reason is None)]
+
+    @staticmethod
+    def _merged_streaming_result(
+        initial_result: ChatResult,
+        all_results: list[ChatResult],
+    ) -> StreamingResult:
+        merged_result = (
+            Conversation.merge_results(*all_results) if len(all_results) > 1 else initial_result
+        )
+        streaming_result = StreamingResult()
+        streaming_result._text = merged_result.text
+        streaming_result._finish_reason = merged_result.finish_reason
+        streaming_result._usage = merged_result.usage
+        streaming_result._done = True
+        return streaming_result
 
     @staticmethod
     def _get_continue_prompt(
@@ -115,18 +133,23 @@ class Conversation:
             continue_delay: Fixed delay (seconds) or tuple (min, max) for random delay.
             continue_count: Current continue count (delay only applied if count > 1).
         """
-        if continue_count <= 1:
-            return  # No delay for first continue
-
-        if isinstance(continue_delay, tuple):
-            # Random delay range
-            delay = random.uniform(continue_delay[0], continue_delay[1])
-        else:
-            # Fixed delay
-            delay = continue_delay
-
-        if delay > 0:
+        delay = Conversation._get_delay_seconds(continue_delay, continue_count)
+        if delay is not None:
             time.sleep(delay)
+
+    @staticmethod
+    def _get_delay_seconds(
+        continue_delay: float | tuple[float, float],
+        continue_count: int,
+    ) -> float | None:
+        if continue_count <= 1:
+            return None
+        delay = (
+            random.uniform(continue_delay[0], continue_delay[1])
+            if isinstance(continue_delay, tuple)
+            else continue_delay
+        )
+        return delay if delay > 0 else None
 
     @staticmethod
     def _handle_continue_error(
@@ -152,29 +175,34 @@ class Conversation:
         Raises:
             Exception: If strategy is "raise" or callback returns "raise".
         """
+        action = on_error
+        callback_result: ChatResult | None = None
+
         if on_error_callback:
             try:
                 response = on_error_callback(error, partial_result)
                 if isinstance(response, dict):
-                    action = response.get("action", "raise")
-                    if action == "return_partial":
-                        if len(all_results) > 1:
-                            return Conversation.merge_results(*all_results)
-                        return partial_result
-                    elif action == "retry":
-                        # Retry not implemented yet
-                        raise NotImplementedError("Retry action not implemented")
-                    # else: "raise" - fall through
+                    action = response.get("action", action)
+                    result = response.get("result")
+                    if isinstance(result, ChatResult):
+                        callback_result = result
             except Exception as callback_error:
                 logger.warning(f"Error callback failed: {callback_error}")
-                # Fall through to default behavior
 
-        if on_error == "return_partial":
-            if len(all_results) > 1:
-                return Conversation.merge_results(*all_results)
-            return partial_result
-        else:  # "raise"
-            raise
+        if callback_result is not None:
+            return callback_result
+
+        if action == "return_partial":
+            return (
+                Conversation.merge_results(*all_results)
+                if len(all_results) > 1
+                else partial_result
+            )
+
+        if action == "retry":
+            raise NotImplementedError("Retry action not implemented") from error
+
+        raise error
 
     @staticmethod
     @overload
@@ -348,24 +376,18 @@ class Conversation:
                 if add_continue_prompt:
                     working_history.add_user(prompt)
 
-                continue_result = chat(
-                    working_history.get_messages(), history=working_history, **params
-                )
+                continue_result = chat(working_history.get_messages(), **params)
                 all_results.append(continue_result)
                 current_result = continue_result
                 accumulated_text += continue_result.text
+                working_history.append_result(continue_result)
 
             except Exception as e:
                 # Handle error based on strategy
-                try:
-                    result = Conversation._handle_continue_error(
-                        e, current_result, all_results, on_error, on_error_callback
-                    )
-                    return result if auto_merge else all_results
-                except LexiluxError as e:
-                    # Log warning for continuation errors
-                    logger.warning(f"Continuation request failed: {e.message}")
-                    raise
+                result = Conversation._handle_continue_error(
+                    e, current_result, all_results, on_error, on_error_callback
+                )
+                return result if auto_merge else all_results
 
         # Check if still truncated after max_continues
         if current_result.finish_reason == "length":
@@ -571,9 +593,7 @@ class Conversation:
                         working_history.add_user(prompt)
 
                     # Stream continue request
-                    continue_iterator = chat.stream(
-                        working_history.get_messages(), history=working_history, **params
-                    )
+                    continue_iterator = chat.stream(working_history.get_messages(), **params)
 
                     # Yield all chunks from this continue request
                     yield from continue_iterator
@@ -583,19 +603,14 @@ class Conversation:
                     all_results.append(continue_result)
                     current_result = continue_result
                     accumulated_text += continue_result.text
+                    working_history.append_result(continue_result)
 
                 except Exception as e:
                     # Handle error based on strategy
-                    try:
-                        Conversation._handle_continue_error(
-                            e, current_result, all_results, on_error, on_error_callback
-                        )
-                        # If returning partial, stop iteration
-                        break
-                    except LexiluxError as e:
-                        # Log warning for continuation errors
-                        logger.warning(f"Continuation request failed: {e.message}")
-                        raise
+                    Conversation._handle_continue_error(
+                        e, current_result, all_results, on_error, on_error_callback
+                    )
+                    break
 
         # Create StreamingIterator with custom result that merges all continues
         class MergedContinueIterator(StreamingIterator):
@@ -619,34 +634,17 @@ class Conversation:
                     self._result.update(chunk)
                     yield chunk
                 # After iteration, ensure all_results is populated correctly
-                # Filter out any empty results that might have been added
                 if self._all_results_ref:
-                    # Remove any empty results (text='' and finish_reason=None)
-                    self._all_results_ref[:] = [
-                        r
-                        for r in self._all_results_ref
-                        if not (r.text == "" and r.finish_reason is None)
-                    ]
+                    Conversation._filter_empty_results(self._all_results_ref)
 
             @property
             def result(self) -> StreamingResult:
                 """Get merged result from all continues."""
                 if self._merged_result is None:
-                    # Merge all results
-                    if len(self._all_results_ref) > 1:
-                        merged = Conversation.merge_results(*self._all_results_ref)
-                        self._merged_result = StreamingResult()
-                        self._merged_result._text = merged.text
-                        self._merged_result._finish_reason = merged.finish_reason
-                        self._merged_result._usage = merged.usage
-                        self._merged_result._done = True
-                    else:
-                        # Only initial result, convert to StreamingResult
-                        self._merged_result = StreamingResult()
-                        self._merged_result._text = self._initial_result.text
-                        self._merged_result._finish_reason = self._initial_result.finish_reason
-                        self._merged_result._usage = self._initial_result.usage
-                        self._merged_result._done = True
+                    self._merged_result = Conversation._merged_streaming_result(
+                        self._initial_result,
+                        self._all_results_ref,
+                    )
                 return self._merged_result
 
         return MergedContinueIterator(_continue_chunk_generator(), last_result, all_results)
@@ -667,15 +665,8 @@ class Conversation:
             continue_delay: Fixed delay (seconds) or tuple (min, max) for random delay.
             continue_count: Current continue count (delay only applied if count > 1).
         """
-        if continue_count <= 1:
-            return  # No delay for first continue
-
-        if isinstance(continue_delay, tuple):
-            delay = random.uniform(continue_delay[0], continue_delay[1])
-        else:
-            delay = continue_delay
-
-        if delay > 0:
+        delay = Conversation._get_delay_seconds(continue_delay, continue_count)
+        if delay is not None:
             await asyncio.sleep(delay)
 
     @staticmethod
@@ -779,23 +770,17 @@ class Conversation:
                     working_history.add_user(prompt)
 
                 # Use async acall
-                continue_result = await chat.acall(
-                    working_history.get_messages(), history=working_history, **params
-                )
+                continue_result = await chat.acall(working_history.get_messages(), **params)
                 all_results.append(continue_result)
                 current_result = continue_result
                 accumulated_text += continue_result.text
+                working_history.append_result(continue_result)
 
             except Exception as e:
-                try:
-                    result = Conversation._handle_continue_error(
-                        e, current_result, all_results, on_error, on_error_callback
-                    )
-                    return result if auto_merge else all_results
-                except LexiluxError as e:
-                    # Log error for continuation failures
-                    logger.error(f"Unexpected continuation error: {e.message}")
-                    raise
+                result = Conversation._handle_continue_error(
+                    e, current_result, all_results, on_error, on_error_callback
+                )
+                return result if auto_merge else all_results
 
         if current_result.finish_reason == "length":
             if auto_merge:
@@ -911,9 +896,7 @@ class Conversation:
                         working_history.add_user(prompt)
 
                     # Use async astream
-                    continue_iterator = await chat.astream(
-                        working_history.get_messages(), history=working_history, **params
-                    )
+                    continue_iterator = await chat.astream(working_history.get_messages(), **params)
 
                     # Yield all chunks from this continue request
                     async for chunk in continue_iterator:
@@ -924,17 +907,13 @@ class Conversation:
                     all_results.append(continue_result)
                     current_result = continue_result
                     accumulated_text += continue_result.text
+                    working_history.append_result(continue_result)
 
                 except Exception as e:
-                    try:
-                        Conversation._handle_continue_error(
-                            e, current_result, all_results, on_error, on_error_callback
-                        )
-                        break
-                    except LexiluxError as e:
-                        # Log error for continuation failures
-                        logger.error(f"Unexpected continuation error: {e.message}")
-                        raise
+                    Conversation._handle_continue_error(
+                        e, current_result, all_results, on_error, on_error_callback
+                    )
+                    break
 
         # Create AsyncStreamingIterator with custom result
         class AsyncMergedContinueIterator(AsyncStreamingIterator):
@@ -959,30 +938,17 @@ class Conversation:
                 except StopAsyncIteration:
                     # Filter out empty results
                     if self._all_results_ref:
-                        self._all_results_ref[:] = [
-                            r
-                            for r in self._all_results_ref
-                            if not (r.text == "" and r.finish_reason is None)
-                        ]
+                        Conversation._filter_empty_results(self._all_results_ref)
                     raise
 
             @property
             def result(self) -> StreamingResult:
                 """Get merged result from all continues."""
                 if self._merged_result is None:
-                    if len(self._all_results_ref) > 1:
-                        merged = Conversation.merge_results(*self._all_results_ref)
-                        self._merged_result = StreamingResult()
-                        self._merged_result._text = merged.text
-                        self._merged_result._finish_reason = merged.finish_reason
-                        self._merged_result._usage = merged.usage
-                        self._merged_result._done = True
-                    else:
-                        self._merged_result = StreamingResult()
-                        self._merged_result._text = self._initial_result.text
-                        self._merged_result._finish_reason = self._initial_result.finish_reason
-                        self._merged_result._usage = self._initial_result.usage
-                        self._merged_result._done = True
+                    self._merged_result = Conversation._merged_streaming_result(
+                        self._initial_result,
+                        self._all_results_ref,
+                    )
                 return self._merged_result
 
         return AsyncMergedContinueIterator(

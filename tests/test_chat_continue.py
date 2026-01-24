@@ -239,6 +239,55 @@ class TestChatContinueMergeResults:
             ChatContinue.merge_results()
 
 
+class TestChatContinueLoopBehavior:
+    """Test continuation loop behavior beyond single-continue."""
+
+    def test_continue_request_multiple_continues_updates_history(self):
+        """Second continue should include the previous continue assistant text in messages."""
+
+        class DummyChat:
+            def __init__(self, results: list[ChatResult]):
+                self._results = results
+                self.calls: list[list[dict[str, object]]] = []
+
+            def __call__(self, messages, **_params):
+                self.calls.append(list(messages))
+                return self._results.pop(0)
+
+        result1 = ChatResult(text="Part 1", usage=Usage(), finish_reason="length")
+        result2 = ChatResult(text=" Part 2", usage=Usage(), finish_reason="length")
+        result3 = ChatResult(text=" Part 3", usage=Usage(), finish_reason="stop")
+
+        history = ChatHistory.from_messages("Write a story")
+        history.append_result(result1)
+
+        chat = DummyChat(results=[result2, result3])
+        full = ChatContinue.continue_request(chat, result1, history=history, max_continues=2)
+
+        assert full.text == "Part 1 Part 2 Part 3"
+        assert len(chat.calls) == 2
+
+        # First continue call sees initial assistant, plus one "continue" user prompt.
+        assert any(m.get("content") == "Part 1" and m.get("role") == "assistant" for m in chat.calls[0])
+
+        # Second continue call should now include assistant from previous continue.
+        assert any(m.get("content") == " Part 2" and m.get("role") == "assistant" for m in chat.calls[1])
+
+    def test_continue_request_on_error_raise_reraises_original(self):
+        """on_error='raise' should re-raise the original exception, not RuntimeError."""
+
+        class DummyChat:
+            def __call__(self, _messages, **_params):
+                raise RuntimeError("boom")
+
+        result1 = ChatResult(text="Part 1", usage=Usage(), finish_reason="length")
+        history = ChatHistory.from_messages("Write a story")
+        history.append_result(result1)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            ChatContinue.continue_request(DummyChat(), result1, history=history, max_continues=1)
+
+
 class TestChatContinueIntegration:
     """Test ChatContinue integration scenarios"""
 
