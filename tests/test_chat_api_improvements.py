@@ -574,6 +574,6 @@ class TestNeedsContinue:
 
 @pytest.fixture
 def mock_post():
-    """Mock requests.Session.post for testing via BaseAPIClient."""
-    with patch("lexilux._base.requests.Session.post") as mock:
+    """Mock requests.post for testing via BaseAPIClient."""
+    with patch("lexilux._base.requests.post") as mock:
         yield mock
