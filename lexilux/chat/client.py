@@ -27,7 +27,6 @@ from lexilux.chat.params import ChatParams
 from lexilux.chat.streaming import (
     AsyncStreamingIterator,
     StreamingIterator,
-    StreamingResult,
 )
 from lexilux.usage import Json
 
@@ -130,8 +129,6 @@ class Chat(BaseAPIClient):
         connect_timeout_s: float | None = None,
         read_timeout_s: float | None = None,
         max_retries: int = 0,
-        pool_connections: int = 10,
-        pool_maxsize: int = 10,
         headers: dict[str, str] | None = None,
         proxies: dict[str, str] | None = None,
     ):
@@ -146,18 +143,15 @@ class Chat(BaseAPIClient):
             connect_timeout_s: Connection timeout in seconds (overrides timeout_s).
             read_timeout_s: Read timeout in seconds (overrides timeout_s).
             max_retries: Maximum number of retries for failed requests (default: 0).
-            pool_connections: Number of connection pools to cache (default: 10).
-            pool_maxsize: Maximum number of connections in pool (default: 10).
             headers: Additional headers to include in requests.
             proxies: Optional proxy configuration dict (e.g., {"http": "http://proxy:port"}).
                     If None, uses environment variables (HTTP_PROXY, HTTPS_PROXY).
                     To disable proxies, pass {}.
 
         Note:
-            Connection pooling and retry logic are handled by BaseAPIClient.
-            Set max_retries > 0 to enable automatic retries on transient failures.
+            Each HTTP request creates a new connection that closes after completion.
         """
-        # Initialize base client with connection pooling and retry support
+        # Initialize base client
         super().__init__(
             base_url=base_url,
             api_key=api_key,
@@ -165,8 +159,6 @@ class Chat(BaseAPIClient):
             connect_timeout_s=connect_timeout_s,
             read_timeout_s=read_timeout_s,
             max_retries=max_retries,
-            pool_connections=pool_connections,
-            pool_maxsize=pool_maxsize,
             headers=headers,
             proxies=proxies,
         )
@@ -411,92 +403,8 @@ class Chat(BaseAPIClient):
                 if parser.done:
                     break
 
-        # Create iterator with cleanup callback
-        iterator = StreamingIterator(_chunk_generator())
-
-        # Wrap iterator to schedule cleanup when done
-        return self._wrap_iterator_with_cleanup(iterator)
-
-    def _wrap_iterator_with_cleanup(
-        self, iterator: StreamingIterator
-    ) -> StreamingIterator:
-        """
-        Wrap streaming iterator to schedule connection cleanup when iteration completes.
-
-        Args:
-            iterator: Original StreamingIterator.
-
-        Returns:
-            Wrapped iterator that schedules cleanup on completion.
-        """
-
-        class CleanupStreamingIterator(StreamingIterator):
-            """Iterator wrapper that schedules cleanup when done."""
-
-            def __init__(self, base_iterator: StreamingIterator, client: Chat):
-                # Don't call super().__init__() - we'll delegate to base
-                self._base = base_iterator
-                self._client = client
-                self._cleanup_scheduled = False
-
-            def __iter__(self) -> Iterator[ChatStreamChunk]:
-                try:
-                    for chunk in self._base:
-                        yield chunk
-                finally:
-                    # Schedule cleanup when iteration completes (success or failure)
-                    if not self._cleanup_scheduled:
-                        self._cleanup_scheduled = True
-                        self._client._schedule_connection_cleanup()
-
-            @property
-            def result(self) -> StreamingResult:
-                """Delegate to base iterator."""
-                return self._base.result
-
-        return CleanupStreamingIterator(iterator, self)
-
-    def _wrap_async_iterator_with_cleanup(
-        self, iterator: AsyncStreamingIterator
-    ) -> AsyncStreamingIterator:
-        """
-        Wrap async streaming iterator to schedule connection cleanup when iteration completes.
-
-        Args:
-            iterator: Original AsyncStreamingIterator.
-
-        Returns:
-            Wrapped async iterator that schedules cleanup on completion.
-        """
-
-        class CleanupAsyncStreamingIterator(AsyncStreamingIterator):
-            """Async iterator wrapper that schedules cleanup when done."""
-
-            def __init__(self, base_iterator: AsyncStreamingIterator, client: Chat):
-                # Don't call super().__init__() - we'll delegate to base
-                self._base = base_iterator
-                self._client = client
-                self._cleanup_scheduled = False
-
-            def __aiter__(self) -> AsyncIterator[ChatStreamChunk]:
-                return self
-
-            async def __anext__(self) -> ChatStreamChunk:
-                try:
-                    return await self._base.__anext__()
-                except StopAsyncIteration:
-                    # Schedule cleanup when iteration completes
-                    if not self._cleanup_scheduled:
-                        self._cleanup_scheduled = True
-                        self._client._schedule_connection_cleanup()
-                    raise
-
-            @property
-            def result(self) -> StreamingResult:
-                """Delegate to base iterator."""
-                return self._base.result
-
-        return CleanupAsyncStreamingIterator(iterator, self)
+        # Create and return iterator (no cleanup wrapper needed)
+        return StreamingIterator(_chunk_generator())
 
     # =========================================================================
     # Async Methods
@@ -624,11 +532,8 @@ class Chat(BaseAPIClient):
                 if parser.done:
                     break
 
-        # Create async iterator with cleanup callback
-        iterator = AsyncStreamingIterator(_async_chunk_generator())
-
-        # Wrap iterator to schedule cleanup when done
-        return self._wrap_async_iterator_with_cleanup(iterator)
+        # Create and return async iterator (no cleanup wrapper needed)
+        return AsyncStreamingIterator(_async_chunk_generator())
 
     def complete(
         self,

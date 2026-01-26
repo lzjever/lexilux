@@ -460,8 +460,6 @@ class ChatFactory:
         connect_timeout_s: float | None = None,
         read_timeout_s: float | None = None,
         max_retries: int = 0,
-        pool_connections: int = 10,
-        pool_maxsize: int = 10,
         headers: dict[str, str] | None = None,
         proxies: dict[str, str] | None = None,
     ) -> ConfiguredChat:
@@ -483,8 +481,6 @@ class ChatFactory:
             connect_timeout_s: Connection timeout (overrides timeout_s).
             read_timeout_s: Read timeout (overrides timeout_s).
             max_retries: Maximum retry attempts for failed requests.
-            pool_connections: Number of connection pools.
-            pool_maxsize: Maximum connections per pool.
             headers: Additional request headers.
             proxies: Proxy configuration.
 
@@ -557,8 +553,6 @@ class ChatFactory:
             connect_timeout_s=connect_timeout_s,
             read_timeout_s=read_timeout_s,
             max_retries=max_retries,
-            pool_connections=pool_connections,
-            pool_maxsize=pool_maxsize,
             headers=headers,
             proxies=proxies,
         )

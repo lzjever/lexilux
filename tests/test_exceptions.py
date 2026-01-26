@@ -119,23 +119,17 @@ class TestChatExceptionHandling:
         assert TimeoutError is not None
 
     def test_chat_has_base_api_client_features(self):
-        """Chat should have connection pooling configuration."""
+        """Chat should have base API client features."""
         chat = Chat(
             base_url="https://api.example.com/v1",
             api_key="test-key",
             max_retries=3,
-            pool_connections=20,
         )
 
         # Verify attributes from BaseAPIClient
-        # Note: session is now lazy-initialized (private _session)
-        assert hasattr(chat, "_session")  # Private session (lazy)
         assert hasattr(chat, "timeout")
         assert chat.api_key == "test-key"
-
-        # Verify session is created when needed
-        session = chat._get_session()
-        assert session is not None
+        assert chat._max_retries == 3
 
     def test_chat_timeout_property_backward_compat(self):
         """Chat should have timeout_s property for backward compatibility."""
