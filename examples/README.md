@@ -1,391 +1,242 @@
-# Examples
+# Lexilux Examples
 
-This directory contains practical examples demonstrating Lexilux usage.
+This directory contains practical examples demonstrating Lexilux usage, organized by difficulty level from beginner to expert.
 
-## Examples
+## Quick Start
 
-### basic_chat.py
-A simple example demonstrating basic chat completions:
-- Simple chat calls
-- System messages
-- Usage statistics
+1. Configure your API endpoints (see [Configuration](#configuration) below)
+2. Run any example:
+   ```bash
+   python examples/01_hello_world.py
+   ```
 
-**Run:**
+## Examples by Level
+
+### Level 1: Getting Started (Beginner)
+
+**Start here if you're new to Lexilux!**
+
+| File | Description | Concepts |
+|------|-------------|----------|
+| [`01_hello_world.py`](01_hello_world.py) | Simplest possible chat call | Basic chat completion, usage tracking |
+| [`02_system_message.py`](02_system_message.py) | Control AI behavior with system messages | System prompts, personality control |
+
 ```bash
-python examples/basic_chat.py
+python examples/01_hello_world.py
+python examples/02_system_message.py
 ```
 
-### chat_streaming.py
-Demonstrates streaming chat completions:
-- Real-time response streaming
-- Chunk processing
-- Usage tracking in streaming mode
+---
 
-**Run:**
+### Level 2: Core Features (Intermediate)
+
+**Essential features for most use cases.**
+
+| File | Description | Concepts |
+|------|-------------|----------|
+| [`10_streaming.py`](10_streaming.py) | Real-time response streaming | Streaming, chunk processing, usage tracking |
+| [`11_conversation.py`](11_conversation.py) | Multi-turn conversations | Message history, chat loop, context management |
+| [`12_chat_params.py`](12_chat_params.py) | Control response behavior | Temperature, max_tokens, stop sequences, ChatParams |
+
 ```bash
-python examples/chat_streaming.py
+python examples/10_streaming.py
+python examples/11_conversation.py
+python examples/12_chat_params.py
 ```
 
-### chat_params_demo.py
-Comprehensive demonstration of chat parameters and their effects:
-- max_tokens parameter and finish_reason
-- stop sequences (single and multiple)
-- temperature parameter (creativity control)
-- ChatParams dataclass for structured configuration
-- presence_penalty and frequency_penalty
-- Streaming with parameters
-- Comparing different parameter combinations
+---
 
-**Features demonstrated:**
-- How max_tokens affects output length and finish_reason
-- How stop sequences control when generation stops
-- How temperature affects output creativity
-- Using ChatParams for reusable parameter configurations
-- How penalties affect output characteristics
-- Parameter effects in streaming mode
-- Side-by-side comparison of different parameter settings
+### Level 3: Other APIs (Intermediate)
 
-**Run:**
+**Features beyond chat completions.**
+
+| File | Description | Concepts |
+|------|-------------|----------|
+| [`20_embedding.py`](20_embedding.py) | Text to vector conversion | Embeddings, semantic similarity, batch processing |
+| [`21_rerank.py`](21_rerank.py) | Document reranking | Relevance sorting, top-k filtering, search |
+| [`22_tokenizer.py`](22_tokenizer.py) | Token counting | Cost estimation, input validation |
+
 ```bash
-python examples/chat_params_demo.py
+python examples/20_embedding.py
+python examples/21_rerank.py
+python examples/22_tokenizer.py
 ```
 
-### embedding_demo.py
-Examples for text embeddings:
-- Single text embedding
-- Batch embeddings
-- Vector dimensions and usage
-
-**Run:**
+**Note:** Tokenizer requires extra dependencies:
 ```bash
-python examples/embedding_demo.py
+pip install lexilux[tokenizer]
 ```
 
-### rerank_demo.py
-Comprehensive reranking examples:
-- Basic reranking
-- Top-k filtering
-- Include documents option
-- Score sorting rules (positive and negative scores)
-- Extra parameters
-- OpenAI-compatible mode vs Chat-based mode
+---
 
-**Features demonstrated:**
-- Document reranking with various configurations
-- Understanding score formats (positive vs negative)
-- Automatic sorting based on score type
-- Top-k result filtering
-- Mode selection (OpenAI vs Chat)
+### Level 4: Advanced Features (Advanced)
 
-**Run:**
+**Powerful capabilities for complex applications.**
+
+| File | Description | Concepts |
+|------|-------------|----------|
+| [`30_function_calling.py`](30_function_calling.py) | Let AI call your functions | Function tools, parallel execution, tool loops |
+| [`31_multimodal.py`](31_multimodal.py) | Process images with text | Vision, image URLs, base64 encoding, OCR |
+| [`32_async.py`](32_async.py) | Concurrent API calls | Async/await, parallel requests, rate limiting |
+
 ```bash
-python examples/rerank_demo.py
+python examples/30_function_calling.py
+python examples/31_multimodal.py
+python examples/32_async.py
 ```
 
-### tokenizer_demo.py
-Examples for tokenization:
-- Online tokenization (allows network access for downloading models)
-- Offline tokenization (using local models only)
+---
 
-**Run:**
+### Level 5: Expert Topics (Expert)
+
+**Advanced techniques for production applications.**
+
+| File | Description | Concepts |
+|------|-------------|----------|
+| [`40_chat_history.py`](40_chat_history.py) | Advanced conversation management | ChatHistory, formatting, searching, merging |
+| [`41_auto_continue.py`](41_auto_continue.py) | Handle truncated responses | Auto-continue, streaming continue, completion guarantees |
+| [`42_error_handling.py`](42_error_handling.py) | Robust error management | Exception hierarchy, retry logic, input validation |
+| [`43_custom_formatting.py`](43_custom_formatting.py) | Export conversations | Markdown, HTML, JSON, custom formatters |
+
 ```bash
-python examples/tokenizer_demo.py
+python examples/40_chat_history.py
+python examples/41_auto_continue.py
+python examples/42_error_handling.py
+python examples/43_custom_formatting.py
 ```
 
-### error_handling_demo.py
-Demonstrates error handling and distinguishing network errors from normal completions:
-- Handling exceptions for non-streaming requests
-- Handling exceptions for streaming requests
-- Detecting completion vs interruption
-- Understanding when finish_reason is available
+---
 
-**Key concepts:**
-- finish_reason is ONLY available when API successfully returns a response
-- Network errors raise exceptions - no finish_reason is available
-- For streaming, check if done=True chunk was received before error
+## Configuration
 
-**Run:**
-```bash
-python examples/error_handling_demo.py
-```
+Most examples require API credentials. Configure them in one of two ways:
 
-### real_api_test.py
-Real API integration testing script:
-- Tests all Lexilux components with real API endpoints
-- Requires `test_endpoints.json` configuration file
-- Comprehensive testing of Chat, Embed, and Rerank APIs
+### Option 1: Configuration File (Recommended for Testing)
 
-**Run:**
-```bash
-python examples/real_api_test.py
-```
-
-## Configuration File Format
-
-The `test_endpoints.json` file is used by `real_api_test.py` to configure API endpoints and credentials. This file should be placed in either the `tests/` or `examples/` directory.
-
-### Complete Configuration Schema
+Create `tests/test_endpoints.json` or `examples/test_endpoints.json`:
 
 ```json
 {
-  "chat": {
-    "model": "string (required)",
-    "source_model": "string (optional)",
-    "api_base": "string (required)",
-    "api_key": "string (required)"
-  },
-  "embed": {
-    "model": "string (required)",
-    "source_model": "string (optional)",
-    "api_base": "string (required)",
-    "api_key": "string (required)"
-  },
-  "rerank": {
-    "model": "string (required)",
-    "source_model": "string (optional)",
-    "api_base": "string (required)",
-    "api_key": "string (required)",
-    "mode": "string (optional, 'openai' or 'chat', default: 'chat')"
-  }
-}
-```
-
-### Field Descriptions
-
-#### Common Fields (for all services)
-
-- **`model`** (required): The model identifier to use for API calls.
-  - Example: `"deepseek-chat"`, `"text-embedding-ada-002"`, `"RerankService"`
-  - This is the primary model name used in API requests.
-
-- **`source_model`** (optional): The original/source model name (for tracking purposes).
-  - Example: `"deepseek-chat"`, `"EmbeddingService"`
-  - Useful when the API uses a different model name internally.
-  - If not provided, defaults to the value of `model`.
-
-- **`api_base`** (required): Base URL for the API endpoint.
-  - Example: `"https://api.deepseek.com"`, `"http://192.168.0.220:20551/v1"`
-  - Should include protocol (`http://` or `https://`), host, and port if needed.
-  - For rerank services, the path determines the mode:
-    - If ends with `/v1` or contains `/chat/completions`, chat mode is used
-    - Otherwise, OpenAI mode is used (unless explicitly set)
-
-- **`api_key`** (required): API key for authentication.
-  - Example: `"sk-123456"`, `"sk-d5ad8808d0f54c599f523b4e1d13c82c"`
-  - Used in the `Authorization: Bearer <api_key>` header.
-
-#### Rerank-Specific Fields
-
-- **`mode`** (optional): Rerank API mode selection.
-  - Values: `"openai"` or `"chat"` (default: `"chat"`)
-  - `"openai"`: Uses OpenAI-compatible standard rerank API format
-    - Endpoint: `POST {api_base}/rerank`
-    - Request format: `{"model": "...", "query": "...", "documents": [...], "top_n": ..., "return_documents": ...}`
-    - Response format: `{"results": [{"index": 0, "relevance_score": 0.95, "document": {"text": "..."}}], "usage": {...}}`
-  - `"chat"`: Uses chat-based custom rerank API format
-    - Endpoint: `POST {api_base}/chat/completions`
-    - Request format: `{"model": "...", "messages": [{"role": "user", "content": "{\"query\": ..., \"candidates\": ...}"}]}`
-    - Response format: `{"choices": [{"message": {"content": "..."}}], "usage": {...}}`
-  - If not specified, defaults to `"chat"` for backward compatibility.
-
-### Example Configuration Files
-
-#### Minimal Configuration
-
-```json
-{
-  "chat": {
-    "model": "deepseek-chat",
-    "api_base": "https://api.deepseek.com",
+  "completion": {
+    "model": "gpt-4",
+    "api_base": "https://api.openai.com/v1",
     "api_key": "sk-your-api-key"
   },
-  "embed": {
+  "embedding": {
     "model": "text-embedding-ada-002",
     "api_base": "https://api.openai.com/v1",
     "api_key": "sk-your-api-key"
   },
-  "rerank": {
+  "reranker": {
     "model": "rerank-model",
     "api_base": "https://api.example.com/v1",
-    "api_key": "sk-your-api-key"
-  }
-}
-```
-
-#### Full Configuration with Optional Fields
-
-```json
-{
-  "chat": {
-    "model": "deepseek-chat",
-    "source_model": "deepseek-chat",
-    "api_base": "https://api.deepseek.com",
-    "api_key": "sk-d5ad8808d0f54c599f523b4e1d13c82c"
-  },
-  "embed": {
-    "model": "EmbeddingService",
-    "source_model": "EmbeddingService",
-    "api_base": "http://192.168.0.220:20553/v1",
-    "api_key": "sk-123456"
-  },
-  "rerank": {
-    "model": "RerankService",
-    "source_model": "RerankService",
-    "api_base": "http://192.168.0.220:20551/v1",
-    "api_key": "sk-123456",
-    "mode": "chat"
-  }
-}
-```
-
-#### Rerank Configuration Examples
-
-**OpenAI-Compatible Mode (e.g., Jina):**
-```json
-{
-  "rerank_openai": {
-    "model": "jina-reranker-v3",
-    "api_base": "https://api.jina.ai/v1",
-    "api_key": "jina_your-api-key",
+    "api_key": "sk-your-api-key",
     "mode": "openai"
   }
 }
 ```
 
-**DashScope Mode (Alibaba Cloud):**
-```json
-{
-  "rerank_dashscope": {
-    "model": "qwen3-rerank",
-    "api_base": "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
-    "api_key": "sk-your-dashscope-api-key",
-    "mode": "dashscope"
-  }
-}
-```
-
-**Chat-Based Mode (Custom Service):**
-```json
-{
-  "rerank_chat": {
-    "model": "RerankService",
-    "api_base": "http://your-service:port/v1",
-    "api_key": "sk-your-api-key",
-    "mode": "chat"
-  }
-}
-```
-
-### Configuration File Location
-
-The `real_api_test.py` script looks for `test_endpoints.json` in the following locations (in order):
-
-1. `tests/test_endpoints.json` (preferred location)
-2. `examples/test_endpoints.json`
-
-The first file found will be used.
-
-### Security Notes
-
-⚠️ **IMPORTANT**: The `test_endpoints.json` file contains sensitive credentials:
-
-1. **Never commit this file to version control**
-   - It's already in `.gitignore` to prevent accidental commits
-   - Always verify it's not tracked before pushing changes
-
-2. **Use environment variables in production**
-   - For production code, use environment variables instead of config files
-   - Example:
-     ```python
-     import os
-     rerank = Rerank(
-         base_url=os.getenv("RERANK_API_BASE"),
-         api_key=os.getenv("RERANK_API_KEY"),
-         model=os.getenv("RERANK_MODEL")
-     )
-     ```
-
-3. **Restrict file permissions**
-   - On Unix systems, restrict access: `chmod 600 test_endpoints.json`
-   - Only the owner should be able to read/write the file
-
-4. **Use different keys for testing and production**
-   - Never use production API keys in test configurations
-   - Rotate keys if accidentally exposed
-
-### Creating Your Configuration File
-
-1. **Copy the template:**
-   ```bash
-   cp examples/test_endpoints.json.template tests/test_endpoints.json
-   ```
-   (If a template exists, otherwise create from scratch)
-
-2. **Fill in your API credentials:**
-   - Replace `"your-api-key"` with your actual API keys
-   - Update `api_base` URLs to match your endpoints
-   - Set appropriate model names
-
-3. **Verify the file:**
-   ```bash
-   python -m json.tool tests/test_endpoints.json
-   ```
-   This will validate the JSON syntax.
-
-4. **Test the configuration:**
-   ```bash
-   python examples/real_api_test.py
-   ```
-
-## Running All Examples
-
-To run all examples (except real API tests which require credentials):
+### Option 2: Custom Config Path
 
 ```bash
-# Basic examples
-python examples/basic_chat.py
-python examples/chat_streaming.py
-python examples/chat_params_demo.py
-python examples/embedding_demo.py
-python examples/rerank_demo.py
-python examples/tokenizer_demo.py
-
-# Real API tests (requires configuration)
-python examples/real_api_test.py
+python examples/01_hello_world.py --config /path/to/config.json
 ```
 
-## Understanding Rerank Score Formats
+### Option 3: Environment Variables (Production)
 
-Different rerank APIs may return scores in different formats:
+For production, use environment variables instead of config files:
 
-### Positive Scores
-- Format: `0.0` to `1.0` or higher
-- Rule: **Higher score = Better relevance**
-- Example: `0.95 > 0.80 > 0.70`
-- Lexilux sorts in **descending order** (highest first)
+```python
+import os
+from lexilux import Chat
 
-### Negative Scores
-- Format: Negative numbers (e.g., `-3.0`, `-4.0`)
-- Rule: **Less negative = Better relevance**
-- Example: `-3.0 > -4.0 > -5.0` (because -3.0 is mathematically greater)
-- Lexilux sorts in **descending order** (least negative first)
+chat = Chat(
+    base_url=os.getenv("LEXILUX_BASE_URL"),
+    api_key=os.getenv("LEXILUX_API_KEY"),
+    model=os.getenv("LEXILUX_MODEL"),
+)
+```
 
-Lexilux automatically detects the score format and applies the correct sorting order.
+---
 
-## Configuration
+## Common Issues
 
-Most examples use placeholder credentials. To use real APIs:
+### Import Error: `ModuleNotFoundError: No module named 'lexilux'`
 
-1. **Use the configuration file** (recommended for testing):
-   - Create `test_endpoints.json` as described above
-   - Run `python examples/real_api_test.py`
+Install lexilux in development mode:
+```bash
+cd /path/to/lexilux
+pip install -e .
+```
 
-2. **Set environment variables** (recommended for production):
+### Configuration File Not Found
+
+The examples look for configuration files in this order:
+1. `tests/test_endpoints.json`
+2. `examples/test_endpoints.json`
+
+If neither exists, the example will use placeholder values (which won't work with real APIs).
+
+### Tokenizer Examples Fail
+
+The tokenizer examples require additional dependencies:
+```bash
+pip install lexilux[tokenizer]
+# or
+pip install transformers tokenizers
+```
+
+### Vision Examples Don't Work
+
+Multimodal examples require a vision-enabled model (like `gpt-4-vision-preview`).
+
+---
+
+## Learning Path
+
+Recommended order for learning Lexilux:
+
+1. **Start here:** `01_hello_world.py` → `02_system_message.py`
+2. **Core skills:** `10_streaming.py` → `11_conversation.py` → `12_chat_params.py`
+3. **Expand:** `20_embedding.py` → `21_rerank.py` → `22_tokenizer.py`
+4. **Advanced:** `30_function_calling.py` → `31_multimodal.py` → `32_async.py`
+5. **Expert:** `40_chat_history.py` → `41_auto_continue.py` → `42_error_handling.py` → `43_custom_formatting.py`
+
+---
+
+## Security Notes
+
+⚠️ **IMPORTANT:**
+
+1. **Never commit** `test_endpoints.json` to version control
+   - It's in `.gitignore` to prevent accidental commits
+   - Always verify before pushing
+
+2. **Use different keys** for testing and production
+   - Never use production keys in examples
+
+3. **Restrict file permissions:**
    ```bash
-   export LEXILUX_API_KEY="your-api-key"
-   export LEXILUX_BASE_URL="https://api.example.com"
+   chmod 600 test_endpoints.json
    ```
 
-3. **Modify examples directly** (not recommended):
-   - Edit the example files with your credentials
-   - Only for quick testing, never commit credentials
+4. **Use environment variables in production**
+   - Config files are for development/testing only
+
+---
+
+## Additional Resources
+
+- **Main Documentation:** [lexilux.readthedocs.io](https://lexilux.readthedocs.io)
+- **GitHub Repository:** [github.com/lzjever/lexilux](https://github.com/lzjever/lexilux)
+- **Issue Tracker:** [github.com/lzjever/lexilux/issues](https://github.com/lzjever/lexilux/issues)
+
+---
+
+## Supporting Files
+
+| File | Purpose |
+|------|---------|
+| `config_loader.py` | Shared configuration loading for all examples |
+| `test_endpoints.json.template` | Template for API configuration (create your own) |
+| `README.md` | This file |

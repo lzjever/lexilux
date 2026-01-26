@@ -121,7 +121,8 @@ python_functions = ["test_*"]
 markers = [
     "unit: Unit tests",
     "integration: Integration tests (require external services)",
-    "slow: Slow running tests", 
+    "slow: Slow running tests",
     "mock: Tests that require mocking",
-    "asyncio: Async tests"
+    "asyncio: Async tests",
+    "example: Tests for example scripts"
 ]

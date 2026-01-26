@@ -1,4 +1,4 @@
-.PHONY: help clean install dev-install test test-cov test-integration lint format format-check check build sdist wheel docs html clean-docs upload upload-test check-package setup-venv pre-commit-install pre-commit-run pre-commit-update
+.PHONY: help clean install dev-install test test-examples test-cov test-integration lint format format-check check build sdist wheel docs html clean-docs upload upload-test check-package setup-venv pre-commit-install pre-commit-run pre-commit-update
 
 # Use uv if available, otherwise fall back to pip
 UV := $(shell command -v uv 2>/dev/null)
@@ -28,6 +28,7 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  test          - Run all unit tests in parallel (excludes integration tests)"
+	@echo "  test-examples - Run example script tests"
 	@echo "  test-cov      - Run tests with coverage report in parallel"
 	@echo "  test-integration - Run all integration tests in parallel (requires external services)"
 	@echo ""
@@ -95,6 +96,9 @@ dev-install:
 
 test:
 	$(PYTHON_CMD) -m pytest tests/ -v -m "not integration" -n auto
+
+test-examples:
+	$(PYTHON_CMD) -m pytest tests/ -v -m example --no-cov
 
 test-cov:
 	$(PYTHON_CMD) -m pytest tests/ -m "not integration" --cov=lexilux --cov-report=html --cov-report=term -n auto
