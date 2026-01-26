@@ -92,6 +92,73 @@ class ToolCall:
         }
 
 
+@dataclass
+class StreamingToolCall:
+    """
+    Represents a tool call being streamed (arguments accumulating).
+
+    Unlike ToolCall (which represents a complete tool call), StreamingToolCall
+    tracks the incremental generation state during streaming.
+
+    OpenAI streaming format sends tool calls incrementally:
+    - First chunk: {"index": 0, "id": "call_xxx", "function": {"name": "write", "arguments": ""}}
+    - Later chunks: {"index": 0, "function": {"arguments": "{\\"file_path\\":"}}
+
+    Attributes:
+        index: Position in the parallel tool_calls array (0, 1, 2...)
+        id: Call ID (only available when is_first=True)
+        name: Function name (only available when is_first=True)
+        arguments_delta: The arguments fragment in THIS chunk only
+        arguments_accumulated: Total accumulated arguments string so far
+        is_first: True if this is the first chunk for this tool call
+        is_complete: True if arguments_accumulated is valid JSON
+
+    Examples:
+        >>> for chunk in chat.stream(..., tools=[...]):
+        ...     for stc in chunk.streaming_tool_calls:
+        ...         if stc.is_first:
+        ...             print(f"Tool call started: {stc.name}")
+        ...         print(f"Progress: {stc.arguments_length} chars")
+        ...         if stc.is_complete:
+        ...             tc = stc.to_tool_call()
+        ...             print(f"Complete! Args: {tc.get_arguments()}")
+    """
+
+    index: int
+    id: str | None
+    name: str | None
+    arguments_delta: str
+    arguments_accumulated: str
+    is_first: bool
+    is_complete: bool
+
+    @property
+    def arguments_length(self) -> int:
+        """Length of accumulated arguments string."""
+        return len(self.arguments_accumulated)
+
+    def to_tool_call(self) -> ToolCall | None:
+        """
+        Convert to complete ToolCall if is_complete, else return None.
+
+        Returns:
+            ToolCall if arguments form valid JSON and id/name are available,
+            None otherwise.
+        """
+        if not self.is_complete:
+            return None
+        # For non-first chunks, id and name are None, but we need them
+        # The caller should track the full state if they need the ToolCall
+        if not self.id or not self.name:
+            return None
+        return ToolCall(
+            id=self.id,
+            call_id=self.id,
+            name=self.name,
+            arguments=self.arguments_accumulated,
+        )
+
+
 class ChatResult(ResultBase):
     """
     Chat completion result (non-streaming).
@@ -262,6 +329,7 @@ class ChatStreamChunk(ResultBase):
         done: bool,
         finish_reason: str | None = None,
         tool_calls: list[ToolCall] | None = None,
+        streaming_tool_calls: list[StreamingToolCall] | None = None,
         raw: Json | None = None,
         # ✅ NEW: Add reasoning fields for OpenAI o1/Claude 3.5/DeepSeek R1
         reasoning_content: str | None = None,
@@ -275,7 +343,8 @@ class ChatStreamChunk(ResultBase):
             usage: Usage statistics.
             done: Whether this is the final chunk.
             finish_reason: Reason why generation stopped.
-            tool_calls: List of incremental tool call data.
+            tool_calls: List of complete tool calls (valid JSON arguments).
+            streaming_tool_calls: List of streaming tool call states (may be incomplete).
             raw: Raw chunk data.
             reasoning_content: Reasoning/thinking content (OpenAI o1/Claude 3.5/DeepSeek).
             reasoning_tokens: Token count for reasoning content.
@@ -285,6 +354,7 @@ class ChatStreamChunk(ResultBase):
         self.done = done
         self.finish_reason = finish_reason
         self.tool_calls = tool_calls or []
+        self.streaming_tool_calls = streaming_tool_calls or []
         # ✅ NEW: Assign reasoning fields
         self.reasoning_content = reasoning_content
         self.reasoning_tokens = reasoning_tokens
@@ -307,7 +377,7 @@ class ChatStreamChunk(ResultBase):
     @property
     def has_tool_calls(self) -> bool:
         """
-        Check if chunk contains tool call data.
+        Check if chunk contains complete tool call data.
 
         Returns:
             True if tool_calls is non-empty.
@@ -324,6 +394,22 @@ class ChatStreamChunk(ResultBase):
         """
         return len(self.tool_calls) > 0
 
+    @property
+    def has_streaming_tool_calls(self) -> bool:
+        """
+        Check if chunk contains streaming tool call data.
+
+        Returns:
+            True if streaming_tool_calls is non-empty.
+
+        Examples:
+            >>> for chunk in chat.stream(..., tools=[...]):
+            ...     if chunk.has_streaming_tool_calls:
+            ...         for stc in chunk.streaming_tool_calls:
+            ...             print(f"Tool: {stc.name}, progress: {stc.arguments_length}")
+        """
+        return len(self.streaming_tool_calls) > 0
+
     def __repr__(self) -> str:
         """Return string representation."""
         reasoning_info = (
@@ -331,4 +417,9 @@ class ChatStreamChunk(ResultBase):
             if self.reasoning_content
             else ""
         )
-        return f"ChatStreamChunk(delta={self.delta!r}, done={self.done}, finish_reason={self.finish_reason!r}, usage={self.usage!r}, tool_calls={len(self.tool_calls)}{reasoning_info})"
+        streaming_info = (
+            f", streaming_tool_calls={len(self.streaming_tool_calls)}"
+            if self.streaming_tool_calls
+            else ""
+        )
+        return f"ChatStreamChunk(delta={self.delta!r}, done={self.done}, finish_reason={self.finish_reason!r}, usage={self.usage!r}, tool_calls={len(self.tool_calls)}{streaming_info}{reasoning_info})"

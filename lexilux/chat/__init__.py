@@ -31,6 +31,7 @@ from lexilux.chat.models import (
     MessageLike,
     MessagesLike,
     Role,
+    StreamingToolCall,
     ToolCall,
 )
 from lexilux.chat.params import ChatParams
@@ -69,6 +70,7 @@ __all__ = [
     "MessageLike",
     "MessagesLike",
     "ToolCall",
+    "StreamingToolCall",
     "Tool",
     "FunctionTool",
     "ToolChoice",

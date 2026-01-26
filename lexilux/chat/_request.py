@@ -15,7 +15,13 @@ import re
 from collections.abc import Sequence
 from typing import Any, TYPE_CHECKING
 from lexilux.chat.history import ChatHistory
-from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike, ToolCall
+from lexilux.chat.models import (
+    ChatResult,
+    ChatStreamChunk,
+    MessagesLike,
+    StreamingToolCall,
+    ToolCall,
+)
 from lexilux.chat.params import ChatParams
 from lexilux.chat.utils import normalize_finish_reason, normalize_messages, parse_usage
 from lexilux.usage import Json, Usage
@@ -305,12 +311,26 @@ def _parse_text_tool_calls(text: str) -> list[ToolCall]:
 
 
 class SSEChatStreamParser:
+    """
+    Parser for Server-Sent Events (SSE) chat streaming responses.
+
+    Handles incremental parsing of streaming responses including:
+    - Text content deltas
+    - Tool call accumulation (streaming tool calls)
+    - Reasoning content (for thinking models)
+    - Usage statistics
+    """
+
     def __init__(self, *, return_raw_events: bool, include_reasoning: bool = False):
         self._return_raw_events = return_raw_events
-        self._include_reasoning = include_reasoning  # ✅ NEW
+        self._include_reasoning = include_reasoning
         self._final_usage: Usage | None = None
         self._final_finish_reason: str | None = None
         self._done = False
+
+        # Tool call accumulation state
+        # key: index (0, 1, 2...), value: {"id": str, "name": str, "arguments": str}
+        self._tool_call_state: dict[int, dict[str, str]] = {}
 
     @property
     def done(self) -> bool:
@@ -335,8 +355,8 @@ class SSEChatStreamParser:
                 usage=final_usage,
                 finish_reason=self._final_finish_reason,
                 raw={"done": True} if self._return_raw_events else {},
-                reasoning_content=None,  # ✅ NEW: No reasoning in [DONE]
-                reasoning_tokens=None,  # ✅ NEW
+                reasoning_content=None,
+                reasoning_tokens=None,
             )
 
         try:
@@ -356,7 +376,28 @@ class SSEChatStreamParser:
         if not isinstance(delta, dict):
             delta = {}
         content = delta.get("content") or ""
-        tool_calls_list = _parse_stream_tool_calls(delta.get("tool_calls"))
+
+        # Process streaming tool calls with accumulation
+        raw_tool_calls = delta.get("tool_calls", [])
+        streaming_tool_calls = self._process_tool_call_deltas(raw_tool_calls)
+
+        # Extract complete tool calls (those with valid JSON arguments)
+        complete_tool_calls = []
+        for stc in streaming_tool_calls:
+            if stc.is_complete:
+                # Get id and name from accumulated state
+                state = self._tool_call_state.get(stc.index, {})
+                tc_id = state.get("id", "")
+                tc_name = state.get("name", "")
+                if tc_id and tc_name:
+                    complete_tool_calls.append(
+                        ToolCall(
+                            id=tc_id,
+                            call_id=tc_id,
+                            name=tc_name,
+                            arguments=stc.arguments_accumulated,
+                        )
+                    )
 
         finish_reason = normalize_finish_reason(choice.get("finish_reason"))
         done = finish_reason is not None
@@ -372,7 +413,7 @@ class SSEChatStreamParser:
         else:
             usage = Usage()
 
-        # ✅ NEW: Parse reasoning fields if enabled
+        # Parse reasoning fields if enabled
         reasoning_content = None
         reasoning_tokens = None
         if self._include_reasoning:
@@ -386,8 +427,83 @@ class SSEChatStreamParser:
             done=done,
             usage=usage,
             finish_reason=finish_reason,
-            tool_calls=tool_calls_list,
+            tool_calls=complete_tool_calls,
+            streaming_tool_calls=streaming_tool_calls,
             raw=event_data if self._return_raw_events else {},
-            reasoning_content=reasoning_content,  # ✅ NEW
-            reasoning_tokens=reasoning_tokens,  # ✅ NEW
+            reasoning_content=reasoning_content,
+            reasoning_tokens=reasoning_tokens,
         )
+
+    def _process_tool_call_deltas(
+        self, raw_tool_calls: list[Any]
+    ) -> list[StreamingToolCall]:
+        """
+        Process streaming tool call deltas and accumulate state.
+
+        OpenAI streaming format:
+        - First chunk: {"index": 0, "id": "call_xxx", "function": {"name": "write", "arguments": ""}}
+        - Later chunks: {"index": 0, "function": {"arguments": "{\\"file_path\\":"}}
+
+        Args:
+            raw_tool_calls: Raw tool_calls array from delta
+
+        Returns:
+            List of StreamingToolCall objects with accumulated state
+        """
+        if not isinstance(raw_tool_calls, list):
+            return []
+
+        results: list[StreamingToolCall] = []
+
+        for tc in raw_tool_calls:
+            if not isinstance(tc, dict):
+                continue
+
+            index = tc.get("index", 0)
+            function = tc.get("function", {}) or {}
+
+            # Check if this is the first chunk for this tool call
+            is_first = index not in self._tool_call_state
+
+            if is_first:
+                # Initialize state for this tool call
+                self._tool_call_state[index] = {
+                    "id": tc.get("id") or "",
+                    "name": function.get("name") or "",
+                    "arguments": function.get("arguments") or "",
+                }
+            else:
+                # Accumulate arguments
+                args_delta = function.get("arguments") or ""
+                self._tool_call_state[index]["arguments"] += args_delta
+
+            state = self._tool_call_state[index]
+            args_delta = function.get("arguments") or ""
+
+            # Check if accumulated arguments form valid JSON
+            is_complete = self._is_valid_json(state["arguments"])
+
+            results.append(
+                StreamingToolCall(
+                    index=index,
+                    id=state["id"] if is_first else None,
+                    name=state["name"] if is_first else None,
+                    arguments_delta=args_delta,
+                    arguments_accumulated=state["arguments"],
+                    is_first=is_first,
+                    is_complete=is_complete,
+                )
+            )
+
+        return results
+
+    @staticmethod
+    def _is_valid_json(s: str) -> bool:
+        """Check if string is valid JSON."""
+        if not s:
+            return False
+        try:
+            json.loads(s)
+            return True
+        except json.JSONDecodeError:
+            return False
