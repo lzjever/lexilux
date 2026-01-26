@@ -680,7 +680,7 @@ class Chat(BaseAPIClient):
             on_error: Error handling strategy: "raise" (default) or "return_partial".
             on_error_callback: Optional error callback function with signature:
                 (error: Exception, partial_result: ChatResult) -> dict
-            **params: Additional parameters to pass to chat and continue requests.
+            params: Additional parameters to pass to chat and continue requests.
 
         Returns:
             Complete ChatResult (never truncated, unless max_continues exceeded).
@@ -693,7 +693,7 @@ class Chat(BaseAPIClient):
             Single-turn conversation (no history needed):
             >>> result = chat.complete("Write a long JSON", max_tokens=100)
             >>> import json
-            >>> json_data = json.loads(result.text)  # Guaranteed complete
+            >>> json_data = json.loads(result.text)  # Response is complete
 
             Multi-turn conversation (provide history):
             >>> history = ChatHistory()
@@ -810,7 +810,7 @@ class Chat(BaseAPIClient):
             on_error: Error handling strategy: "raise" (default) or "return_partial".
             on_error_callback: Optional error callback function with signature:
                 (error: Exception, partial_result: ChatResult) -> dict
-            **params: Additional parameters to pass to chat and continue requests.
+            params: Additional parameters to pass to chat and continue requests.
 
         Returns:
             StreamingIterator: Iterator that yields ChatStreamChunk objects from
@@ -828,7 +828,7 @@ class Chat(BaseAPIClient):
             ...     print(chunk.delta, end="", flush=True)
             >>> result = iterator.result.to_chat_result()
             >>> import json
-            >>> json_data = json.loads(result.text)  # Guaranteed complete
+            >>> json_data = json.loads(result.text)  # Response is complete
 
             Multi-turn conversation (provide history):
             >>> history = ChatHistory()
@@ -931,7 +931,7 @@ class Chat(BaseAPIClient):
             continue_delay: Delay between continue requests (seconds).
             on_error: Error handling strategy: "raise" (default) or "return_partial".
             on_error_callback: Optional error callback function.
-            **params: Additional parameters to pass to chat and continue requests.
+            params: Additional parameters to pass to chat and continue requests.
 
         Returns:
             Complete ChatResult (never truncated, unless max_continues exceeded).
@@ -939,11 +939,7 @@ class Chat(BaseAPIClient):
         Examples:
             >>> result = await chat.acomplete("Write a long JSON", max_tokens=100)
             >>> import json
-            >>> json_data = json.loads(result.text)  # Guaranteed complete
-
-            Concurrent complete requests:
-            >>> tasks = [chat.acomplete(f"Write story {i}") for i in range(3)]
-            >>> results = await asyncio.gather(*tasks)
+            >>> json_data = json.loads(result.text)  # Response is complete
         """
         from lexilux.chat.utils import normalize_messages
 
@@ -1036,7 +1032,7 @@ class Chat(BaseAPIClient):
             continue_delay: Delay between continue requests (seconds).
             on_error: Error handling strategy: "raise" (default) or "return_partial".
             on_error_callback: Optional error callback function.
-            **params: Additional parameters to pass to chat and continue requests.
+            params: Additional parameters to pass to chat and continue requests.
 
         Returns:
             AsyncStreamingIterator: Async iterator that yields ChatStreamChunk objects.

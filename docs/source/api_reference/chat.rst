@@ -80,10 +80,12 @@ Streaming
 Continue Functionality
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. autoclass:: lexilux.chat.continue_.ChatContinue
+.. autoclass:: lexilux.chat.conversation.Conversation
    :members:
    :undoc-members:
    :show-inheritance:
+
+   **Note:** ``ChatContinue`` is a backward compatibility alias for ``Conversation``.
 
 Function Calling
 ~~~~~~~~~~~~~~~~

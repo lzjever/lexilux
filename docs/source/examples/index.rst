@@ -7,22 +7,57 @@ All examples are located in the ``examples/`` directory and can be run directly:
 
 .. code-block:: bash
 
-   python examples/basic_chat.py
-   python examples/chat_streaming.py
-   python examples/embedding_demo.py
-   python examples/rerank_demo.py
-   python examples/tokenizer_demo.py
+   python examples/01_hello_world.py
+   python examples/10_streaming.py
+   python examples/20_embedding.py
+   python examples/32_async.py
 
-For real API testing with actual endpoints, see ``examples/real_api_test.py``.
+Beginner Examples
+-----------------
 
 .. toctree::
    :maxdepth: 1
 
-   basic_chat
-   chat_streaming
-   chat_history
-   chat_continue
-   chat_formatting
+   hello_world
+   system_message
+
+Core Features
+-------------
+
+.. toctree::
+   :maxdepth: 1
+
+   streaming
+   conversation
+   chat_params
+
+Other APIs
+----------
+
+.. toctree::
+   :maxdepth: 1
+
    embedding
    rerank
    tokenizer
+
+Advanced Features
+-----------------
+
+.. toctree::
+   :maxdepth: 1
+
+   function_calling
+   multimodal
+   async_examples
+
+Expert Topics
+-------------
+
+.. toctree::
+   :maxdepth: 1
+
+   chat_history
+   auto_continue
+   error_handling
+   custom_formatting

@@ -648,12 +648,6 @@ class Rerank:
         Examples:
             >>> result = await rerank.acall("python http", ["urllib", "requests"])
             >>> ranked = result.results
-
-            Concurrent rerank requests:
-            >>> queries = ["python http", "python json", "python async"]
-            >>> docs = ["requests", "json", "asyncio", "urllib"]
-            >>> tasks = [rerank.acall(q, docs) for q in queries]
-            >>> results = await asyncio.gather(*tasks)
         """
         handler, url, payload = self._prepare_rerank(
             query, docs, model, top_k, include_docs, extra, mode

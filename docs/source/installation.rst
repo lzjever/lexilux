@@ -116,8 +116,10 @@ Requirements
 Core Dependencies
 ~~~~~~~~~~~~~~~~~~
 
-* **Python**: 3.7 or higher
+* **Python**: 3.9 or higher (supports up to 3.14)
 * **requests**: >=2.28.0
+* **httpx**: >=0.24.0
+* **typing_extensions**: >=4.0.0
 
 These are the only dependencies required for Chat, Embedding, and Rerank features.
 

@@ -7,20 +7,16 @@ Key Features
 ------------
 
 * **Function-like API**: Call APIs like functions (``chat("hi")``, ``embed(["text"])``)
-* **Streaming Support**: Built-in streaming for Chat with automatic text accumulation
-* **Explicit History Management**: Full control over conversation history with explicit ``ChatHistory`` objects
-* **Continue Generation**: Seamlessly continue cut-off responses with ``ChatContinue``
-* **Function Calling**: OpenAI-compatible function/tool calling with helper utilities
-* **Multimodal Support**: Vision capabilities with image inputs (URL and base64)
-* **Comprehensive Token Analysis**: Detailed token statistics and analysis for conversation history
+* **Streaming Support**: Built-in streaming for Chat with usage tracking
 * **Unified Usage**: Consistent usage statistics across all APIs
 * **Flexible Input**: Support multiple input formats (string, list, dict)
-* **History Management**: Automatic extraction, serialization, and multi-format export
-* **Optional Dependencies**: Tokenizer requires transformers only when needed
 * **OpenAI-Compatible**: Works with OpenAI-compatible APIs
-* **Automatic Retry**: Built-in retry logic with exponential backoff for transient failures
-* **Connection Pooling**: HTTP connection pooling for better performance under high concurrency
-* **Exception Hierarchy**: Comprehensive exception system with error codes and retryable flags
+* **Automatic Retry**: Built-in retry logic with exponential backoff
+* **Connection Pooling**: HTTP connection pooling for better performance
+* **Exception Hierarchy**: Comprehensive exception system with error codes
+* **Function Calling**: OpenAI-compatible function/tool calling support
+* **Multimodal Support**: Vision capabilities with image inputs
+* **Async Support**: Full async/await API for concurrent operations
 
 Design Philosophy
 -----------------
@@ -39,5 +35,5 @@ What's Next?
 * :doc:`installation` - Install Lexilux
 * :doc:`quickstart` - Get started in minutes
 * :doc:`function_calling` - Learn about function calling with tools
+* :doc:`async` - Learn about async/await support
 * :doc:`api_reference/index` - Complete API reference
-

@@ -10,6 +10,13 @@ Lexilux supports two rerank modes:
 
 For a detailed comparison of both modes, see :doc:`../rerank_modes_comparison`.
 
+Full Example
+------------
+
+.. literalinclude:: ../../../examples/21_rerank.py
+   :language: python
+   :linenos:
+
 Mode Selection
 --------------
 
@@ -40,15 +47,6 @@ You can also override the mode for individual calls:
    # Use OpenAI mode for this call only
    result = rerank("query", docs, mode="openai")
 
-Basic Usage
------------
-
-.. literalinclude:: ../../../examples/rerank_demo.py
-   :language: python
-   :linenos:
-   :start-after: def demo_basic_rerank
-   :end-before: def demo_top_k
-
 Score Sorting Rules
 --------------------
 
@@ -65,24 +63,6 @@ Lexilux automatically handles different score formats returned by rerank APIs:
 
 The library automatically detects which format is used and applies the correct sorting order.
 
-Top-K Filtering
----------------
-
-.. literalinclude:: ../../../examples/rerank_demo.py
-   :language: python
-   :linenos:
-   :start-after: def demo_top_k
-   :end-before: def demo_include_docs
-
-Include Documents
------------------
-
-.. literalinclude:: ../../../examples/rerank_demo.py
-   :language: python
-   :linenos:
-   :start-after: def demo_include_docs
-   :end-before: def demo_score_sorting_rules
-
 OpenAI-Compatible Mode
 ----------------------
 
@@ -94,7 +74,7 @@ When using ``mode="openai"``, Lexilux uses the standard OpenAI-compatible rerank
 - Payload:
 
   .. code-block:: json
-  
+
      {
        "model": "rerank-model",
        "query": "search query",
@@ -108,7 +88,7 @@ When using ``mode="openai"``, Lexilux uses the standard OpenAI-compatible rerank
 - Expected response:
 
   .. code-block:: json
-  
+
      {
        "results": [
          {
@@ -142,7 +122,7 @@ When using ``mode="dashscope"``, Lexilux uses the Alibaba Cloud DashScope rerank
 - Payload:
 
   .. code-block:: json
-  
+
      {
        "model": "qwen3-rerank",
        "input": {
@@ -160,7 +140,7 @@ When using ``mode="dashscope"``, Lexilux uses the Alibaba Cloud DashScope rerank
 - Expected response:
 
   .. code-block:: json
-  
+
      {
        "output": {
          "results": [
@@ -187,7 +167,7 @@ Lexilux supports multiple response formats from rerank APIs:
 1. **Dictionary format with results**:
 
    .. code-block:: json
-   
+
       {
         "results": [
           {"index": 0, "score": 0.95},
@@ -198,7 +178,7 @@ Lexilux supports multiple response formats from rerank APIs:
 2. **Dictionary format with data**:
 
    .. code-block:: json
-   
+
       {
         "data": [
           {"index": 0, "score": 0.95},
@@ -209,7 +189,7 @@ Lexilux supports multiple response formats from rerank APIs:
 3. **Direct list format with document text**:
 
    .. code-block:: json
-   
+
       [
         ["doc1", 0.95],
         ["doc2", 0.80]
@@ -218,22 +198,10 @@ Lexilux supports multiple response formats from rerank APIs:
 4. **Direct list format with index**:
 
    .. code-block:: json
-   
+
       [
         [0, 0.95],
         [1, 0.80]
       ]
 
-
 The library automatically detects and parses all these formats.
-
-Extra Parameters
-----------------
-
-Some rerank APIs support additional parameters:
-
-.. literalinclude:: ../../../examples/rerank_demo.py
-   :language: python
-   :linenos:
-   :start-after: def demo_extra_parameters
-   :end-before: def main

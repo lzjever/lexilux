@@ -303,11 +303,6 @@ class Embed:
         Examples:
             >>> result = await embed.acall("Hello")
             >>> vector = result.vectors
-
-            Concurrent embedding requests:
-            >>> texts = ["Hello", "World", "Test"]
-            >>> tasks = [embed.acall(text) for text in texts]
-            >>> results = await asyncio.gather(*tasks)
         """
         payload, is_single = self._build_payload(
             input, model, dimensions, encoding_format, user, params, extra
