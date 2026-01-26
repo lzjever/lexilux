@@ -5,7 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.0] - 2026-01-15
+## [2.4.0] - 2026-01-27
+
+### Changed
+
+#### HTTP Client Simplification
+- **Remove Connection Pooling**: Simplified HTTP client by removing connection pooling
+  - Each HTTP request now creates a new connection and closes it after completion
+  - No more connection state management or pooling overhead
+  - Removed `pool_connections` and `pool_maxsize` parameters from `Chat.__init__`
+  - Removed `connection_idle_timeout` parameter and cleanup logic
+  - Async client configured with `max_connections=1, max_keepalive_connections=0`
+  - Removed connection cleanup scheduling from streaming iterators
+
+### Fixed
+
+#### Bug Fixes
+- **Assistant Messages with Tool Calls**: Allow assistant messages with `tool_calls` to omit the `content` field
+  - Previously required all messages to have a `content` field, even for tool-only responses
+  - Now complies with OpenAI API specification (content can be null/omitted when tool_calls exist)
+  - Content is automatically set to `None` for such messages
+
+#### Documentation
+- **README Rewrite**: Updated README with professional style, removed all emojis
+- **Sphinx Documentation**: Fixed all documentation build warnings and errors
+  - Added async support documentation
+  - Updated example references to numbered structure
+  - Fixed API reference issues
+
+### Removed
+
+#### Deprecated Parameters
+- `pool_connections` parameter from `Chat.__init__` and `ChatFactory.create()`
+- `pool_maxsize` parameter from `Chat.__init__` and `ChatFactory.create()`
+- `connection_idle_timeout` parameter from `BaseAPIClient.__init__()`
+
+## [2.3.0] - 2026-01-15
 
 ### 🎯 Quality & Infrastructure Improvements
 
