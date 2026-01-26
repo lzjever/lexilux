@@ -99,6 +99,65 @@ class TestChatNormalizeMessages:
         with pytest.raises(ValueError, match="Invalid messages type"):
             normalize_messages(123)  # type: ignore
 
+    def test_normalize_assistant_with_tool_calls_no_content(self):
+        """Test that assistant messages with tool_calls can omit content"""
+        messages = normalize_messages(
+            [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "call_123",
+                            "type": "function",
+                            "function": {
+                                "name": "get_weather",
+                                "arguments": '{"location": "NYC"}',
+                            },
+                        }
+                    ],
+                }
+            ]
+        )
+        assert len(messages) == 1
+        assert messages[0]["role"] == "assistant"
+        assert "tool_calls" in messages[0]
+        assert messages[0]["content"] is None
+
+    def test_normalize_assistant_with_tool_calls_and_content(self):
+        """Test that assistant messages with both tool_calls and content work"""
+        messages = normalize_messages(
+            [
+                {
+                    "role": "assistant",
+                    "content": "I'll check the weather for you.",
+                    "tool_calls": [
+                        {
+                            "id": "call_123",
+                            "type": "function",
+                            "function": {
+                                "name": "get_weather",
+                                "arguments": '{"location": "NYC"}',
+                            },
+                        }
+                    ],
+                }
+            ]
+        )
+        assert len(messages) == 1
+        assert messages[0]["role"] == "assistant"
+        assert messages[0]["content"] == "I'll check the weather for you."
+        assert "tool_calls" in messages[0]
+
+    def test_normalize_user_without_content_raises(self):
+        """Test that user messages without content still raise error"""
+        with pytest.raises(ValueError, match="Must have 'content' key"):
+            normalize_messages([{"role": "user"}])
+
+    def test_normalize_system_without_content_raises(self):
+        """Test that system messages without content still raise error"""
+        with pytest.raises(ValueError, match="Must have 'content' key"):
+            normalize_messages([{"role": "system"}])
+
 
 class TestChatCall:
     """Chat __call__ method tests"""

@@ -80,14 +80,19 @@ def normalize_messages(
                         f"Invalid message dict: {msg}. Must have 'role' key."
                     )
 
+                # Allow assistant messages with tool_calls to omit content
+                # (OpenAI API allows content to be null/omitted when tool_calls exist)
                 if "content" not in msg:
-                    raise ValueError(
-                        f"Invalid message dict: {msg}. Must have 'content' key."
-                    )
-
-                # Validate content format
-                content = msg["content"]
-                if not isinstance(content, (str, list)):
+                    if msg.get("role") == "assistant" and "tool_calls" in msg:
+                        content = None
+                    else:
+                        raise ValueError(
+                            f"Invalid message dict: {msg}. Must have 'content' key."
+                        )
+                else:
+                    content = msg["content"]
+                # Validate content format (skip for None when tool_calls exist)
+                if content is not None and not isinstance(content, (str, list)):
                     raise ValueError(
                         f"Invalid content type: {type(content)}. "
                         "Content must be str or list of content blocks."
