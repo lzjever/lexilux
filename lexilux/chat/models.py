@@ -9,13 +9,13 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Union
 from lexilux.usage import Json, ResultBase, Usage
 
 # Type aliases
 Role = Literal["system", "user", "assistant", "tool"]
-MessageLike = str | dict[str, str] | dict[str, Any]
-MessagesLike = str | Sequence[MessageLike]
+MessageLike = Union[str, dict[str, str], dict[str, Any]]
+MessagesLike = Union[str, Sequence[MessageLike]]
 
 
 @dataclass
