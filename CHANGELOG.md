@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-01-27
+
+### Added
+
+#### Streaming Tool Call Improvements
+- **StreamingToolCall**: New dataclass for representing incremental tool call data during streaming
+  - `index`: Position of the tool call in the response
+  - `id`: Tool call identifier
+  - `name`: Function name
+  - `arguments_accumulated`: Accumulated arguments string
+  - `arguments_delta`: Latest chunk of arguments
+  - `is_complete`: Whether arguments form valid JSON
+
+#### Tool Call Accumulation
+- **Enhanced SSEChatStreamParser**: Now properly accumulates streaming tool calls across chunks
+  - Maintains state for tool call IDs, names, and arguments during streaming
+  - Parses tool call deltas incrementally from streaming responses
+  - Validates accumulated arguments as complete JSON before emitting ToolCall objects
+  - Supports multiple concurrent tool calls with proper index tracking
+
+### Changed
+
+#### ChatStreamChunk
+- Now includes `streaming_tool_calls` field for incremental tool call data during streaming
+- Provides `has_streaming_tool_calls` property for checking if chunk contains tool call deltas
+
+### Fixed
+
+#### Test Updates
+- **Mock Path Alignment**: Updated test mocks from `requests.Session.post` to `requests.post`
+  - Aligns with the refactored BaseAPIClient that uses direct `requests.post` calls
+  - Updated in `test_chat_stream.py`, `test_chat_api_improvements.py`, and `test_chat_continue.py`
+
 ## [2.4.0] - 2026-01-27
 
 ### Changed
