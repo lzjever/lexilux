@@ -9,7 +9,7 @@ of specific functions.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, Union
 
 
 @dataclass
@@ -144,4 +144,4 @@ class ToolChoice:
 
 
 # Type alias for tool choice parameter
-ToolChoiceParam = str | ToolChoice | None
+ToolChoiceParam = Union[str, ToolChoice, None]
