@@ -389,19 +389,23 @@ class Chat(BaseAPIClient):
                 return_raw_events=return_raw_events,
                 include_reasoning=include_reasoning,
             )
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                try:
-                    line_str = line.decode("utf-8")
-                except UnicodeDecodeError:
-                    continue
-                chunk = parser.feed_line(line_str)
-                if chunk is None:
-                    continue
-                yield chunk
-                if parser.done:
-                    break
+            try:
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    try:
+                        line_str = line.decode("utf-8")
+                    except UnicodeDecodeError:
+                        continue
+                    chunk = parser.feed_line(line_str)
+                    if chunk is None:
+                        continue
+                    yield chunk
+                    if parser.done:
+                        break
+            finally:
+                # Ensure the response is closed to release the HTTP connection.
+                response.close()
 
         # Create and return iterator (no cleanup wrapper needed)
         return StreamingIterator(_chunk_generator())
@@ -522,15 +526,20 @@ class Chat(BaseAPIClient):
                 return_raw_events=return_raw_events,
                 include_reasoning=include_reasoning,
             )
-            async for line in self._amake_streaming_request(
-                "chat/completions", payload
-            ):
-                chunk = parser.feed_line(line)
-                if chunk is None:
-                    continue
-                yield chunk
-                if parser.done:
-                    break
+            stream = self._amake_streaming_request("chat/completions", payload)
+            try:
+                async for line in stream:
+                    chunk = parser.feed_line(line)
+                    if chunk is None:
+                        continue
+                    yield chunk
+                    if parser.done:
+                        break
+            finally:
+                # Ensure the async generator is properly closed to release the HTTP connection.
+                # Without this, the httpx stream context manager inside _amake_streaming_request
+                # won't close until GC, potentially blocking subsequent requests.
+                await stream.aclose()
 
         # Create and return async iterator (no cleanup wrapper needed)
         return AsyncStreamingIterator(_async_chunk_generator())
