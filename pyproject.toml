@@ -29,6 +29,7 @@ classifiers = [
 dependencies = [
     "requests>=2.28.0",
     "httpx>=0.24.0",
+    "tenacity>=9.0.0",  # 新增：重试逻辑
     "typing_extensions>=4.0.0",
 ]
 
@@ -93,6 +94,7 @@ exclude = [
     "examples*",
     "docs*",
     "*.tests*",
+    "benchmarks*",
 ]
 
 [tool.setuptools.dynamic]
@@ -124,5 +126,6 @@ markers = [
     "slow: Slow running tests",
     "mock: Tests that require mocking",
     "asyncio: Async tests",
-    "example: Tests for example scripts"
+    "example: Tests for example scripts",
+    "benchmark: Performance benchmarks"
 ]

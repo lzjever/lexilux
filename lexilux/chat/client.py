@@ -7,6 +7,7 @@ both non-streaming and streaming responses.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +33,9 @@ from lexilux.usage import Json
 
 if TYPE_CHECKING:
     from lexilux.chat.tools import Tool
+
+
+logger = logging.getLogger(__name__)
 
 
 def _get_original_prompt(messages: MessagesLike) -> str:
@@ -404,7 +408,7 @@ class Chat(BaseAPIClient):
                     if parser.done:
                         break
             finally:
-                # Ensure the response is closed to release the HTTP connection.
+                logger.debug("Closing streaming response and releasing connection")
                 response.close()
 
         # Create and return iterator (no cleanup wrapper needed)
@@ -536,9 +540,9 @@ class Chat(BaseAPIClient):
                     if parser.done:
                         break
             finally:
-                # Ensure the async generator is properly closed to release the HTTP connection.
-                # Without this, the httpx stream context manager inside _amake_streaming_request
-                # won't close until GC, potentially blocking subsequent requests.
+                logger.debug(
+                    "Closing async streaming response and releasing connection"
+                )
                 await stream.aclose()
 
         # Create and return async iterator (no cleanup wrapper needed)

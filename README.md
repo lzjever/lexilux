@@ -135,6 +135,59 @@ async def main():
 asyncio.run(main())
 ```
 
+### Connection Pooling
+
+By default, Lexilux uses a connection pool with size 2 to reuse HTTP connections
+and improve performance. You can customize this based on your API provider's limits:
+
+```python
+chat = Chat(
+    base_url="https://api.openai.com/v1",
+    api_key="your-key",
+    model="gpt-4",
+    pool_size=10,  # Increase for higher concurrency
+)
+```
+
+**Provider Limits:**
+- OpenAI: Recommended <= 10
+- Anthropic: Recommended <= 5
+- Other providers: Check their documentation
+
+### Automatic Retries
+
+Lexilux automatically retries failed requests with exponential backoff when:
+- Rate limit errors (HTTP 429)
+- Server errors (HTTP 500, 502, 503, 504)
+- Network timeouts or connection errors
+
+Configure retry behavior:
+
+```python
+chat = Chat(
+    base_url="https://api.openai.com/v1",
+    api_key="your-key",
+    max_retries=3,  # Retry up to 3 times on transient errors
+)
+```
+
+**Note:** Only `retryable=True` errors trigger automatic retries.
+Authentication and validation errors are never retried.
+
+### Chat API Selection Guide
+
+| Method | Streaming | Ensures Complete | History Behavior |
+|--------|-----------|------------------|------------------|
+| `chat()` | No | No | Read-only |
+| `stream()` | Yes | No | Read-only |
+| `complete()` | No | Yes | Internal working copy |
+| `complete_stream()` | Yes | Yes | Internal working copy |
+
+**History Behavior:**
+- `chat()` and `stream()` never modify your history object
+- `complete()` methods create an internal working copy for state management
+- Your original `ChatHistory` is always preserved
+
 ## Documentation
 
 Full documentation available at: [lexilux.readthedocs.io](https://lexilux.readthedocs.io)

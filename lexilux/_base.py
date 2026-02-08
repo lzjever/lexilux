@@ -2,7 +2,7 @@
 Base HTTP client for all Lexilux API clients.
 
 Provides common functionality:
-- Direct HTTP requests (no connection pooling)
+- Connection pooling for improved performance
 - Retry logic for failed requests
 - Configurable timeouts
 - Authentication handling
@@ -16,13 +16,24 @@ from __future__ import annotations
 import logging
 import time
 from typing import TYPE_CHECKING, Any, AsyncIterator
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 import requests
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    wait_random,
+    retry_if_exception,
+    before_sleep_log,
+)
 
 from lexilux.exceptions import (
     APIError,
     AuthenticationError,
+    LexiluxError,
+    NetworkError,
     NotFoundError,
     RateLimitError,
     ServerError,
@@ -43,13 +54,13 @@ logger = logging.getLogger(__name__)
 
 class BaseAPIClient:
     """
-    Base API client with direct HTTP requests (no connection pooling).
+    Base API client with connection pooling for improved performance.
 
     All API clients (Chat, Embed, Rerank) should inherit from this class
     to get consistent HTTP behavior and configuration.
 
-    Each HTTP request creates a new connection and closes it after completion,
-    ensuring no persistent connections are maintained.
+    Connection pooling is enabled by default to improve performance by reusing
+    connections across multiple requests to the same host.
 
     Attributes:
         base_url: Base URL for API requests (without trailing slash).
@@ -57,6 +68,7 @@ class BaseAPIClient:
         timeout: Request timeout in seconds (float or tuple for connect/read).
         headers: Default headers for all requests.
         proxies: Proxy configuration (None means use environment variables).
+        pool_size: Connection pool size for HTTP adapter.
 
     Examples:
         >>> client = BaseAPIClient(
@@ -79,6 +91,7 @@ class BaseAPIClient:
         max_retries: int = 0,
         headers: dict[str, str] | None = None,
         proxies: dict[str, str] | None = None,
+        pool_size: int = 2,
     ):
         """
         Initialize base API client.
@@ -94,7 +107,11 @@ class BaseAPIClient:
             proxies: Proxy configuration dict (e.g., {"http": "http://proxy:port"}).
                     If None, uses environment variables (HTTP_PROXY, HTTPS_PROXY).
                     To disable proxies, pass {}.
+            pool_size: Connection pool size for HTTP adapter (default: 2).
         """
+        if pool_size < 1:
+            raise ValueError(f"pool_size must be at least 1, got {pool_size}")
+
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.proxies = proxies
@@ -111,6 +128,15 @@ class BaseAPIClient:
 
         # Prepare headers
         self.headers = self._prepare_headers(headers, api_key)
+
+        # Create Session and configure connection pool
+        self._session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=pool_size,
+            pool_maxsize=pool_size,
+        )
+        self._session.mount("http://", adapter)
+        self._session.mount("https://", adapter)
 
     def _prepare_headers(
         self,
@@ -134,6 +160,163 @@ class BaseAPIClient:
             headers.setdefault("Authorization", f"Bearer {api_key}")
 
         return headers
+
+    def _sanitize_for_logging(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[str, dict[str, str] | None]:
+        """
+        脱敏 URL 和 headers 中的敏感信息。
+
+        Returns:
+            (sanitized_url, sanitized_headers)
+        """
+        # URL 脱敏
+        parsed = urlparse(url)
+        sensitive_params = {"api_key", "token", "password"}
+
+        # Parse and sanitize query parameters
+        query_params = parse_qs(parsed.query, keep_blank_values=True)
+        sanitized_query_parts = []
+
+        for key, values in query_params.items():
+            if key.lower() in sensitive_params:
+                # For sensitive params, use *** without encoding
+                sanitized_query_parts.append(f"{key}=***")
+            else:
+                # For non-sensitive params, preserve original encoding
+                # We need to manually reconstruct from the original query string
+                # since parse_qs decodes everything
+                for value in values:
+                    sanitized_query_parts.append(f"{key}={value}")
+
+        sanitized_query = "&".join(sanitized_query_parts)
+        sanitized_url = parsed._replace(query=sanitized_query).geturl()
+
+        # Headers 脱敏
+        if headers:
+            sensitive_headers = {
+                "authorization",
+                "cookie",
+                "set-cookie",
+                "x-api-key",
+                "x-auth-token",
+            }
+            sanitized_headers = {
+                k: "***" if k.lower() in sensitive_headers else v
+                for k, v in headers.items()
+            }
+        else:
+            sanitized_headers = None
+
+        return sanitized_url, sanitized_headers
+
+    def _map_exception(self, exc: requests.exceptions.RequestException) -> LexiluxError:
+        """将 requests 异常映射到 Lexilux 异常"""
+        if isinstance(exc, requests.exceptions.Timeout):
+            return LexiluxTimeoutError(str(exc))
+        elif isinstance(exc, requests.exceptions.ConnectionError):
+            return LexiluxConnectionError(str(exc))
+        else:
+            return NetworkError(str(exc))
+
+    def _get_retry_decorator(self, max_attempts: int):
+        """
+        获取重试装饰器
+
+        Args:
+            max_attempts: 最大尝试次数（包括首次请求）
+
+        Returns:
+            重试装饰器或空装饰器（如果 max_attempts <= 1）
+        """
+        if max_attempts <= 1:
+            return lambda f: f  # 不重试
+
+        return retry(
+            stop=stop_after_attempt(max_attempts),
+            wait=wait_exponential(multiplier=0.1, min=0.1, max=60)
+            + wait_random(0, 0.1),
+            retry=retry_if_exception(
+                lambda e: isinstance(e, LexiluxError) and e.retryable
+            ),
+            before_sleep=before_sleep_log(logger, logging.DEBUG),
+            reraise=True,
+        )
+
+    def _do_request(self, endpoint: str, payload: dict) -> requests.Response:
+        """
+        执行请求（可被重试）
+
+        Args:
+            endpoint: API endpoint (e.g., "chat/completions").
+            payload: Request body as dict.
+
+        Returns:
+            requests.Response object.
+
+        Raises:
+            LexiluxTimeoutError: On timeout.
+            LexiluxConnectionError: On connection failure.
+            AuthenticationError: On authentication failure.
+            RateLimitError: On rate limit exceeded.
+            APIError: On other API errors.
+            ValidationError: On invalid input.
+        """
+        url = f"{self.base_url}/{endpoint}"
+        start_time = time.time()
+
+        # Sanitize URL and headers for logging
+        sanitized_url, _ = self._sanitize_for_logging(url, self.headers)
+
+        logger.debug("Making POST request to %s", sanitized_url)
+        logger.debug("Request timeout: %s", self.timeout)
+
+        try:
+            response = self._session.post(
+                url,
+                json=payload,
+                timeout=self.timeout,
+                headers=self.headers,
+                proxies=self.proxies,
+            )
+        except requests.exceptions.Timeout as e:
+            elapsed = time.time() - start_time
+            logger.error("Request timeout after %.2fs: %s", elapsed, sanitized_url)
+            raise LexiluxTimeoutError(f"Request timeout: {e}") from e
+        except requests.exceptions.ConnectionError as e:
+            elapsed = time.time() - start_time
+            logger.error("Connection failed after %.2fs: %s", elapsed, sanitized_url)
+            raise LexiluxConnectionError(f"Connection failed: {e}") from e
+        except requests.exceptions.RequestException as e:
+            elapsed = time.time() - start_time
+            logger.error(
+                "Request failed after %.2fs: %s - %s", elapsed, sanitized_url, e
+            )
+            # Generic requests error
+            raise APIError(f"Request failed: {e}") from e
+
+        elapsed = time.time() - start_time
+
+        # Handle HTTP error status codes
+        if not response.ok:
+            logger.warning(
+                "Request failed with status %d after %.2fs: %s",
+                response.status_code,
+                elapsed,
+                sanitized_url,
+            )
+            self._handle_response_error(response)
+
+        logger.info(
+            "Request completed in %.2fs with status %d: %s",
+            elapsed,
+            response.status_code,
+            sanitized_url,
+        )
+
+        return response
 
     def _handle_response_error(self, response: requests.Response) -> None:
         """
@@ -195,7 +378,7 @@ class BaseAPIClient:
         payload: dict[str, Any],
     ) -> requests.Response:
         """
-        Send POST request to API endpoint (creates new connection each time).
+        Send POST request to API endpoint using connection pool.
 
         Args:
             endpoint: API endpoint (e.g., "chat/completions").
@@ -212,59 +395,22 @@ class BaseAPIClient:
             APIError: On other API errors.
             ValidationError: On invalid input.
         """
-        url = f"{self.base_url}/{endpoint}"
-        start_time = time.time()
+        # 获取重试装饰器并应用到请求方法
+        retry_decorator = self._get_retry_decorator(self._max_retries + 1)
+        request_func = retry_decorator(self._do_request)
 
-        logger.debug("Making POST request to %s", url)
-        logger.debug("Request timeout: %s", self.timeout)
-
-        # Direct request without session - connection closed after response
         try:
-            response = requests.post(
-                url,
-                json=payload,
-                timeout=self.timeout,
-                headers=self.headers,
-                proxies=self.proxies,
-            )
-        except requests.exceptions.Timeout as e:
-            elapsed = time.time() - start_time
-            logger.error("Request timeout after %.2fs: %s", elapsed, url)
-            raise LexiluxTimeoutError(f"Request timeout: {e}") from e
-        except requests.exceptions.ConnectionError as e:
-            elapsed = time.time() - start_time
-            logger.error("Connection failed after %.2fs: %s", elapsed, url)
-            raise LexiluxConnectionError(f"Connection failed: {e}") from e
+            response = request_func(endpoint, payload)
         except requests.exceptions.RequestException as e:
-            elapsed = time.time() - start_time
-            logger.error("Request failed after %.2fs: %s - %s", elapsed, url, e)
-            # Generic requests error
-            raise APIError(f"Request failed: {e}") from e
-        finally:
-            # Connection is automatically closed when response object is garbage collected
-            # or when we explicitly close it
-            pass
+            # Map any remaining request exceptions to Lexilux errors
+            if isinstance(e, requests.exceptions.Timeout):
+                raise LexiluxTimeoutError(f"Request timeout: {e}") from e
+            elif isinstance(e, requests.exceptions.ConnectionError):
+                raise LexiluxConnectionError(f"Connection failed: {e}") from e
+            else:
+                raise APIError(f"Request failed: {e}") from e
 
-        elapsed = time.time() - start_time
-
-        # Handle HTTP error status codes
-        if not response.ok:
-            logger.warning(
-                "Request failed with status %d after %.2fs: %s",
-                response.status_code,
-                elapsed,
-                url,
-            )
-            self._handle_response_error(response)
-
-        logger.info(
-            "Request completed in %.2fs with status %d: %s",
-            elapsed,
-            response.status_code,
-            url,
-        )
-
-        # Close the response to release the connection
+        # Close the response to return connection to pool
         response.close()
 
         return response
@@ -275,7 +421,7 @@ class BaseAPIClient:
         payload: dict[str, Any],
     ) -> requests.Response:
         """
-        Send streaming POST request to API endpoint.
+        Send streaming POST request to API endpoint using connection pool.
 
         Args:
             endpoint: API endpoint (e.g., "chat/completions").
@@ -295,12 +441,15 @@ class BaseAPIClient:
         url = f"{self.base_url}/{endpoint}"
         start_time = time.time()
 
-        logger.debug("Making streaming POST request to %s", url)
+        # Sanitize URL and headers for logging
+        sanitized_url, _ = self._sanitize_for_logging(url, self.headers)
+
+        logger.debug("Making streaming POST request to %s", sanitized_url)
         logger.debug("Request timeout: %s", self.timeout)
 
-        # Direct request without session - connection managed by response lifecycle
+        # Use session for connection pooling
         try:
-            response = requests.post(
+            response = self._session.post(
                 url,
                 json=payload,
                 timeout=self.timeout,
@@ -310,16 +459,23 @@ class BaseAPIClient:
             )
         except requests.exceptions.Timeout as e:
             elapsed = time.time() - start_time
-            logger.error("Streaming request timeout after %.2fs: %s", elapsed, url)
+            logger.error(
+                "Streaming request timeout after %.2fs: %s", elapsed, sanitized_url
+            )
             raise LexiluxTimeoutError(f"Request timeout: {e}") from e
         except requests.exceptions.ConnectionError as e:
             elapsed = time.time() - start_time
-            logger.error("Streaming connection failed after %.2fs: %s", elapsed, url)
+            logger.error(
+                "Streaming connection failed after %.2fs: %s", elapsed, sanitized_url
+            )
             raise LexiluxConnectionError(f"Connection failed: {e}") from e
         except requests.exceptions.RequestException as e:
             elapsed = time.time() - start_time
             logger.error(
-                "Streaming request failed after %.2fs: %s - %s", elapsed, url, e
+                "Streaming request failed after %.2fs: %s - %s",
+                elapsed,
+                sanitized_url,
+                e,
             )
             # Generic requests error
             raise APIError(f"Request failed: {e}") from e
@@ -332,7 +488,7 @@ class BaseAPIClient:
                 "Streaming request failed with status %d after %.2fs: %s",
                 response.status_code,
                 elapsed,
-                url,
+                sanitized_url,
             )
             self._handle_response_error(response)
             # Close the response on error
@@ -342,10 +498,11 @@ class BaseAPIClient:
             "Streaming request initiated in %.2fs with status %d: %s",
             elapsed,
             response.status_code,
-            url,
+            sanitized_url,
         )
 
         # Note: Caller is responsible for closing the response when done streaming
+        # to return connection to pool
         return response
 
     # =========================================================================
@@ -434,6 +591,80 @@ class BaseAPIClient:
                 retryable=False,
             )
 
+    async def _ado_request(self, endpoint: str, payload: dict) -> httpx.Response:
+        """
+        执行异步请求（可被重试）
+
+        Args:
+            endpoint: API endpoint (e.g., "chat/completions").
+            payload: Request body as dict.
+
+        Returns:
+            httpx.Response object.
+
+        Raises:
+            LexiluxTimeoutError: On timeout.
+            LexiluxConnectionError: On connection failure.
+            AuthenticationError: On authentication failure.
+            RateLimitError: On rate limit exceeded.
+            APIError: On other API errors.
+            ValidationError: On invalid input.
+        """
+        url = f"{self.base_url}/{endpoint}"
+        start_time = time.time()
+
+        # Sanitize URL and headers for logging
+        sanitized_url, _ = self._sanitize_for_logging(url, self.headers)
+
+        logger.debug("Making async POST request to %s", sanitized_url)
+
+        client = self._get_async_client()
+
+        try:
+            response = await client.post(
+                url,
+                json=payload,
+            )
+        except httpx.TimeoutException as e:
+            elapsed = time.time() - start_time
+            logger.error(
+                "Async request timeout after %.2fs: %s", elapsed, sanitized_url
+            )
+            raise LexiluxTimeoutError(f"Request timeout: {e}") from e
+        except httpx.ConnectError as e:
+            elapsed = time.time() - start_time
+            logger.error(
+                "Async connection failed after %.2fs: %s", elapsed, sanitized_url
+            )
+            raise LexiluxConnectionError(f"Connection failed: {e}") from e
+        except httpx.HTTPError as e:
+            elapsed = time.time() - start_time
+            logger.error(
+                "Async request failed after %.2fs: %s - %s", elapsed, sanitized_url, e
+            )
+            raise APIError(f"Request failed: {e}") from e
+
+        elapsed = time.time() - start_time
+
+        # Handle HTTP error status codes
+        if not response.is_success:
+            logger.warning(
+                "Async request failed with status %d after %.2fs: %s",
+                response.status_code,
+                elapsed,
+                sanitized_url,
+            )
+            self._handle_async_response_error(response)
+
+        logger.info(
+            "Async request completed in %.2fs with status %d: %s",
+            elapsed,
+            response.status_code,
+            sanitized_url,
+        )
+
+        return response
+
     async def _amake_request(
         self,
         endpoint: str,
@@ -457,49 +688,21 @@ class BaseAPIClient:
             APIError: On other API errors.
             ValidationError: On invalid input.
         """
-        url = f"{self.base_url}/{endpoint}"
-        start_time = time.time()
-
-        logger.debug("Making async POST request to %s", url)
-
-        client = self._get_async_client()
+        # 获取重试装饰器并应用到异步请求方法
+        retry_decorator = self._get_retry_decorator(self._max_retries + 1)
+        request_func = retry_decorator(self._ado_request)
 
         try:
-            response = await client.post(
-                url,
-                json=payload,
-            )
-        except httpx.TimeoutException as e:
-            elapsed = time.time() - start_time
-            logger.error("Async request timeout after %.2fs: %s", elapsed, url)
-            raise LexiluxTimeoutError(f"Request timeout: {e}") from e
-        except httpx.ConnectError as e:
-            elapsed = time.time() - start_time
-            logger.error("Async connection failed after %.2fs: %s", elapsed, url)
-            raise LexiluxConnectionError(f"Connection failed: {e}") from e
+            response = await request_func(endpoint, payload)
         except httpx.HTTPError as e:
-            elapsed = time.time() - start_time
-            logger.error("Async request failed after %.2fs: %s - %s", elapsed, url, e)
-            raise APIError(f"Request failed: {e}") from e
+            # Map any remaining httpx exceptions to Lexilux errors
+            if isinstance(e, httpx.TimeoutException):
+                raise LexiluxTimeoutError(f"Request timeout: {e}") from e
+            elif isinstance(e, httpx.ConnectError):
+                raise LexiluxConnectionError(f"Connection failed: {e}") from e
+            else:
+                raise APIError(f"Request failed: {e}") from e
 
-        elapsed = time.time() - start_time
-
-        # Handle HTTP error status codes
-        if not response.is_success:
-            logger.warning(
-                "Async request failed with status %d after %.2fs: %s",
-                response.status_code,
-                elapsed,
-                url,
-            )
-            self._handle_async_response_error(response)
-
-        logger.info(
-            "Async request completed in %.2fs with status %d: %s",
-            elapsed,
-            response.status_code,
-            url,
-        )
         return response
 
     async def _amake_streaming_request(
@@ -528,7 +731,10 @@ class BaseAPIClient:
         url = f"{self.base_url}/{endpoint}"
         start_time = time.time()
 
-        logger.debug("Making async streaming POST request to %s", url)
+        # Sanitize URL and headers for logging
+        sanitized_url, _ = self._sanitize_for_logging(url, self.headers)
+
+        logger.debug("Making async streaming POST request to %s", sanitized_url)
 
         client = self._get_async_client()
 
@@ -544,7 +750,7 @@ class BaseAPIClient:
                         "Async streaming request failed with status %d after %.2fs: %s",
                         response.status_code,
                         elapsed,
-                        url,
+                        sanitized_url,
                     )
                     self._handle_async_response_error(response)
 
@@ -552,7 +758,7 @@ class BaseAPIClient:
                     "Async streaming request initiated in %.2fs with status %d: %s",
                     elapsed,
                     response.status_code,
-                    url,
+                    sanitized_url,
                 )
 
                 # Yield lines from the stream
@@ -563,19 +769,26 @@ class BaseAPIClient:
         except httpx.TimeoutException as e:
             elapsed = time.time() - start_time
             logger.error(
-                "Async streaming request timeout after %.2fs: %s", elapsed, url
+                "Async streaming request timeout after %.2fs: %s",
+                elapsed,
+                sanitized_url,
             )
             raise LexiluxTimeoutError(f"Request timeout: {e}") from e
         except httpx.ConnectError as e:
             elapsed = time.time() - start_time
             logger.error(
-                "Async streaming connection failed after %.2fs: %s", elapsed, url
+                "Async streaming connection failed after %.2fs: %s",
+                elapsed,
+                sanitized_url,
             )
             raise LexiluxConnectionError(f"Connection failed: {e}") from e
         except httpx.HTTPError as e:
             elapsed = time.time() - start_time
             logger.error(
-                "Async streaming request failed after %.2fs: %s - %s", elapsed, url, e
+                "Async streaming request failed after %.2fs: %s - %s",
+                elapsed,
+                sanitized_url,
+                e,
             )
             raise APIError(f"Request failed: {e}") from e
 
@@ -586,8 +799,9 @@ class BaseAPIClient:
             self._async_client = None
 
     def close(self):
-        """Close any resources (no-op for sync client with no pooling)."""
-        pass
+        """Close the session and release resources."""
+        if hasattr(self, "_session") and self._session is not None:
+            self._session.close()
 
     def __enter__(self):
         """Context manager entry."""
