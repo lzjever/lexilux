@@ -1,10 +1,10 @@
-"""Benchmarks configuration."""
+"""Configuration for benchmark tests."""
 
 import pytest
 
 
 def pytest_configure(config):
-    """Configure pytest for benchmarks."""
+    """Register custom markers."""
     config.addinivalue_line(
-        "markers", "benchmark: marks tests as benchmarks"
+        "markers", "benchmark: marks tests as performance benchmarks"
     )

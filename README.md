@@ -18,6 +18,9 @@
 - **OpenAI-Compatible**: Works with OpenAI-compatible APIs
 - **Automatic Retry**: Built-in retry logic with exponential backoff
 - **Connection Pooling**: HTTP connection pooling for better performance
+- **Rate Limiting**: Built-in rate limiter for API request throttling
+- **SSL Control**: Configurable SSL certificate verification
+- **Input Validation**: Comprehensive parameter validation with clear errors
 - **Exception Hierarchy**: Comprehensive exception system with error codes
 - **Function Calling**: OpenAI-compatible function/tool calling support
 - **Multimodal Support**: Vision capabilities with image inputs
@@ -119,6 +122,34 @@ if result.has_tool_calls:
     for tool_call in result.tool_calls:
         print(f"Calling: {tool_call.name}")
         print(f"Arguments: {tool_call.get_arguments()}")
+```
+
+### Rate Limiting
+
+```python
+from lexilux import Chat
+
+# Limit to 10 requests per second
+chat = Chat(
+    base_url="https://api.example.com/v1",
+    api_key="your-key",
+    model="gpt-4",
+    rate_limit=10  # requests per second
+)
+```
+
+### SSL Verification
+
+```python
+from lexilux import Chat
+
+# Disable SSL verification for testing (not recommended for production)
+chat = Chat(
+    base_url="https://api.example.com/v1",
+    api_key="your-key",
+    model="gpt-4",
+    verify_ssl=False
+)
 ```
 
 ### Async

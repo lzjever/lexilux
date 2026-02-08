@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from functools import lru_cache
 from importlib import resources
 from typing import TYPE_CHECKING, Iterator
 
@@ -365,6 +366,9 @@ class ModelRegistry:
         If the model is not found, returns a conservative default configuration
         and logs a warning (unless suppressed).
 
+        This method uses an LRU cache to speed up repeated lookups of the same
+        model. The cache stores up to 128 unique model specifications.
+
         Args:
             model_id: Model identifier (e.g., "gpt-4o", "claude-3-opus").
             provider: Provider identifier. If None, searches all providers.
@@ -385,6 +389,42 @@ class ModelRegistry:
             >>> # Unknown model without warning
             >>> spec = registry.get("my-custom-model", suppress_unknown_warning=True)
         """
+        # Try to get from cache first
+        spec = self._get_model_spec_cached(model_id, provider)
+
+        # Check if this was a cache hit for an unknown model (conservative defaults)
+        # by checking if it has the conservative capabilities and limits
+        is_unknown = (
+            spec.capabilities == _CONSERVATIVE_CAPABILITIES
+            and spec.limits == _CONSERVATIVE_LIMITS
+            and spec.modalities == _CONSERVATIVE_MODALITIES
+            and spec.provider_id in (provider or "unknown", "unknown")
+        )
+
+        # Log warning for unknown models if not suppressed
+        if is_unknown and not suppress_unknown_warning:
+            logger.warning(
+                f"Model '{model_id}' not found in registry. "
+                f"Using conservative defaults (8K context, text-only, no tool_call). "
+                f"Use suppress_unknown_warning=True to silence this warning."
+            )
+
+        return spec
+
+    def _get_model_spec(self, model_id: str, provider: str | None = None) -> ModelSpec:
+        """
+        Internal method to get model specification without caching.
+
+        This method contains the actual lookup logic that was previously in get().
+        It's called by the cached wrapper method.
+
+        Args:
+            model_id: Model identifier.
+            provider: Optional provider identifier.
+
+        Returns:
+            ModelSpec for the model or conservative defaults if not found.
+        """
         # Search with specified provider
         if provider:
             if provider in self._models and model_id in self._models[provider]:
@@ -397,13 +437,6 @@ class ModelRegistry:
                 return self._models[first_provider][model_id]
 
         # Not found - return conservative defaults
-        if not suppress_unknown_warning:
-            logger.warning(
-                f"Model '{model_id}' not found in registry. "
-                f"Using conservative defaults (8K context, text-only, no tool_call). "
-                f"Use suppress_unknown_warning=True to silence this warning."
-            )
-
         return ModelSpec(
             id=model_id,
             name=model_id,
@@ -412,6 +445,26 @@ class ModelRegistry:
             limits=_CONSERVATIVE_LIMITS,
             modalities=_CONSERVATIVE_MODALITIES,
         )
+
+    @lru_cache(maxsize=128)
+    def _get_model_spec_cached(
+        self, model_id: str, provider: str | None = None
+    ) -> ModelSpec:
+        """
+        Cached version of model spec lookup.
+
+        This method wraps the actual lookup logic with functools.lru_cache
+        to reduce redundant lookups for the same model. The cache stores
+        up to 128 unique (model_id, provider) combinations.
+
+        Args:
+            model_id: Model identifier.
+            provider: Optional provider identifier (None for any provider).
+
+        Returns:
+            ModelSpec for the model or conservative defaults if not found.
+        """
+        return self._get_model_spec(model_id, provider)
 
     def get_providers_for_model(self, model_id: str) -> list[str]:
         """

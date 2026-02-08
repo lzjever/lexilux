@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any
 
 from lexilux._base import BaseAPIClient
+from lexilux._rate_limit import RateLimiter
 from lexilux.chat._request import (
     SSEChatStreamParser,
     build_api_messages,
@@ -20,8 +21,8 @@ from lexilux.chat._request import (
     parse_chat_completion_response,
     prepare_messages_for_request,
 )
-from lexilux.chat.conversation import Conversation
-from lexilux.chat.exceptions import ChatIncompleteResponseError
+from lexilux.chat.continuer import ConversationContinuer
+
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike
 from lexilux.chat.params import ChatParams
@@ -29,78 +30,22 @@ from lexilux.chat.streaming import (
     AsyncStreamingIterator,
     StreamingIterator,
 )
+from lexilux.chat.validation import (
+    validate_chat_params,
+    validate_messages,
+    validate_model,
+    validate_stop,
+)
 from lexilux.usage import Json
 
 if TYPE_CHECKING:
     from lexilux.chat.tools import Tool
-
 
 logger = logging.getLogger(__name__)
 
 
 def _get_original_prompt(messages: MessagesLike) -> str:
     return messages if isinstance(messages, str) else str(messages)
-
-
-class _CompleteStreamingIterator(StreamingIterator):
-    """StreamingIterator wrapper that checks for truncation after iteration."""
-
-    def __init__(
-        self,
-        chunk_gen: Iterator[ChatStreamChunk],
-        max_continues: int,
-        ensure_complete: bool,
-    ):
-        super().__init__(chunk_gen)
-        self._max_continues = max_continues
-        self._ensure_complete = ensure_complete
-
-    def __iter__(self) -> Iterator[ChatStreamChunk]:
-        for chunk in self._iterator:
-            self._result.update(chunk)
-            yield chunk
-
-        if self._ensure_complete:
-            final_result = self.result.to_chat_result()
-            if final_result.finish_reason == "length":
-                raise ChatIncompleteResponseError(
-                    f"Response still truncated after {self._max_continues} continues. "
-                    f"Consider increasing max_continues or max_tokens.",
-                    final_result=final_result,
-                    continue_count=self._max_continues,
-                    max_continues=self._max_continues,
-                )
-
-
-class _AsyncCompleteStreamingIterator(AsyncStreamingIterator):
-    """AsyncStreamingIterator wrapper that checks for truncation on completion."""
-
-    def __init__(
-        self,
-        chunk_gen: AsyncIterator[ChatStreamChunk],
-        max_continues: int,
-        ensure_complete: bool,
-    ):
-        super().__init__(chunk_gen)
-        self._max_continues = max_continues
-        self._ensure_complete = ensure_complete
-
-    async def __anext__(self) -> ChatStreamChunk:
-        try:
-            chunk = await self._iterator.__anext__()
-            self._result.update(chunk)
-            return chunk
-        except StopAsyncIteration:
-            if self._ensure_complete:
-                final_result = self.result.to_chat_result()
-                if final_result.finish_reason == "length":
-                    raise ChatIncompleteResponseError(
-                        f"Response still truncated after {self._max_continues} continues.",
-                        final_result=final_result,
-                        continue_count=self._max_continues,
-                        max_continues=self._max_continues,
-                    )
-            raise
 
 
 class Chat(BaseAPIClient):
@@ -135,6 +80,7 @@ class Chat(BaseAPIClient):
         max_retries: int = 0,
         headers: dict[str, str] | None = None,
         proxies: dict[str, str] | None = None,
+        rate_limit: tuple[int, float] | None = None,
     ):
         """
         Initialize Chat client.
@@ -151,6 +97,9 @@ class Chat(BaseAPIClient):
             proxies: Optional proxy configuration dict (e.g., {"http": "http://proxy:port"}).
                     If None, uses environment variables (HTTP_PROXY, HTTPS_PROXY).
                     To disable proxies, pass {}.
+            rate_limit: Optional rate limiting as (max_rate, time_period) tuple.
+                    Example: (10, 60.0) for 10 requests per 60 seconds.
+                    Requires aiolimiter to be installed.
 
         Note:
             Each HTTP request creates a new connection that closes after completion.
@@ -169,6 +118,15 @@ class Chat(BaseAPIClient):
 
         # Chat-specific attributes
         self.model = model
+
+        # Rate limiting
+        self._rate_limiter: RateLimiter | None = None
+        if rate_limit is not None:
+            max_rate, time_period = rate_limit
+            self._rate_limiter = RateLimiter(max_rate=max_rate, time_period=time_period)
+
+        # Conversation continuer for complete() methods
+        self._continuer = ConversationContinuer(self)
 
     @property
     def timeout_s(self) -> float:
@@ -200,12 +158,27 @@ class Chat(BaseAPIClient):
         This is the fast path for basic __call__ and stream operations.
         History is only read, never modified.
         """
+        # Validate model
+        final_model = validate_model(model, self.model)
+
         # Build messages (read-only from history)
         api_messages = build_api_messages(messages, system=system, history=history)
+        validate_messages(api_messages)
 
-        final_model = model or self.model
-        if not final_model:
-            raise ValueError("Model must be specified (either in __init__ or in call)")
+        # Validate chat parameters
+        validate_chat_params(
+            temperature=kwargs.get("temperature"),
+            top_p=kwargs.get("top_p"),
+            max_tokens=kwargs.get("max_tokens"),
+            presence_penalty=kwargs.get("presence_penalty"),
+            frequency_penalty=kwargs.get("frequency_penalty"),
+        )
+
+        # Validate stop sequences
+        stop = kwargs.get("stop")
+        if stop is not None:
+            validated_stop = validate_stop(stop)
+            kwargs["stop"] = validated_stop
 
         param_dict = build_params_dict(params=params, **kwargs)
         return build_payload(
@@ -237,6 +210,9 @@ class Chat(BaseAPIClient):
         This is for complete() family methods that need to track
         conversation state across multiple API calls.
         """
+        # Validate model
+        final_model = validate_model(model, self.model)
+
         normalized_messages, working_history, user_messages_to_add = (
             prepare_messages_for_request(
                 messages,
@@ -246,9 +222,23 @@ class Chat(BaseAPIClient):
             )
         )
 
-        final_model = model or self.model
-        if not final_model:
-            raise ValueError("Model must be specified (either in __init__ or in call)")
+        # Validate messages
+        validate_messages(normalized_messages)
+
+        # Validate chat parameters
+        validate_chat_params(
+            temperature=kwargs.get("temperature"),
+            top_p=kwargs.get("top_p"),
+            max_tokens=kwargs.get("max_tokens"),
+            presence_penalty=kwargs.get("presence_penalty"),
+            frequency_penalty=kwargs.get("frequency_penalty"),
+        )
+
+        # Validate stop sequences
+        stop = kwargs.get("stop")
+        if stop is not None:
+            validated_stop = validate_stop(stop)
+            kwargs["stop"] = validated_stop
 
         param_dict = build_params_dict(params=params, **kwargs)
         payload = build_payload(
@@ -383,17 +373,17 @@ class Chat(BaseAPIClient):
             parallel_tool_calls=parallel_tool_calls,
         )
 
-        # Make streaming request
-        response = self._make_streaming_request("chat/completions", payload)
-
-        # Create internal chunk generator
+        # Create internal chunk generator using context manager
         def _chunk_generator() -> Iterator[ChatStreamChunk]:
             """Internal generator for streaming chunks."""
             parser = SSEChatStreamParser(
                 return_raw_events=return_raw_events,
                 include_reasoning=include_reasoning,
             )
-            try:
+            # Use context manager to ensure response is always closed
+            with self._streaming_request_context(
+                "chat/completions", payload
+            ) as response:
                 for line in response.iter_lines():
                     if not line:
                         continue
@@ -407,9 +397,6 @@ class Chat(BaseAPIClient):
                     yield chunk
                     if parser.done:
                         break
-            finally:
-                logger.debug("Closing streaming response and releasing connection")
-                response.close()
 
         # Create and return iterator (no cleanup wrapper needed)
         return StreamingIterator(_chunk_generator())
@@ -417,6 +404,38 @@ class Chat(BaseAPIClient):
     # =========================================================================
     # Async Methods
     # =========================================================================
+
+    async def _amake_request(
+        self,
+        endpoint: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        """
+        Send async POST request to API endpoint with rate limiting.
+
+        Overrides base method to add rate limiting if configured.
+
+        Args:
+            endpoint: API endpoint (e.g., "chat/completions").
+            payload: Request body as dict.
+
+        Returns:
+            httpx.Response object.
+
+        Raises:
+            LexiluxTimeoutError: On timeout.
+            LexiluxConnectionError: On connection failure.
+            AuthenticationError: On authentication failure.
+            RateLimitError: On rate limit exceeded.
+            APIError: On other API errors.
+            ValidationError: On invalid input.
+        """
+        # Apply rate limiting if configured
+        if self._rate_limiter is not None:
+            await self._rate_limiter.acquire()
+
+        # Call parent's _amake_request
+        return await super()._amake_request(endpoint, payload)
 
     async def acall(
         self,
@@ -620,63 +639,21 @@ class Chat(BaseAPIClient):
 
             With progress tracking:
             >>> def on_progress(count, max_count, current, all_results):
-            ...     print(f"继续生成 {count}/{max_count}...")
+            ...     print(f"Continuing generation {count}/{max_count}...")
             >>> result = chat.complete("Write JSON", on_progress=on_progress)
         """
-        from lexilux.chat.utils import normalize_messages
-
-        original_prompt = _get_original_prompt(messages)
-
-        # Build messages list (read-only from history, no cloning)
-        working_messages: list[dict[str, Any]] = []
-        if history is not None:
-            working_messages.extend(history.get_messages(include_system=True))
-
-        # Add user message(s) from input
-        for msg in normalize_messages(messages):
-            working_messages.append(msg)
-
-        # First API call
-        result = self(working_messages, **params)
-
-        # Add assistant response for potential continuation
-        working_messages.append({"role": "assistant", "content": result.text})
-
-        if result.finish_reason == "length":
-            try:
-                result = Conversation.continue_request(
-                    self,
-                    result,
-                    messages=working_messages,
-                    max_continues=max_continues,
-                    continue_prompt=continue_prompt,
-                    on_progress=on_progress,
-                    continue_delay=continue_delay,
-                    on_error=on_error,
-                    on_error_callback=on_error_callback,
-                    original_prompt=original_prompt,
-                    **params,
-                )
-            except Exception as e:
-                if ensure_complete:
-                    raise ChatIncompleteResponseError(
-                        f"Failed to get complete response after {max_continues} continues: {e}",
-                        final_result=result,
-                        continue_count=0,
-                        max_continues=max_continues,
-                    ) from e
-                raise
-
-        if ensure_complete and result.finish_reason == "length" and on_error == "raise":
-            raise ChatIncompleteResponseError(
-                f"Response still truncated after {max_continues} continues. "
-                f"Consider increasing max_continues or max_tokens.",
-                final_result=result,
-                continue_count=max_continues,
-                max_continues=max_continues,
-            )
-
-        return result
+        return self._continuer.complete(
+            messages=messages,
+            history=history,
+            max_continues=max_continues,
+            ensure_complete=ensure_complete,
+            continue_prompt=continue_prompt,
+            on_progress=on_progress,
+            continue_delay=continue_delay,
+            on_error=on_error,
+            on_error_callback=on_error_callback,
+            **params,
+        )
 
     def complete_stream(
         self,
@@ -753,64 +730,17 @@ class Chat(BaseAPIClient):
             >>> iterator1 = chat.complete_stream("First question", history=history)
             >>> iterator2 = chat.complete_stream("Follow-up", history=history)
         """
-        from lexilux.chat.utils import normalize_messages
-
-        original_prompt = _get_original_prompt(messages)
-
-        # Build messages list (read-only from history, no cloning)
-        working_messages: list[dict[str, Any]] = []
-        if history is not None:
-            working_messages.extend(history.get_messages(include_system=True))
-
-        # Add user message(s) from input
-        for msg in normalize_messages(messages):
-            working_messages.append(msg)
-
-        def _complete_stream_generator() -> Iterator[ChatStreamChunk]:
-            # First stream
-            initial_iterator = self.stream(working_messages, **params)
-            yield from initial_iterator
-
-            initial_result = initial_iterator.result.to_chat_result()
-
-            # Add assistant response for potential continuation
-            working_messages.append(
-                {"role": "assistant", "content": initial_result.text}
-            )
-
-            if initial_result.finish_reason != "length":
-                return
-
-            try:
-                continue_iterator = Conversation.continue_request_stream(
-                    self,
-                    initial_result,
-                    messages=working_messages,
-                    max_continues=max_continues,
-                    continue_prompt=continue_prompt,
-                    on_progress=on_progress,
-                    continue_delay=continue_delay,
-                    on_error=on_error,
-                    on_error_callback=on_error_callback,
-                    original_prompt=original_prompt,
-                    **params,
-                )
-            except Exception as e:
-                if ensure_complete:
-                    raise ChatIncompleteResponseError(
-                        f"Failed to get complete response after {max_continues} continues: {e}",
-                        final_result=initial_result,
-                        continue_count=0,
-                        max_continues=max_continues,
-                    ) from e
-                raise
-
-            yield from continue_iterator
-
-        return _CompleteStreamingIterator(
-            _complete_stream_generator(),
+        return self._continuer.complete_stream(
+            messages=messages,
+            history=history,
             max_continues=max_continues,
             ensure_complete=ensure_complete,
+            continue_prompt=continue_prompt,
+            on_progress=on_progress,
+            continue_delay=continue_delay,
+            on_error=on_error,
+            on_error_callback=on_error_callback,
+            **params,
         )
 
     async def acomplete(
@@ -859,60 +789,18 @@ class Chat(BaseAPIClient):
             >>> import json
             >>> json_data = json.loads(result.text)  # Response is complete
         """
-        from lexilux.chat.utils import normalize_messages
-
-        original_prompt = _get_original_prompt(messages)
-
-        # Build messages list (read-only from history, no cloning)
-        working_messages: list[dict[str, Any]] = []
-        if history is not None:
-            working_messages.extend(history.get_messages(include_system=True))
-
-        # Add user message(s) from input
-        for msg in normalize_messages(messages):
-            working_messages.append(msg)
-
-        # First API call
-        result = await self.acall(working_messages, **params)
-
-        # Add assistant response for potential continuation
-        working_messages.append({"role": "assistant", "content": result.text})
-
-        if result.finish_reason == "length":
-            try:
-                result = await Conversation.acontinue_request(
-                    self,
-                    result,
-                    messages=working_messages,
-                    max_continues=max_continues,
-                    continue_prompt=continue_prompt,
-                    on_progress=on_progress,
-                    continue_delay=continue_delay,
-                    on_error=on_error,
-                    on_error_callback=on_error_callback,
-                    original_prompt=original_prompt,
-                    **params,
-                )
-            except Exception as e:
-                if ensure_complete:
-                    raise ChatIncompleteResponseError(
-                        f"Failed to get complete response after {max_continues} continues: {e}",
-                        final_result=result,
-                        continue_count=0,
-                        max_continues=max_continues,
-                    ) from e
-                raise
-
-        if ensure_complete and result.finish_reason == "length" and on_error == "raise":
-            raise ChatIncompleteResponseError(
-                f"Response still truncated after {max_continues} continues. "
-                f"Consider increasing max_continues or max_tokens.",
-                final_result=result,
-                continue_count=max_continues,
-                max_continues=max_continues,
-            )
-
-        return result
+        return await self._continuer.acomplete(
+            messages=messages,
+            history=history,
+            max_continues=max_continues,
+            ensure_complete=ensure_complete,
+            continue_prompt=continue_prompt,
+            on_progress=on_progress,
+            continue_delay=continue_delay,
+            on_error=on_error,
+            on_error_callback=on_error_callback,
+            **params,
+        )
 
     async def acomplete_stream(
         self,
@@ -960,66 +848,17 @@ class Chat(BaseAPIClient):
             ...     print(chunk.delta, end="", flush=True)
             >>> result = iterator.result.to_chat_result()
         """
-        from lexilux.chat.utils import normalize_messages
-
-        original_prompt = _get_original_prompt(messages)
-
-        # Build messages list (read-only from history, no cloning)
-        working_messages: list[dict[str, Any]] = []
-        if history is not None:
-            working_messages.extend(history.get_messages(include_system=True))
-
-        # Add user message(s) from input
-        for msg in normalize_messages(messages):
-            working_messages.append(msg)
-
-        async def _async_complete_stream_generator() -> AsyncIterator[ChatStreamChunk]:
-            # First stream
-            initial_iterator = await self.astream(working_messages, **params)
-            async for chunk in initial_iterator:
-                yield chunk
-
-            initial_result = initial_iterator.result.to_chat_result()
-
-            # Add assistant response for potential continuation
-            working_messages.append(
-                {"role": "assistant", "content": initial_result.text}
-            )
-
-            if initial_result.finish_reason != "length":
-                return
-
-            try:
-                continue_iterator = await Conversation.acontinue_request_stream(
-                    self,
-                    initial_result,
-                    messages=working_messages,
-                    max_continues=max_continues,
-                    continue_prompt=continue_prompt,
-                    on_progress=on_progress,
-                    continue_delay=continue_delay,
-                    on_error=on_error,
-                    on_error_callback=on_error_callback,
-                    original_prompt=original_prompt,
-                    **params,
-                )
-            except Exception as e:
-                if ensure_complete:
-                    raise ChatIncompleteResponseError(
-                        f"Failed to get complete response after {max_continues} continues: {e}",
-                        final_result=initial_result,
-                        continue_count=0,
-                        max_continues=max_continues,
-                    ) from e
-                raise
-
-            async for chunk in continue_iterator:
-                yield chunk
-
-        return _AsyncCompleteStreamingIterator(
-            _async_complete_stream_generator(),
+        return await self._continuer.acomplete_stream(
+            messages=messages,
+            history=history,
             max_continues=max_continues,
             ensure_complete=ensure_complete,
+            continue_prompt=continue_prompt,
+            on_progress=on_progress,
+            continue_delay=continue_delay,
+            on_error=on_error,
+            on_error_callback=on_error_callback,
+            **params,
         )
 
     def chat_with_history(

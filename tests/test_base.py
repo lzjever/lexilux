@@ -2,6 +2,7 @@
 
 import requests
 import pytest
+import unittest
 from unittest.mock import Mock, patch
 
 from lexilux._base import BaseAPIClient
@@ -16,27 +17,27 @@ from lexilux.exceptions import (
 
 
 def test_connection_pool_initialization():
-    """验证连接池正确初始化"""
+    """Verify connection pool is correctly initialized"""
     client = BaseAPIClient(
         base_url="https://api.example.com",
         pool_size=5,
     )
-    # 验证 Session 被创建
+    # Verify Session is created
     assert hasattr(client, "_session")
     assert isinstance(client._session, requests.Session)
 
 
 def test_connection_pool_default_size():
-    """验证默认连接池大小为 2"""
+    """Verify default connection pool size is 2"""
     client = BaseAPIClient(base_url="https://api.example.com")
-    # 验证默认 pool_size=2
+    # Verify default pool_size=2
     adapter = client._session.get_adapter("https://api.example.com")
     assert hasattr(adapter, "_pool_connections")
     assert adapter._pool_connections == 2
 
 
 def test_connection_pool_custom_size():
-    """验证自定义连接池大小"""
+    """Verify custom connection pool size"""
     client = BaseAPIClient(
         base_url="https://api.example.com",
         pool_size=20,
@@ -47,7 +48,7 @@ def test_connection_pool_custom_size():
 
 
 def test_pool_size_validation():
-    """验证 pool_size 必须大于等于 1"""
+    """Verify pool_size must be >= 1"""
     with pytest.raises(ValueError, match="pool_size must be at least 1"):
         BaseAPIClient(base_url="https://api.example.com", pool_size=0)
 
@@ -56,7 +57,7 @@ def test_pool_size_validation():
 
 
 def test_close_method():
-    """验证 close() 方法正确关闭 Session"""
+    """Verify close() method properly closes Session"""
     client = BaseAPIClient(base_url="https://api.example.com")
 
     # Session should be open
@@ -72,7 +73,7 @@ def test_close_method():
 
 
 def test_context_manager():
-    """验证上下文管理器正确关闭资源"""
+    """Verify context manager properly closes resources"""
     client = BaseAPIClient(base_url="https://api.example.com")
 
     with client as ctx:
@@ -85,7 +86,7 @@ def test_context_manager():
 
 
 def test_make_request_uses_session():
-    """验证 _make_request 使用 session 而非直接 requests.post"""
+    """Verify _make_request uses session instead of direct requests.post"""
     client = BaseAPIClient(base_url="https://api.example.com", api_key="test")
 
     with patch.object(client._session, "post") as mock_post:
@@ -97,15 +98,15 @@ def test_make_request_uses_session():
 
         client._make_request("test", {"data": "test"})
 
-        # 验证使用 session.post
+        # Verify session.post is used
         assert mock_post.called
-        # 验证传入正确的参数
+        # Verify correct parameters are passed
         call_args = mock_post.call_args
-        assert "test" in call_args[0][0]  # URL 包含 endpoint
+        assert "test" in call_args[0][0]  # URL contains endpoint
 
 
 def test_retry_on_rate_limit_error():
-    """验证 RateLimitError 触发重试"""
+    """Verify RateLimitError triggers retry"""
     client = BaseAPIClient(
         base_url="https://api.example.com",
         api_key="test",
@@ -128,12 +129,12 @@ def test_retry_on_rate_limit_error():
     with patch.object(client, "_do_request", side_effect=mock_request):
         client._make_request("test", {})
 
-    # 验证重试了 2 次（第一次失败，第二次成功）
+    # Verify retried 2 times (first failed, second succeeded)
     assert call_count == 2
 
 
 def test_no_retry_on_authentication_error():
-    """验证 AuthenticationError 不触发重试"""
+    """Verify AuthenticationError does not trigger retry"""
     client = BaseAPIClient(
         base_url="https://api.example.com",
         api_key="test",
@@ -151,12 +152,12 @@ def test_no_retry_on_authentication_error():
         with pytest.raises(AuthenticationError):
             client._make_request("test", {})
 
-    # 验证没有重试
+    # Verify no retry occurred
     assert call_count == 1
 
 
 def test_retry_on_server_error():
-    """验证 ServerError 触发重试"""
+    """Verify ServerError triggers retry"""
     client = BaseAPIClient(
         base_url="https://api.example.com",
         api_key="test",
@@ -179,12 +180,12 @@ def test_retry_on_server_error():
     with patch.object(client, "_do_request", side_effect=mock_request):
         client._make_request("test", {})
 
-    # 验证重试了 2 次
+    # Verify retried 2 times
     assert call_count == 2
 
 
 def test_retry_on_timeout_error():
-    """验证 TimeoutError 触发重试"""
+    """Verify TimeoutError triggers retry"""
     client = BaseAPIClient(
         base_url="https://api.example.com",
         api_key="test",
@@ -207,12 +208,12 @@ def test_retry_on_timeout_error():
     with patch.object(client, "_do_request", side_effect=mock_request):
         client._make_request("test", {})
 
-    # 验证重试了 2 次
+    # Verify retried 2 times
     assert call_count == 2
 
 
 def test_retry_on_connection_error():
-    """验证 ConnectionError 触发重试"""
+    """Verify ConnectionError triggers retry"""
     client = BaseAPIClient(
         base_url="https://api.example.com",
         api_key="test",
@@ -235,12 +236,12 @@ def test_retry_on_connection_error():
     with patch.object(client, "_do_request", side_effect=mock_request):
         client._make_request("test", {})
 
-    # 验证重试了 2 次
+    # Verify retried 2 times
     assert call_count == 2
 
 
 def test_no_retry_when_max_retries_is_zero():
-    """验证 max_retries=0 时不重试"""
+    """Verify no retry when max_retries=0"""
     client = BaseAPIClient(
         base_url="https://api.example.com",
         api_key="test",
@@ -258,12 +259,12 @@ def test_no_retry_when_max_retries_is_zero():
         with pytest.raises(RateLimitError):
             client._make_request("test", {})
 
-    # 验证只尝试了 1 次（没有重试）
+    # Verify only tried 1 time (no retry)
     assert call_count == 1
 
 
 def test_map_timeout_exception():
-    """验证 requests.Timeout 映射到 Lexilux TimeoutError"""
+    """Verify requests.Timeout maps to Lexilux TimeoutError"""
     client = BaseAPIClient(base_url="https://api.example.com")
 
     original_exc = requests.exceptions.Timeout("Connection timed out")
@@ -274,7 +275,7 @@ def test_map_timeout_exception():
 
 
 def test_map_connection_exception():
-    """验证 requests.ConnectionError 映射到 Lexilux ConnectionError"""
+    """Verify requests.ConnectionError maps to Lexilux ConnectionError"""
     client = BaseAPIClient(base_url="https://api.example.com")
 
     original_exc = requests.exceptions.ConnectionError("Failed to connect")
@@ -284,7 +285,7 @@ def test_map_connection_exception():
 
 
 def test_map_generic_request_exception():
-    """验证通用 RequestException 映射到 NetworkError"""
+    """Verify generic RequestException maps to NetworkError"""
     client = BaseAPIClient(base_url="https://api.example.com")
 
     original_exc = requests.exceptions.RequestException("Generic error")
@@ -295,7 +296,7 @@ def test_map_generic_request_exception():
 
 @pytest.mark.asyncio
 async def test_async_retry_on_rate_limit_error():
-    """验证异步方法也支持重试"""
+    """Verify async methods also support retry"""
     client = BaseAPIClient(
         base_url="https://api.example.com",
         api_key="test",
@@ -322,7 +323,7 @@ async def test_async_retry_on_rate_limit_error():
 
 
 def test_sanitize_url_with_api_key():
-    """验证 URL 中的 api_key 参数被脱敏"""
+    """Verify api_key parameter in URL is sanitized"""
     client = BaseAPIClient(base_url="https://api.example.com")
 
     url = "https://api.example.com/v1/chat?api_key=sk-abc123&other=value"
@@ -334,7 +335,7 @@ def test_sanitize_url_with_api_key():
 
 
 def test_sanitize_headers_with_authorization():
-    """验证 Authorization header 被脱敏"""
+    """Verify Authorization header is sanitized"""
     client = BaseAPIClient(base_url="https://api.example.com")
 
     headers = {
@@ -348,7 +349,7 @@ def test_sanitize_headers_with_authorization():
 
 
 def test_sanitize_headers_multiple_sensitive():
-    """验证多个敏感 headers 都被脱敏"""
+    """Verify all sensitive headers are sanitized"""
     client = BaseAPIClient(base_url="https://api.example.com")
 
     headers = {
@@ -363,3 +364,145 @@ def test_sanitize_headers_multiple_sensitive():
     assert sanitized["Cookie"] == "***"
     assert sanitized["X-API-Key"] == "***"
     assert sanitized["User-Agent"] == "Lexilux/2.5.0"
+
+
+def test_streaming_request_context_closes_response():
+    """Verify that streaming request context closes response."""
+    client = BaseAPIClient(base_url="https://api.example.com", api_key="test")
+
+    # Mock the session.post to return a response with close tracking
+    class MockResponse:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    mock_response = MockResponse()
+
+    with unittest.mock.patch.object(
+        client._session, "post", return_value=mock_response
+    ):
+        with client._streaming_request_context("test", {}):
+            pass
+
+    assert mock_response.closed, "Response should be closed after context exit"
+
+
+def test_streaming_request_context_closes_on_exception():
+    """Verify that streaming request context closes response even on exception."""
+    client = BaseAPIClient(base_url="https://api.example.com", api_key="test")
+
+    class MockResponse:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    mock_response = MockResponse()
+
+    with unittest.mock.patch.object(
+        client._session, "post", return_value=mock_response
+    ):
+        with pytest.raises(ValueError):
+            with client._streaming_request_context("test", {}):
+                raise ValueError("Test exception")
+
+    assert mock_response.closed, "Response should be closed even on exception"
+
+
+def test_ssl_verification_default():
+    """Verify SSL verification is enabled by default"""
+    client = BaseAPIClient(base_url="https://api.example.com")
+
+    # Verify default verify_ssl=True
+    assert client._verify_ssl is True
+
+
+def test_ssl_verification_disabled():
+    """Verify SSL verification can be disabled"""
+    client = BaseAPIClient(
+        base_url="https://api.example.com",
+        verify_ssl=False,
+    )
+
+    # Verify verify_ssl=False
+    assert client._verify_ssl is False
+
+
+def test_ssl_verification_custom_ca_bundle():
+    """Verify custom CA certificate can be used"""
+    ca_bundle_path = "/path/to/ca.crt"
+    client = BaseAPIClient(
+        base_url="https://api.example.com",
+        verify_ssl=ca_bundle_path,
+    )
+
+    # Verify verify_ssl is set to custom path
+    assert client._verify_ssl == ca_bundle_path
+
+
+def test_ssl_verification_used_in_request():
+    """Verify verify_ssl parameter is passed to requests"""
+    client = BaseAPIClient(
+        base_url="https://api.example.com",
+        verify_ssl="/custom/ca.crt",
+        api_key="test",
+    )
+
+    with patch.object(client._session, "post") as mock_post:
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.ok = True
+        mock_response.json.return_value = {"result": "ok"}
+        mock_post.return_value = mock_response
+
+        client._make_request("test", {"data": "test"})
+
+        # Verify verify parameter is passed
+        call_kwargs = mock_post.call_args[1]
+        assert "verify" in call_kwargs
+        assert call_kwargs["verify"] == "/custom/ca.crt"
+
+
+def test_ssl_verification_disabled_passed_to_request():
+    """Verify verify_ssl=False 被正确传递到 requests"""
+    client = BaseAPIClient(
+        base_url="https://api.example.com",
+        verify_ssl=False,
+        api_key="test",
+    )
+
+    with patch.object(client._session, "post") as mock_post:
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.ok = True
+        mock_response.json.return_value = {"result": "ok"}
+        mock_post.return_value = mock_response
+
+        client._make_request("test", {"data": "test"})
+
+        # Verify verify=False is passed
+        call_kwargs = mock_post.call_args[1]
+        assert "verify" in call_kwargs
+        assert call_kwargs["verify"] is False
+
+
+@pytest.mark.asyncio
+async def test_ssl_verification_used_in_async_request():
+    """验证 verify_ssl 参数被存储并可用于异步客户端"""
+    client = BaseAPIClient(
+        base_url="https://api.example.com",
+        verify_ssl="/custom/ca.crt",
+        api_key="test",
+    )
+
+    # Verify that verify_ssl is stored correctly
+    assert client._verify_ssl == "/custom/ca.crt"

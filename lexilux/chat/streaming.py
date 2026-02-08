@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING
 
+from lexilux.chat.exceptions import ChatIncompleteResponseError
 from lexilux.chat.models import ChatResult, ChatStreamChunk
 from lexilux.usage import Usage
 
@@ -176,3 +177,74 @@ class AsyncStreamingIterator:
         async for _ in self:
             pass
         return self._result.to_chat_result()
+
+
+class CompleteStreamingIterator(StreamingIterator):
+    """
+    StreamingIterator wrapper that checks for truncation after iteration.
+
+    Used by complete_stream() to ensure the final result is complete
+    and raise an exception if still truncated after max_continues.
+    """
+
+    def __init__(
+        self,
+        chunk_gen: Iterator[ChatStreamChunk],
+        max_continues: int,
+        ensure_complete: bool,
+    ):
+        super().__init__(chunk_gen)
+        self._max_continues = max_continues
+        self._ensure_complete = ensure_complete
+
+    def __iter__(self) -> Iterator[ChatStreamChunk]:
+        for chunk in self._iterator:
+            self._result.update(chunk)
+            yield chunk
+
+        if self._ensure_complete:
+            final_result = self.result.to_chat_result()
+            if final_result.finish_reason == "length":
+                raise ChatIncompleteResponseError(
+                    f"Response still truncated after {self._max_continues} continues. "
+                    f"Consider increasing max_continues or max_tokens.",
+                    final_result=final_result,
+                    continue_count=self._max_continues,
+                    max_continues=self._max_continues,
+                )
+
+
+class AsyncCompleteStreamingIterator(AsyncStreamingIterator):
+    """
+    AsyncStreamingIterator wrapper that checks for truncation on completion.
+
+    Used by acomplete_stream() to ensure the final result is complete
+    and raise an exception if still truncated after max_continues.
+    """
+
+    def __init__(
+        self,
+        chunk_gen: AsyncIterator[ChatStreamChunk],
+        max_continues: int,
+        ensure_complete: bool,
+    ):
+        super().__init__(chunk_gen)
+        self._max_continues = max_continues
+        self._ensure_complete = ensure_complete
+
+    async def __anext__(self) -> ChatStreamChunk:
+        try:
+            chunk = await self._iterator.__anext__()
+            self._result.update(chunk)
+            return chunk
+        except StopAsyncIteration:
+            if self._ensure_complete:
+                final_result = self.result.to_chat_result()
+                if final_result.finish_reason == "length":
+                    raise ChatIncompleteResponseError(
+                        f"Response still truncated after {self._max_continues} continues.",
+                        final_result=final_result,
+                        continue_count=self._max_continues,
+                        max_continues=self._max_continues,
+                    )
+            raise

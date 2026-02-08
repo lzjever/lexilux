@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 from urllib.parse import parse_qs, urlparse
 
@@ -69,6 +70,7 @@ class BaseAPIClient:
         headers: Default headers for all requests.
         proxies: Proxy configuration (None means use environment variables).
         pool_size: Connection pool size for HTTP adapter.
+        verify_ssl: SSL verification setting (True, False, or path to CA bundle).
 
     Examples:
         >>> client = BaseAPIClient(
@@ -92,6 +94,7 @@ class BaseAPIClient:
         headers: dict[str, str] | None = None,
         proxies: dict[str, str] | None = None,
         pool_size: int = 2,
+        verify_ssl: str | bool = True,
     ):
         """
         Initialize base API client.
@@ -108,6 +111,9 @@ class BaseAPIClient:
                     If None, uses environment variables (HTTP_PROXY, HTTPS_PROXY).
                     To disable proxies, pass {}.
             pool_size: Connection pool size for HTTP adapter (default: 2).
+            verify_ssl: SSL verification setting (default: True).
+                    True to use system certificates, False to disable verification,
+                    or a path to a custom CA bundle file.
         """
         if pool_size < 1:
             raise ValueError(f"pool_size must be at least 1, got {pool_size}")
@@ -116,6 +122,7 @@ class BaseAPIClient:
         self.api_key = api_key
         self.proxies = proxies
         self._max_retries = max_retries
+        self._verify_ssl = verify_ssl
 
         # Configure timeout
         if connect_timeout_s is not None and read_timeout_s is not None:
@@ -167,12 +174,12 @@ class BaseAPIClient:
         headers: dict[str, str] | None = None,
     ) -> tuple[str, dict[str, str] | None]:
         """
-        脱敏 URL 和 headers 中的敏感信息。
+        Sanitize sensitive information in URL and headers for logging.
 
         Returns:
             (sanitized_url, sanitized_headers)
         """
-        # URL 脱敏
+        # URL sanitization
         parsed = urlparse(url)
         sensitive_params = {"api_key", "token", "password"}
 
@@ -194,7 +201,7 @@ class BaseAPIClient:
         sanitized_query = "&".join(sanitized_query_parts)
         sanitized_url = parsed._replace(query=sanitized_query).geturl()
 
-        # Headers 脱敏
+        # Headers sanitization
         if headers:
             sensitive_headers = {
                 "authorization",
@@ -213,7 +220,7 @@ class BaseAPIClient:
         return sanitized_url, sanitized_headers
 
     def _map_exception(self, exc: requests.exceptions.RequestException) -> LexiluxError:
-        """将 requests 异常映射到 Lexilux 异常"""
+        """Map requests exceptions to Lexilux exceptions"""
         if isinstance(exc, requests.exceptions.Timeout):
             return LexiluxTimeoutError(str(exc))
         elif isinstance(exc, requests.exceptions.ConnectionError):
@@ -223,16 +230,16 @@ class BaseAPIClient:
 
     def _get_retry_decorator(self, max_attempts: int):
         """
-        获取重试装饰器
+        Get retry decorator for request methods.
 
         Args:
-            max_attempts: 最大尝试次数（包括首次请求）
+            max_attempts: Maximum number of attempts (including initial request)
 
         Returns:
-            重试装饰器或空装饰器（如果 max_attempts <= 1）
+            Retry decorator or no-op decorator (if max_attempts <= 1)
         """
         if max_attempts <= 1:
-            return lambda f: f  # 不重试
+            return lambda f: f  # No retry
 
         return retry(
             stop=stop_after_attempt(max_attempts),
@@ -247,7 +254,7 @@ class BaseAPIClient:
 
     def _do_request(self, endpoint: str, payload: dict) -> requests.Response:
         """
-        执行请求（可被重试）
+        Execute request (can be retried).
 
         Args:
             endpoint: API endpoint (e.g., "chat/completions").
@@ -280,6 +287,7 @@ class BaseAPIClient:
                 timeout=self.timeout,
                 headers=self.headers,
                 proxies=self.proxies,
+                verify=self._verify_ssl,
             )
         except requests.exceptions.Timeout as e:
             elapsed = time.time() - start_time
@@ -395,7 +403,7 @@ class BaseAPIClient:
             APIError: On other API errors.
             ValidationError: On invalid input.
         """
-        # 获取重试装饰器并应用到请求方法
+        # Get retry decorator and apply to request method
         retry_decorator = self._get_retry_decorator(self._max_retries + 1)
         request_func = retry_decorator(self._do_request)
 
@@ -414,6 +422,35 @@ class BaseAPIClient:
         response.close()
 
         return response
+
+    @contextmanager
+    def _streaming_request_context(self, endpoint: str, payload: dict):
+        """
+        Context manager for streaming requests with guaranteed cleanup.
+
+        Args:
+            endpoint: API endpoint path
+            payload: Request payload
+
+        Yields:
+            requests.Response: The response object
+
+        Ensures response is closed even if exception occurs.
+        """
+        url = f"{self.base_url}/{endpoint}"
+        response = self._session.post(
+            url,
+            json=payload,
+            stream=True,
+            timeout=self.timeout,
+            headers=self.headers,
+            proxies=self.proxies,
+            verify=self._verify_ssl,
+        )
+        try:
+            yield response
+        finally:
+            response.close()
 
     def _make_streaming_request(
         self,
@@ -456,6 +493,7 @@ class BaseAPIClient:
                 headers=self.headers,
                 proxies=self.proxies,
                 stream=True,
+                verify=self._verify_ssl,
             )
         except requests.exceptions.Timeout as e:
             elapsed = time.time() - start_time
@@ -514,7 +552,7 @@ class BaseAPIClient:
         Get or create the async HTTP client (lazy initialization).
 
         Returns:
-            httpx.AsyncClient instance (no connection pooling).
+            httpx.AsyncClient instance with connection pooling (max_connections=10, max_keepalive_connections=5).
         """
         if self._async_client is None:
             # Configure timeout
@@ -528,11 +566,15 @@ class BaseAPIClient:
             else:
                 timeout = httpx.Timeout(self.timeout)
 
-            # Create async client without connection limits
+            # Create async client with connection limits for keepalive
             self._async_client = httpx.AsyncClient(
                 timeout=timeout,
                 headers=self.headers,
-                limits=httpx.Limits(max_connections=1, max_keepalive_connections=0),
+                limits=httpx.Limits(
+                    max_connections=10,
+                    max_keepalive_connections=5,
+                ),
+                verify=self._verify_ssl,
             )
 
         return self._async_client
@@ -593,7 +635,7 @@ class BaseAPIClient:
 
     async def _ado_request(self, endpoint: str, payload: dict) -> httpx.Response:
         """
-        执行异步请求（可被重试）
+        Execute async request (can be retried).
 
         Args:
             endpoint: API endpoint (e.g., "chat/completions").
@@ -688,7 +730,7 @@ class BaseAPIClient:
             APIError: On other API errors.
             ValidationError: On invalid input.
         """
-        # 获取重试装饰器并应用到异步请求方法
+        # Get retry decorator and apply to async request method
         retry_decorator = self._get_retry_decorator(self._max_retries + 1)
         request_func = retry_decorator(self._ado_request)
 

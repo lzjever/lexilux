@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-02-08
+
+### Added
+
+#### Rate Limiting
+- **RateLimiter**: Token bucket rate limiter for API request throttling
+  - `rate_limit` parameter on all API clients (Chat, Embed, Rerank)
+  - Automatic request throttling based on configured rate
+  - Thread-safe implementation for concurrent operations
+  - Per-client rate limiting configuration
+
+#### SSL Verification Control
+- **verify_ssl**: Parameter to control SSL certificate verification
+  - Available on all API clients (Chat, Embed, Rerank)
+  - Defaults to `True` for secure connections
+  - Can be disabled for testing scenarios with self-signed certificates
+  - Improves security posture by making SSL verification explicit
+
+#### Input Validation
+- **validate_stop()**: Validation for stop sequences parameter
+  - Ensures stop sequences are properly formatted
+  - Validates that stop sequences contain non-empty strings
+  - Provides clear error messages for invalid input
+
+#### Comprehensive Validation
+- **Parameter Validation**: Enhanced validation for all Chat parameters
+  - `max_tokens`: Must be positive integer
+  - `temperature`: Must be between 0 and 2
+  - `top_p`: Must be between 0 and 1
+  - `presence_penalty`: Must be between -2 and 2
+  - `frequency_penalty`: Must be between -2 and 2
+  - `n`: Must be between 1 and 10
+  - `model`: Must be specified (either in client init or call)
+  - Clear validation errors with descriptive messages
+
+### Changed
+
+#### Performance Improvements
+- **Client Size Optimization**: Reduced `lexilux/chat/client.py` to 938 lines
+  - Consolidated redundant code paths
+  - Improved code organization and maintainability
+  - Removed duplicate validation logic
+
+#### Code Quality
+- **Type Safety**: Added comprehensive type hints throughout validation module
+- **Error Messages**: Improved error messages with specific parameter validation details
+- **Test Coverage**: Increased test coverage to 75% (exceeds 68% target)
+
+### Fixed
+
+#### Validation Fixes
+- **Parameter Validation**: Fixed validation to properly reject invalid values
+  - max_tokens=0 now raises ValidationError
+  - Invalid temperature values now properly rejected
+  - Model requirement properly enforced
+
+#### Test Fixes
+- **Test Expectations**: Updated tests to expect ValidationError for invalid inputs
+- **Import Cleanup**: Removed unused imports across test files
+- **Linting**: All ruff linting checks now pass
+- **Formatting**: All files properly formatted with ruff
+
 ## [2.5.0] - 2026-01-27
 
 ### Added

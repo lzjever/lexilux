@@ -9,6 +9,7 @@ import responses
 
 from lexilux import Chat, ChatResult
 from lexilux.chat.utils import normalize_messages
+from lexilux.exceptions import ValidationError
 
 
 class TestChatInit:
@@ -330,7 +331,7 @@ class TestChatCall:
         """Test calling chat without model (should raise error)"""
         chat = Chat(base_url="https://api.example.com/v1", api_key="test-key")
 
-        with pytest.raises(ValueError, match="Model must be specified"):
+        with pytest.raises(ValidationError, match="Model must be specified"):
             chat("Hello")
 
     @responses.activate

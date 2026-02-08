@@ -21,6 +21,7 @@ from lexilux import (
     RerankResult,
 )
 from lexilux.chat.history import ChatHistory
+from lexilux.exceptions import ValidationError
 from lexilux.usage import Usage
 
 
@@ -104,7 +105,7 @@ class TestChatAcall:
     async def test_acall_requires_model(self, chat):
         """Test that acall requires a model."""
         chat.model = None
-        with pytest.raises(ValueError, match="Model must be specified"):
+        with pytest.raises(ValidationError, match="Model must be specified"):
             await chat.acall("Hello")
 
 
