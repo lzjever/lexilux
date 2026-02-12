@@ -5,6 +5,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-02-12
+
+### Added
+
+#### Exception Handling
+- **ToolExecutionError**: New exception class for tool execution failures
+  - Includes `tool_name` attribute for debugging
+  - Non-retryable error type
+
+#### Type Definitions
+- **chat/types.py**: New module with type aliases for better type safety
+  - `JSONValue`, `JsonObject`: Type aliases for JSON data
+  - `MessageDict`, `ToolCallDict`, `UsageDict`: TypedDicts for API structures
+  - `ChatResponse`, `ChatResponseChoice`: Full response types
+  - `ContinuePromptCallable`, `ProgressCallback`, `ErrorCallback`: Callback types
+
+#### Test Coverage
+- **test_chat_validation.py**: New test file for validation functions (86% coverage)
+- **test_chat_continuer.py**: New test file for ConversationContinuer (59% coverage)
+
+### Changed
+
+#### Performance Improvements
+- **Embed class**: Added connection pooling with `requests.Session`
+  - New `pool_size` parameter (default: 10)
+  - Reuses HTTP connections for sync requests
+  - Added `close()` method for proper resource cleanup
+- **Rerank class**: Added connection pooling with `requests.Session`
+  - New `pool_size` parameter (default: 10)
+  - Shared session between Rerank and RerankModeHandler
+  - Added `close()` method for proper resource cleanup
+- **ChatHistory**: Optimized factory methods to skip redundant deepcopy
+  - `from_messages()` and `from_chat_result()` now use `_from_trusted()`
+  - Avoids double copying when creating history from normalized messages
+
+#### Code Deduplication
+- **AsyncClientMixin**: New mixin for async client management
+  - Shared by `Embed` and `Rerank` classes
+  - Provides `_get_async_client()`, `aclose()`, `close()` methods
+  - Provides sync/async context manager support
+  - Reduced duplicate code by ~36 lines
+
+#### Exception Handling Improvements
+- **Reduced broad exception catching**: From 14 instances to 3
+  - Remaining uses are intentional for user-provided callbacks
+  - Added explanatory comments for all remaining `except Exception` blocks
+- **More specific exception types**:
+  - `validation.py`: Now catches `(TypeError, ValueError, AttributeError)`
+  - `continuer.py`: Now catches `LexiluxError` instead of `Exception`
+  - `conversation.py`: Now catches `LexiluxError` for continuation methods
+  - `tokenizer.py`: Now catches `(OSError, ValueError)` for filesystem errors
+
+#### Documentation
+- **AGENTS.md updates**: Reflected new exception handling standards
+  - Updated structure section with new modules
+  - Updated exports section with new types
+  - Removed outdated anti-pattern warnings
+- **tests/AGENTS.md updates**: Added new test files
+
+### Fixed
+
+- Test `test_error_handling_return_partial` now raises `ServerError` instead of generic `Exception` to match production behavior
+
+### Test Coverage
+
+- Overall coverage increased to **77.89%** (target: 68%)
+- validation.py: **86%**
+- continuer.py: **59%**
+- All 555 tests passing
+
 ## [2.6.0] - 2026-02-08
 
 ### Added

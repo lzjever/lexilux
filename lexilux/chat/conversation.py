@@ -20,6 +20,7 @@ from lexilux.chat.streaming import (
     StreamingIterator,
     StreamingResult,
 )
+from lexilux.exceptions import LexiluxError
 from lexilux.usage import Usage
 
 if TYPE_CHECKING:
@@ -123,9 +124,10 @@ class Conversation:
             all_results: All results so far.
         """
         if on_progress:
+            # NOTE: Broad exception catch is intentional here to catch any error from
+            # user-provided callback. We log the error but don't break the main flow.
             try:
                 on_progress(continue_count, max_continues, current_result, all_results)
-            # Catch any exception from user-provided callback to avoid breaking main flow
             except Exception as e:
                 logger.warning(f"Progress callback failed: {e}")
 
@@ -187,6 +189,8 @@ class Conversation:
         callback_result: ChatResult | None = None
 
         if on_error_callback:
+            # NOTE: Broad exception catch is intentional here to catch any error from
+            # user-provided callback. We log the error but don't break the main flow.
             try:
                 response = on_error_callback(error, partial_result)
                 if isinstance(response, dict):
@@ -396,7 +400,7 @@ class Conversation:
                 current_result, accumulated_text = Conversation._process_continue_step(
                     continue_result, all_results, working_messages
                 )
-            except Exception as e:
+            except LexiluxError as e:
                 return Conversation._handle_continue_error(
                     e, current_result, all_results, on_error, on_error_callback
                 )
@@ -553,7 +557,7 @@ class Conversation:
                             continue_result, all_results, working_messages
                         )
                     )
-                except Exception as e:
+                except LexiluxError as e:
                     Conversation._handle_continue_error(
                         e, current_result, all_results, on_error, on_error_callback
                     )
@@ -650,7 +654,7 @@ class Conversation:
                 current_result, accumulated_text = Conversation._process_continue_step(
                     continue_result, all_results, working_messages
                 )
-            except Exception as e:
+            except LexiluxError as e:
                 return Conversation._handle_continue_error(
                     e, current_result, all_results, on_error, on_error_callback
                 )
@@ -744,7 +748,7 @@ class Conversation:
                             continue_result, all_results, working_messages
                         )
                     )
-                except Exception as e:
+                except LexiluxError as e:
                     Conversation._handle_continue_error(
                         e, current_result, all_results, on_error, on_error_callback
                     )

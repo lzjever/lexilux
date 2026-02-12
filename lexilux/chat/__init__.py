@@ -46,6 +46,18 @@ from lexilux.chat.tool_helpers import (
     execute_tool_calls,
 )
 from lexilux.chat.tools import FunctionTool, Tool, ToolChoice
+from lexilux.chat.types import (
+    ChatResponse,
+    ChatResponseChoice,
+    ContinuePromptCallable,
+    ErrorCallback,
+    JSONValue,
+    JsonObject,
+    MessageDict,
+    ProgressCallback,
+    ToolCallDict,
+    UsageDict,
+)
 from lexilux.chat.utils import normalize_messages
 
 # Backward compatibility alias
@@ -92,4 +104,15 @@ __all__ = [
     # Exceptions
     "ChatStreamInterruptedError",
     "ChatIncompleteResponseError",
+    # Type aliases
+    "JSONValue",
+    "JsonObject",
+    "MessageDict",
+    "ToolCallDict",
+    "UsageDict",
+    "ChatResponseChoice",
+    "ChatResponse",
+    "ContinuePromptCallable",
+    "ProgressCallback",
+    "ErrorCallback",
 ]

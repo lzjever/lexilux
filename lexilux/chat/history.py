@@ -214,7 +214,8 @@ class ChatHistory(MutableSequence):
         if normalized and normalized[0].get("role") == "system":
             sys_msg = normalized[0]["content"]
             normalized = normalized[1:]
-        return cls(messages=normalized, system=sys_msg)
+        # Use _from_trusted since normalized is a fresh list from normalize_messages
+        return cls._from_trusted(messages=normalized, system=sys_msg)
 
     @classmethod
     def from_chat_result(
@@ -241,11 +242,12 @@ class ChatHistory(MutableSequence):
             sys_msg = normalized[0]["content"]
             normalized = normalized[1:]
 
-        # Add assistant response
+        # Add assistant response - normalized.copy() creates a new list
         history_messages = normalized.copy()
         history_messages.append({"role": "assistant", "content": result.text})
 
-        return cls(messages=history_messages, system=sys_msg)
+        # Use _from_trusted since history_messages is a fresh list
+        return cls._from_trusted(messages=history_messages, system=sys_msg)
 
     @classmethod
     def from_dict(cls, data: dict) -> ChatHistory:

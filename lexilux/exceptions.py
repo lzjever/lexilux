@@ -245,3 +245,30 @@ class ConfigurationError(LexiluxError):
 
     def __init__(self, message: str = "Configuration error"):
         super().__init__(message, code=self.code, retryable=self.retryable)
+
+
+class ToolExecutionError(LexiluxError):
+    """
+    Error during tool/function execution.
+
+    Raised when a user-provided tool function raises an exception during execution.
+
+    This error is NOT retryable without fixing the tool function.
+
+    Attributes:
+        tool_name: Name of the tool that failed (if available).
+    """
+
+    code = "tool_execution_error"
+    retryable = False
+
+    def __init__(self, message: str, tool_name: str | None = None):
+        """
+        Initialize ToolExecutionError.
+
+        Args:
+            message: Human-readable error message.
+            tool_name: Name of the tool that failed (optional).
+        """
+        self.tool_name = tool_name
+        super().__init__(message, code=self.code, retryable=self.retryable)

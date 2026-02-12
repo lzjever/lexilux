@@ -251,7 +251,7 @@ class Tokenizer:
 
             return False, None
 
-        except Exception as e:
+        except (OSError, ImportError, AttributeError) as e:
             # If filesystem check fails for any reason, fail fast
             import warnings
 
@@ -306,7 +306,7 @@ class Tokenizer:
                 allow_patterns=["tokenizer*", "*.json", "*.txt", "vocab.*", "merges.*"],
                 ignore_patterns=["*.safetensors", "*.bin", "*.pt", "*.onnx"],
             )
-        except Exception as e:
+        except (OSError, ValueError) as e:
             # If download fails, provide a clear error message.
             raise OSError(
                 f"Failed to download tokenizer files for model '{self.model}'. "

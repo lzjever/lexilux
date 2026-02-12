@@ -19,6 +19,7 @@ from lexilux.chat.streaming import (
     AsyncStreamingIterator,
     StreamingIterator,
 )
+from lexilux.exceptions import LexiluxError
 
 if TYPE_CHECKING:
     from lexilux.chat.client import Chat
@@ -122,7 +123,7 @@ class ConversationContinuer:
                     original_prompt=original_prompt,
                     **params,
                 )
-            except Exception as e:
+            except LexiluxError as e:
                 if ensure_complete:
                     raise ChatIncompleteResponseError(
                         f"Failed to get complete response after {max_continues} continues: {e}",
@@ -225,7 +226,7 @@ class ConversationContinuer:
                     original_prompt=original_prompt,
                     **params,
                 )
-            except Exception as e:
+            except LexiluxError as e:
                 if ensure_complete:
                     raise ChatIncompleteResponseError(
                         f"Failed to get complete response after {max_continues} continues: {e}",
@@ -298,7 +299,7 @@ class ConversationContinuer:
                     original_prompt=original_prompt,
                     **params,
                 )
-            except Exception as e:
+            except LexiluxError as e:
                 if ensure_complete:
                     raise ChatIncompleteResponseError(
                         f"Failed to get complete response after {max_continues} continues: {e}",
@@ -381,7 +382,7 @@ class ConversationContinuer:
                     original_prompt=original_prompt,
                     **params,
                 )
-            except Exception as e:
+            except LexiluxError as e:
                 if ensure_complete:
                     raise ChatIncompleteResponseError(
                         f"Failed to get complete response after {max_continues} continues: {e}",

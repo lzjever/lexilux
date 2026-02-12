@@ -69,6 +69,9 @@ def execute_tool_calls(
             raise ValueError(f"Invalid arguments for {tool_call.name}: {e}") from e
 
         # Execute function
+        # NOTE: Broad exception catch is intentional here to catch any error from
+        # user-provided functions. We convert the error to a string message that
+        # gets returned to the model, allowing the conversation to continue.
         try:
             output = func(**args)
         except Exception as e:

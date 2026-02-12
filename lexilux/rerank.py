@@ -3,7 +3,7 @@ Rerank API client.
 
 Provides a simple, function-like API for document reranking with unified usage tracking.
 Supports multiple provider modes: OpenAI-compatible and DashScope.
-Supports both sync and async operations.
+Supports both sync and async operations with connection pooling.
 """
 
 from __future__ import annotations
@@ -12,14 +12,14 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-import httpx
 import requests
 
+from lexilux._async_client import AsyncClientMixin
 from lexilux.usage import Json, ResultBase, Usage
 from lexilux.chat.utils import parse_usage
 
 if TYPE_CHECKING:
-    pass
+    import httpx
 
 # Type aliases
 Ranked = list[tuple[int, float]]  # (index, score)
@@ -81,7 +81,8 @@ class RerankModeHandler(ABC):
     Abstract base class for rerank mode handlers.
 
     Each handler implements provider-specific request/response format conversion
-    while maintaining a unified interface.
+    while maintaining a unified interface. Supports connection pooling via
+    shared session.
     """
 
     def __init__(
@@ -91,6 +92,7 @@ class RerankModeHandler(ABC):
         headers: dict[str, str],
         timeout_s: float,
         proxies: dict[str, str] | None = None,
+        session: requests.Session | None = None,
     ):
         """
         Initialize mode handler.
@@ -101,12 +103,14 @@ class RerankModeHandler(ABC):
             headers: HTTP headers.
             timeout_s: Request timeout in seconds.
             proxies: Optional proxy configuration dict.
+            session: Optional requests.Session for connection pooling.
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.headers = headers
         self.timeout_s = timeout_s
         self.proxies = proxies
+        self._session = session
 
     @abstractmethod
     def build_request(
@@ -185,7 +189,7 @@ class RerankModeHandler(ABC):
 
     def make_request(self, url: str, payload: Json) -> Json:
         """
-        Make HTTP request.
+        Make HTTP request using connection pooling.
 
         Args:
             url: Request URL.
@@ -197,18 +201,28 @@ class RerankModeHandler(ABC):
         Raises:
             requests.RequestException: On network or HTTP errors.
         """
-        response = requests.post(
-            url,
-            json=payload,
-            headers=self.headers,
-            timeout=self.timeout_s,
-            proxies=self.proxies,
-        )
+        # Use shared session if available, otherwise create a one-off request
+        if self._session is not None:
+            response = self._session.post(
+                url,
+                json=payload,
+                headers=self.headers,
+                timeout=self.timeout_s,
+                proxies=self.proxies,
+            )
+        else:
+            response = requests.post(
+                url,
+                json=payload,
+                headers=self.headers,
+                timeout=self.timeout_s,
+                proxies=self.proxies,
+            )
         response.raise_for_status()
         return response.json()
 
     async def amake_request(
-        self, url: str, payload: Json, async_client: httpx.AsyncClient
+        self, url: str, payload: Json, async_client: "httpx.AsyncClient"
     ) -> Json:
         """
         Make async HTTP request.
@@ -388,14 +402,16 @@ class DashScopeHandler(RerankModeHandler):
         return parsed_results, usage
 
 
-class Rerank:
+class Rerank(AsyncClientMixin):
     """
-    Rerank API client.
+    Rerank API client with connection pooling.
 
     Provides a simple, function-like API for document reranking.
     Supports two modes:
     - "openai": OpenAI-compatible standard API (default)
     - "dashscope": Alibaba Cloud DashScope API
+
+    Uses connection pooling for improved performance in high-throughput scenarios.
 
     Examples:
         >>> # OpenAI-compatible mode (default)
@@ -416,6 +432,10 @@ class Rerank:
         ...     mode="dashscope"
         ... )
         >>> result = rerank("python http", ["urllib", "requests", "httpx"])
+
+        >>> # Context manager for proper resource cleanup
+        >>> with Rerank(base_url="...", api_key="key") as rerank:
+        ...     result = rerank("query", ["doc1", "doc2"])
     """
 
     # Mode handler registry
@@ -434,6 +454,7 @@ class Rerank:
         timeout_s: float = 60.0,
         headers: dict[str, str] | None = None,
         proxies: dict[str, str] | None = None,
+        pool_size: int = 10,
     ):
         """
         Initialize Rerank client.
@@ -449,6 +470,7 @@ class Rerank:
             proxies: Optional proxy configuration dict (e.g., {"http": "http://proxy:port"}).
                     If None, uses environment variables (HTTP_PROXY, HTTPS_PROXY).
                     To disable proxies, pass {}.
+            pool_size: Connection pool size for HTTP adapter (default: 10).
 
         Raises:
             ValueError: If mode is not supported.
@@ -470,7 +492,16 @@ class Rerank:
             self.headers.setdefault("Authorization", f"Bearer {self.api_key}")
         self.headers.setdefault("Content-Type", "application/json")
 
-        # Initialize mode handler
+        # Create Session with connection pooling for sync requests
+        self._session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=pool_size,
+            pool_maxsize=pool_size,
+        )
+        self._session.mount("http://", adapter)
+        self._session.mount("https://", adapter)
+
+        # Initialize mode handler with shared session
         handler_class = self._HANDLERS[mode]
         self._handler = handler_class(
             base_url=self.base_url,
@@ -478,10 +509,11 @@ class Rerank:
             headers=self.headers,
             timeout_s=self.timeout_s,
             proxies=self.proxies,
+            session=self._session,
         )
 
-        # Async client (lazy initialization)
-        self._async_client: httpx.AsyncClient | None = None
+        # Initialize async client (lazy) - required by AsyncClientMixin
+        self._async_client = None
 
     def _get_handler_for_call(self, mode: str | None) -> RerankModeHandler:
         """Get or create handler for a specific call."""
@@ -493,7 +525,7 @@ class Rerank:
         if use_mode == self.mode:
             return self._handler
 
-        # Create temporary handler for mode override
+        # Create temporary handler for mode override (with shared session)
         handler_class = self._HANDLERS[use_mode]
         return handler_class(
             base_url=self.base_url,
@@ -501,6 +533,7 @@ class Rerank:
             headers=self.headers,
             timeout_s=self.timeout_s,
             proxies=self.proxies,
+            session=self._session,
         )
 
     def _prepare_rerank(
@@ -604,16 +637,6 @@ class Rerank:
     # Async Methods
     # =========================================================================
 
-    def _get_async_client(self) -> httpx.AsyncClient:
-        """Get or create the async HTTP client."""
-        if self._async_client is None:
-            self._async_client = httpx.AsyncClient(
-                timeout=httpx.Timeout(self.timeout_s),
-                headers=self.headers,
-                proxies=self.proxies,
-            )
-        return self._async_client
-
     async def acall(
         self,
         query: str,
@@ -660,28 +683,12 @@ class Rerank:
             handler, response_data, docs, include_docs, top_k, return_raw
         )
 
-    async def aclose(self) -> None:
-        """Close the async client and release resources."""
-        if self._async_client is not None:
-            await self._async_client.aclose()
-            self._async_client = None
-
     def close(self) -> None:
-        """Close sync resources (placeholder for consistency)."""
-        pass
+        """
+        Close the sync session and release resources.
 
-    def __enter__(self):
-        """Context manager entry."""
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        self.close()
-
-    async def __aenter__(self):
-        """Async context manager entry."""
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        await self.aclose()
+        Should be called when done with the client, or use context manager.
+        """
+        if hasattr(self, "_session") and self._session is not None:
+            self._session.close()
+            self._session = None

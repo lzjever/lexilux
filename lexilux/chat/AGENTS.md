@@ -1,6 +1,7 @@
 # CHAT MODULE KNOWLEDGE BASE
 
 **Generated:** 2026-01-24
+**Updated:** 2026-02-12
 **Commit:** 9600b79
 **Branch:** main
 
@@ -9,21 +10,24 @@ Chat API - streaming, history, tools, conversations, continuation support.
 
 ## STRUCTURE
 ```
-chat/                 # 16 files, ~5,800 lines - PRIMARY HOTSPOT
+chat/                 # 17 files, ~5,900 lines - PRIMARY HOTSPOT
 ├── client.py         # 1174 lines - Main Chat (sync/async)
-├── conversation.py   # 984 lines - Conversation (was continue_.py)
+├── conversation.py   # 830 lines - Conversation (was continue_.py)
 ├── history.py        # 1039 lines - ChatHistory, TokenAnalysis
+├── continuer.py      # 404 lines - ConversationContinuer (complete methods)
 ├── _complete.py      # 278 lines - Auto-continue (extracted)
 ├── _request.py       # 238 lines - Request handling (extracted)
 ├── formatters.py     # 381 lines - ChatHistoryFormatter
 ├── models.py         # 322 lines - ChatResult, ChatStreamChunk, ToolCall
 ├── params.py         # 216 lines - ChatParams dataclass
-├── tool_helpers.py   # 239 lines - Tool helpers
+├── tool_helpers.py   # 241 lines - Tool helpers
 ├── utils.py          # 181 lines - normalize_messages, parse_usage
 ├── streaming.py      # 170 lines - StreamingIterator
 ├── tools.py          # 142 lines - Tool, FunctionTool, ToolChoice
 ├── content_blocks.py  # 125 lines - Content blocks
-└── exceptions.py      # 142 lines - Chat exceptions
+├── types.py          # 40 lines - Type aliases (JSONValue, MessageDict, etc.)
+├── validation.py     # 200 lines - Input validation
+└── exceptions.py     # 142 lines - Chat exceptions
 ```
 
 ## WHERE TO LOOK
@@ -66,12 +70,16 @@ chat/                 # 16 files, ~5,800 lines - PRIMARY HOTSPOT
 
 ## ANTI-PATTERNS
 
-### Bare Except (10 instances)
-- **AVOID bare `except Exception:`**
-- Locations:
-  - conversation.py: 6 (120, 189, 385, 608, 779, 912)
-  - _complete.py: 4 (63, 154, 206, 299)
-- All re-raise immediately - use specific exceptions with logging
+### Exception Handling (Updated 2026-02-12)
+- **AVOID bare `except Exception:`** except for user-provided callbacks
+- Remaining acceptable uses (3 instances):
+  - `conversation.py:131` - User progress callback
+  - `conversation.py:201` - User error callback
+  - `tool_helpers.py:77` - User function execution
+- All other exception handlers should use specific exception types:
+  - `LexiluxError` for library-specific errors
+  - `(TypeError, ValueError, AttributeError)` for validation errors
+  - `(OSError, ValueError)` for filesystem/network errors
 
 ### Code Duplication
 - **NEVER** add sync/async pairs without consolidating shared logic
@@ -110,7 +118,7 @@ chat/                 # 16 files, ~5,800 lines - PRIMARY HOTSPOT
 
 **Multimodal:** ContentBlock, TextContentBlock, ImageContentBlock, ImageUrlDetail
 
-**Types:** Role, MessageLike, MessagesLike, TokenAnalysis
+**Types:** Role, MessageLike, MessagesLike, TokenAnalysis, JSONValue, JsonObject, MessageDict, ToolCallDict, UsageDict, ChatResponseChoice, ChatResponse, ContinuePromptCallable, ProgressCallback, ErrorCallback
 
 **Utils:** normalize_messages, merge_histories, filter_by_role, search_content, get_statistics
 

@@ -2,7 +2,7 @@
 Embedding API client.
 
 Provides a simple, function-like API for text embeddings with unified usage tracking.
-Supports both sync and async operations.
+Supports both sync and async operations with connection pooling.
 """
 
 from __future__ import annotations
@@ -10,9 +10,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
 
-import httpx
 import requests
 
+from lexilux._async_client import AsyncClientMixin
 from lexilux.embed_params import EmbedParams
 from lexilux.usage import Json, ResultBase, Usage
 from lexilux.chat.utils import parse_usage
@@ -75,11 +75,12 @@ class EmbedResult(ResultBase):
             )
 
 
-class Embed:
+class Embed(AsyncClientMixin):
     """
-    Embedding API client.
+    Embedding API client with connection pooling.
 
     Provides a simple, function-like API for text embeddings.
+    Uses connection pooling for improved performance in high-throughput scenarios.
 
     Examples:
         >>> embed = Embed(base_url="https://api.example.com/v1", api_key="key", model="text-embedding-ada-002")
@@ -88,6 +89,10 @@ class Embed:
 
         >>> result = embed(["text1", "text2"])
         >>> vectors = result.vectors  # List[List[float]]
+
+        >>> # Context manager for proper resource cleanup
+        >>> with Embed(base_url="...", api_key="key") as embed:
+        ...     result = embed("Hello")
     """
 
     def __init__(
@@ -99,6 +104,7 @@ class Embed:
         timeout_s: float = 60.0,
         headers: dict[str, str] | None = None,
         proxies: dict[str, str] | None = None,
+        pool_size: int = 10,
     ):
         """
         Initialize Embed client.
@@ -112,6 +118,7 @@ class Embed:
             proxies: Optional proxy configuration dict (e.g., {"http": "http://proxy:port"}).
                     If None, uses environment variables (HTTP_PROXY, HTTPS_PROXY).
                     To disable proxies, pass {}.
+            pool_size: Connection pool size for HTTP adapter (default: 10).
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -125,8 +132,17 @@ class Embed:
             self.headers.setdefault("Authorization", f"Bearer {self.api_key}")
         self.headers.setdefault("Content-Type", "application/json")
 
-        # Async client (lazy initialization)
-        self._async_client: httpx.AsyncClient | None = None
+        # Create Session with connection pooling for sync requests
+        self._session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=pool_size,
+            pool_maxsize=pool_size,
+        )
+        self._session.mount("http://", adapter)
+        self._session.mount("https://", adapter)
+
+        # Initialize async client (lazy) - required by AsyncClientMixin
+        self._async_client = None
 
     def _build_payload(
         self,
@@ -243,7 +259,8 @@ class Embed:
         )
 
         url = f"{self.base_url}/embeddings"
-        response = requests.post(
+        # Use session with connection pooling
+        response = self._session.post(
             url,
             json=payload,
             headers=self.headers,
@@ -258,16 +275,6 @@ class Embed:
     # =========================================================================
     # Async Methods
     # =========================================================================
-
-    def _get_async_client(self) -> httpx.AsyncClient:
-        """Get or create the async HTTP client."""
-        if self._async_client is None:
-            self._async_client = httpx.AsyncClient(
-                timeout=httpx.Timeout(self.timeout_s),
-                headers=self.headers,
-                proxies=self.proxies,
-            )
-        return self._async_client
 
     async def acall(
         self,
@@ -316,28 +323,12 @@ class Embed:
         response_data = response.json()
         return self._process_response(response_data, is_single, return_raw)
 
-    async def aclose(self) -> None:
-        """Close the async client and release resources."""
-        if self._async_client is not None:
-            await self._async_client.aclose()
-            self._async_client = None
-
     def close(self) -> None:
-        """Close sync resources (placeholder for consistency)."""
-        pass
+        """
+        Close the sync session and release resources.
 
-    def __enter__(self):
-        """Context manager entry."""
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        self.close()
-
-    async def __aenter__(self):
-        """Async context manager entry."""
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        await self.aclose()
+        Should be called when done with the client, or use context manager.
+        """
+        if hasattr(self, "_session") and self._session is not None:
+            self._session.close()
+            self._session = None

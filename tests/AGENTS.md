@@ -1,11 +1,12 @@
 # TEST MODULE KNOWLEDGE BASE
 
 **Generated:** 2026-01-24
+**Updated:** 2026-02-12
 **Commit:** 9600b79
 **Branch:** main
 
 ## OVERVIEW
-28 test files (~9,300 lines) - Chat, Embed, Rerank, Tokenizer, History, Registry.
+30 test files (~9,500 lines) - Chat, Embed, Rerank, Tokenizer, History, Registry.
 
 ## STRUCTURE
 ```
@@ -18,6 +19,8 @@ tests/
 ├── test_chat_history.py          # History management
 ├── test_chat_history_token_analysis.py # Token counting
 ├── test_chat_continue.py          # Conversation/continue tests
+├── test_chat_validation.py        # Validation tests (NEW 2026-02-12)
+├── test_chat_continuer.py         # ConversationContinuer tests (NEW 2026-02-12)
 ├── test_chat_api_improvements.py  # API enhancements
 ├── test_chat_params_additional.py  # Parameter tests
 ├── test_chat_params_integration.py # Real API param tests

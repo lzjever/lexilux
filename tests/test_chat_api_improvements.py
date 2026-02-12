@@ -13,6 +13,7 @@ import pytest
 from lexilux import Chat, ChatContinue, ChatHistory
 from lexilux.chat.exceptions import ChatIncompleteResponseError
 from lexilux.chat.models import ChatResult
+from lexilux.exceptions import ServerError
 from lexilux.usage import Usage
 
 
@@ -451,8 +452,8 @@ class TestCustomizableContinueStrategy:
                     raise_for_status=lambda: None,
                 )
             else:
-                # Continue request fails
-                raise Exception("Network error")
+                # Continue request fails - use LexiluxError to match production behavior
+                raise ServerError("Network error")
 
         mock_post.side_effect = mock_response
 

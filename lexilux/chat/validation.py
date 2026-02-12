@@ -96,7 +96,7 @@ def validate_messages(messages: MessagesLike) -> list[dict[str, Any]]:
 
     try:
         normalized = normalize_messages(messages)
-    except Exception as e:
+    except (TypeError, ValueError, AttributeError) as e:
         raise ValidationError(f"Invalid messages format: {e}") from e
 
     if not normalized:
