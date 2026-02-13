@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-02-14
+
+### Added
+
+- **Unified Reasoning Mode Support**: Enable extended thinking across providers with a single API
+  - `reasoning=True` parameter for Chat methods (chat, stream, acall, astream)
+  - `reasoning={"effort": "high"}` for providers that support effort levels
+  - `reasoning={"max_tokens": 16000}` for providers that support budget tokens
+  - Supported providers: OpenAI, DeepSeek, Anthropic, Kimi, GLM, Minimax
+
+- **New `providers/` module**: Provider-specific reasoning configurations
+  - `ReasoningConfig` dataclass for provider settings
+  - `get_reasoning_config()` to retrieve provider config
+  - `detect_provider_from_url()` for automatic provider detection
+
+- **New `chat/reasoning.py` module**: Reasoning helper functions
+  - `normalize_reasoning()`: Convert various input formats to normalized dict
+  - `build_reasoning_request()`: Build provider-specific request params
+  - `extract_reasoning_content()`: Extract reasoning from response
+
+- **ChatResult enhancements**:
+  - New `reasoning` field containing reasoning content
+  - New `has_reasoning` property for easy checking
+
+- **ChatStreamChunk enhancements**:
+  - New `reasoning` property (alias for `reasoning_content`)
+  - New `has_reasoning` property for easy checking
+
+- **Data sync**: `make sync-models` command to sync from models.dev
+
+### Changed
+
+- **models.json**: Synced to latest from models.dev (89 providers, 2561 models)
+
+### Test Coverage
+
+- New `tests/test_reasoning.py` with 34 tests
+- All 602 tests passing (568 existing + 34 new)
+
 ## [2.7.4] - 2026-02-13
 
 ### Added
