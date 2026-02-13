@@ -24,7 +24,6 @@ from lexilux.chat._request import (
 from lexilux.chat.continuer import ConversationContinuer
 from lexilux.chat.reasoning import (
     build_reasoning_request,
-    extract_reasoning_content,
     normalize_reasoning,
 )
 from lexilux.providers.registry import detect_provider_from_url

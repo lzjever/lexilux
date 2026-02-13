@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from lexilux.providers.base import ReasoningConfig
 from lexilux.providers.registry import get_reasoning_config
 
 

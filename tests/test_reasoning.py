@@ -8,7 +8,6 @@ Tests the unified reasoning API across providers:
 - ChatResult.reasoning and ChatStreamChunk.reasoning
 """
 
-import pytest
 
 from lexilux.chat.reasoning import (
     build_reasoning_request,
@@ -162,9 +161,7 @@ class TestExtractStreamingReasoningDelta:
     """Tests for extract_streaming_reasoning_delta function."""
 
     def test_extracts_reasoning_delta(self):
-        chunk = {
-            "choices": [{"delta": {"reasoning_content": "thinking more"}}]
-        }
+        chunk = {"choices": [{"delta": {"reasoning_content": "thinking more"}}]}
         result = extract_streaming_reasoning_delta(chunk, "deepseek")
         assert result == "thinking more"
 

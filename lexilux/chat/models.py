@@ -274,7 +274,9 @@ class ChatResult(ResultBase):
 
     def __repr__(self) -> str:
         """Return string representation."""
-        reasoning_info = f", reasoning={len(self.reasoning)} chars" if self.reasoning else ""
+        reasoning_info = (
+            f", reasoning={len(self.reasoning)} chars" if self.reasoning else ""
+        )
         return f"ChatResult(text={self.text!r}, finish_reason={self.finish_reason!r}, usage={self.usage!r}, tool_calls={len(self.tool_calls)}{reasoning_info})"
 
 
