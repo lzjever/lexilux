@@ -36,39 +36,21 @@ def _load_bundled_data() -> dict | None:
     Returns:
         dict or None: The loaded data, or None if loading failed.
     """
-    # Python 3.10+ supports resources.files() with subpackages
-    if sys.version_info >= (3, 10):
+    # Python 3.9+: Use importlib.resources with read_text (available since 3.9)
+    if sys.version_info >= (3, 9):
         from importlib import resources
 
         try:
-            data_file = resources.files("lexilux.data").joinpath("models.json")
-            return json.loads(data_file.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError, OSError, TypeError) as e:
-            logger.warning(f"Could not load bundled models data: {e}")
-            return None
-    else:
-        # Python 3.9 fallback using pkg_resources or importlib_resources
-        try:
-            # Try importlib_resources (backport)
-            import importlib_resources
-
-            data_file = importlib_resources.files("lexilux.data").joinpath(
-                "models.json"
+            # Python 3.9 compatible API
+            return json.loads(
+                resources.read_text("lexilux.data", "models.json", encoding="utf-8")
             )
-            return json.loads(data_file.read_text(encoding="utf-8"))
-        except ImportError:
-            # Fall back to pkg_resources
-            try:
-                import pkg_resources
-
-                data = pkg_resources.resource_string("lexilux.data", "models.json")
-                return json.loads(data.decode("utf-8"))
-            except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
-                logger.warning(f"Could not load bundled models data: {e}")
-                return None
         except (FileNotFoundError, json.JSONDecodeError, OSError, TypeError) as e:
             logger.warning(f"Could not load bundled models data: {e}")
             return None
+
+    # Fallback for older Python (should not reach here as we support 3.9+)
+    return None
 
 
 # Conservative default configuration for unknown models
