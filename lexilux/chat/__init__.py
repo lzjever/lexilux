@@ -4,6 +4,8 @@ Chat API module.
 Provides Chat client, result models, parameter configuration, and tool support for chat completions.
 """
 
+import warnings
+
 from lexilux.chat.client import Chat
 from lexilux.chat.content_blocks import (
     ContentBlock,
@@ -11,7 +13,7 @@ from lexilux.chat.content_blocks import (
     ImageUrlDetail,
     TextContentBlock,
 )
-from lexilux.chat.conversation import Conversation
+from lexilux.chat.conversation import _ResponseContinuer
 from lexilux.chat.exceptions import (
     ChatIncompleteResponseError,
     ChatStreamInterruptedError,
@@ -60,8 +62,27 @@ from lexilux.chat.types import (
 )
 from lexilux.chat.utils import normalize_messages
 
-# Backward compatibility alias
-ChatContinue = Conversation
+
+# Backward compatibility aliases with deprecation warnings
+def __getattr__(name: str):
+    if name == "ChatContinue":
+        warnings.warn(
+            "ChatContinue is deprecated and will be removed in v3.0.0. "
+            "Use chat.complete() for automatic continuation instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _ResponseContinuer
+    if name == "Conversation":
+        warnings.warn(
+            "Conversation is deprecated and will be removed in v3.0.0. "
+            "Use chat.complete() for automatic continuation instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _ResponseContinuer
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     # Main classes
@@ -71,8 +92,6 @@ __all__ = [
     "ChatParams",
     "ChatHistory",
     "ChatHistoryFormatter",
-    "Conversation",
-    "ChatContinue",  # Backward compatibility alias
     "StreamingResult",
     "StreamingIterator",
     "AsyncStreamingIterator",

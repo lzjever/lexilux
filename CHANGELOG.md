@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.1] - 2026-02-13
+
+### Added
+
+- **StreamingResult.set_result()**: New method for properly setting complete result
+  - Uses `__slots__` attributes correctly (`_text_parts`, `_text_cache`)
+  - Avoids dynamic attribute creation
+
+### Changed
+
+#### API Improvements (UX)
+- **Conversation class renamed**: `Conversation` → `_ResponseContinuer` (internal API)
+  - Old name was confusing (suggested conversation history, but was for response continuation)
+  - Users should use `chat.complete()` instead of direct `_ResponseContinuer` access
+  - `Conversation` and `ChatContinue` kept as deprecated aliases (will be removed in v3.0.0)
+- **Updated documentation**: Improved clarity on Chat vs ChatHistory distinction
+  - New example file `examples/05_chat_vs_conversation.py`
+  - Updated `AGENTS.md` with clear concept explanations
+
+#### Internal Improvements
+- **astream() rate limiting**: Now applies rate limiting before streaming (consistent with acall())
+- **StreamingResult**: Fixed `_merged_streaming_result()` to use proper `__slots__` attributes
+
+### Fixed
+
+- **Python 3.9 compatibility**: Fixed `TypeAlias` import from `typing_extensions`
+  - `typing.TypeAlias` not available in Python 3.9
+- **pool_size validation**: Added upper limit (max 100) to prevent resource exhaustion
+  - Applies to `BaseAPIClient`, `Embed`, and `Rerank`
+- **Thread safety**: Added double-checked locking to `ModelRegistry.get_instance()`
+  - Prevents race conditions in multi-threaded environments
+
+### Deprecated
+
+- `Conversation` class: Use `chat.complete()` instead
+- `ChatContinue` alias: Use `chat.complete()` instead
+
+### Test Coverage
+
+- New test file `tests/test_v271_fixes.py` with 15 tests
+- Overall coverage: **77.95%** (target: 68%)
+- All 568 tests passing
+
 ## [2.7.0] - 2026-02-12
 
 ### Added

@@ -117,6 +117,8 @@ class BaseAPIClient:
         """
         if pool_size < 1:
             raise ValueError(f"pool_size must be at least 1, got {pool_size}")
+        if pool_size > 100:
+            raise ValueError(f"pool_size must be at most 100, got {pool_size}")
 
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key

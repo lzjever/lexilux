@@ -4,6 +4,8 @@ Lexilux - Unified LLM API client library
 Provides Chat, Embedding, Rerank, and Tokenizer support with a simple, function-like API.
 """
 
+import warnings
+
 from lexilux.chat import (
     AsyncStreamingIterator,
     Chat,
@@ -12,8 +14,6 @@ from lexilux.chat import (
     ChatParams,
     ChatResult,
     ChatStreamChunk,
-    Conversation,
-    ChatContinue,  # Backward compatibility
     ContentBlock,
     FunctionTool,
     ImageContentBlock,
@@ -34,6 +34,7 @@ from lexilux.chat import (
     normalize_messages,
     search_content,
 )
+from lexilux.chat.conversation import _ResponseContinuer
 from lexilux.embed import Embed, EmbedResult
 from lexilux.embed_params import EmbedParams
 from lexilux.exceptions import (
@@ -65,6 +66,29 @@ from lexilux.registry import (
 from lexilux.tokenizer import Tokenizer, TokenizeResult
 from lexilux.usage import ResultBase, Usage
 
+
+# Backward compatibility aliases with deprecation warnings
+def __getattr__(name: str):
+    """Provide backward-compatible access to deprecated names."""
+    if name == "Conversation":
+        warnings.warn(
+            "Conversation is deprecated and will be removed in v3.0.0. "
+            "Use chat.complete() for automatic continuation instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _ResponseContinuer
+    if name == "ChatContinue":
+        warnings.warn(
+            "ChatContinue is deprecated and will be removed in v3.0.0. "
+            "Use chat.complete() for automatic continuation instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _ResponseContinuer
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     # Exceptions
     "LexiluxError",
@@ -89,8 +113,6 @@ __all__ = [
     "ChatParams",
     "ChatHistory",
     "ChatHistoryFormatter",
-    "Conversation",
-    "ChatContinue",  # Backward compatibility
     "StreamingResult",
     "StreamingIterator",
     "AsyncStreamingIterator",
@@ -136,4 +158,4 @@ __all__ = [
     "ModelCost",
 ]
 
-__version__ = "2.7.0"
+__version__ = "2.7.1"

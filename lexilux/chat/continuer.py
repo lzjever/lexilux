@@ -11,7 +11,7 @@ import logging
 from collections.abc import AsyncIterator, Callable, Iterator
 from typing import TYPE_CHECKING, Any
 
-from lexilux.chat.conversation import Conversation
+from lexilux.chat.conversation import _ResponseContinuer as Conversation
 from lexilux.chat.exceptions import ChatIncompleteResponseError
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike

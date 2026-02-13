@@ -8,7 +8,9 @@ while maintaining flexibility for API responses.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, TypeAlias, TypedDict, Union
+from typing import TYPE_CHECKING, TypedDict, Union
+
+from typing_extensions import TypeAlias
 
 if TYPE_CHECKING:
     from lexilux.chat.models import ChatResult

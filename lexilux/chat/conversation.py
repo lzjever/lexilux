@@ -11,6 +11,7 @@ import asyncio
 import logging
 import random
 import time
+import warnings
 from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING, Any, Callable, Literal, overload
 
@@ -29,12 +30,33 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Conversation:
+class _ResponseContinuer:
     """
-    Continue functionality handler (user is responsible for determining if continue is needed).
+    Internal utility class for handling response continuation.
 
-    This class provides utilities for continuing generation when finish_reason == "length".
-    The user must check finish_reason and decide when to continue.
+    This class provides static methods for continuing generation when
+    `finish_reason == "length"` (i.e., the response was truncated due to
+    max_tokens limit).
+
+    **This is an INTERNAL API.** Users should use `chat.complete()` instead,
+    which handles continuation automatically.
+
+    When to use chat.complete() instead:
+        - You just want complete responses without truncation
+        - You don't need to customize continuation behavior
+
+    Note:
+        This class does NOT store conversation history. Use ChatHistory
+        for managing multi-turn conversation state.
+
+    Examples:
+        >>> # Recommended: Use chat.complete()
+        >>> result = chat.complete("Write a story", max_tokens=50, max_continues=5)
+
+        >>> # Low-level usage (internal only)
+        >>> result = chat("Write a story", max_tokens=50)
+        >>> if _ResponseContinuer.needs_continue(result):
+        ...     result = _ResponseContinuer.continue_request(...)
     """
 
     @staticmethod
@@ -50,8 +72,8 @@ class Conversation:
 
         Examples:
             >>> result = chat("Write a story", max_tokens=50)
-            >>> if Conversation.needs_continue(result):
-            ...     full_result = Conversation.continue_request(chat, result, history=history)
+            >>> if _ResponseContinuer.needs_continue(result):
+            ...     full_result = _ResponseContinuer.continue_request(chat, result, history=history)
         """
         return result.finish_reason == "length"
 
@@ -67,15 +89,16 @@ class Conversation:
         all_results: list[ChatResult],
     ) -> StreamingResult:
         merged_result = (
-            Conversation.merge_results(*all_results)
+            _ResponseContinuer.merge_results(*all_results)
             if len(all_results) > 1
             else initial_result
         )
         streaming_result = StreamingResult()
-        streaming_result._text = merged_result.text
-        streaming_result._finish_reason = merged_result.finish_reason
-        streaming_result._usage = merged_result.usage
-        streaming_result._done = True
+        streaming_result.set_result(
+            text=merged_result.text,
+            finish_reason=merged_result.finish_reason,
+            usage=merged_result.usage,
+        )
         return streaming_result
 
     @staticmethod
@@ -143,7 +166,7 @@ class Conversation:
             continue_delay: Fixed delay (seconds) or tuple (min, max) for random delay.
             continue_count: Current continue count (delay only applied if count > 1).
         """
-        delay = Conversation._get_delay_seconds(continue_delay, continue_count)
+        delay = _ResponseContinuer._get_delay_seconds(continue_delay, continue_count)
         if delay is not None:
             time.sleep(delay)
 
@@ -206,7 +229,7 @@ class Conversation:
 
         if action == "return_partial":
             return (
-                Conversation.merge_results(*all_results)
+                _ResponseContinuer.merge_results(*all_results)
                 if len(all_results) > 1
                 else partial_result
             )
@@ -289,7 +312,7 @@ class Conversation:
             return (
                 all_results[0]
                 if len(all_results) == 1
-                else Conversation.merge_results(*all_results)
+                else _ResponseContinuer.merge_results(*all_results)
             )
         return all_results
 
@@ -373,19 +396,21 @@ class Conversation:
             continue_count,
             accumulated_text,
             original_prompt,
-        ) = Conversation._prepare_continue_loop(last_result, messages, original_prompt)
+        ) = _ResponseContinuer._prepare_continue_loop(
+            last_result, messages, original_prompt
+        )
 
         while (
             current_result.finish_reason == "length" and continue_count < max_continues
         ):
             continue_count += 1
-            Conversation._apply_continue_delay(continue_delay, continue_count)
-            Conversation._call_progress_callback(
+            _ResponseContinuer._apply_continue_delay(continue_delay, continue_count)
+            _ResponseContinuer._call_progress_callback(
                 on_progress, continue_count, max_continues, current_result, all_results
             )
 
             try:
-                prompt = Conversation._get_continue_prompt(
+                prompt = _ResponseContinuer._get_continue_prompt(
                     continue_prompt,
                     continue_count,
                     max_continues,
@@ -397,15 +422,17 @@ class Conversation:
 
                 continue_result = chat(working_messages, **params)
 
-                current_result, accumulated_text = Conversation._process_continue_step(
-                    continue_result, all_results, working_messages
+                current_result, accumulated_text = (
+                    _ResponseContinuer._process_continue_step(
+                        continue_result, all_results, working_messages
+                    )
                 )
             except LexiluxError as e:
-                return Conversation._handle_continue_error(
+                return _ResponseContinuer._handle_continue_error(
                     e, current_result, all_results, on_error, on_error_callback
                 )
 
-        return Conversation._finalize_continue_request(
+        return _ResponseContinuer._finalize_continue_request(
             current_result, all_results, auto_merge
         )
 
@@ -423,7 +450,7 @@ class Conversation:
         Examples:
             >>> result1 = chat("Write a story", max_tokens=50)
             >>> result2 = chat.continue_request(...)
-            >>> full_result = Conversation.merge_results(result1, result2)
+            >>> full_result = _ResponseContinuer.merge_results(result1, result2)
         """
         if not results:
             raise ValueError("At least one result is required")
@@ -514,7 +541,9 @@ class Conversation:
             continue_count,
             accumulated_text,
             original_prompt,
-        ) = Conversation._prepare_continue_loop(last_result, messages, original_prompt)
+        ) = _ResponseContinuer._prepare_continue_loop(
+            last_result, messages, original_prompt
+        )
 
         # Reset all_results for the generator to populate
         all_results.clear()
@@ -528,8 +557,8 @@ class Conversation:
                 and continue_count < max_continues
             ):
                 continue_count += 1
-                Conversation._apply_continue_delay(continue_delay, continue_count)
-                Conversation._call_progress_callback(
+                _ResponseContinuer._apply_continue_delay(continue_delay, continue_count)
+                _ResponseContinuer._call_progress_callback(
                     on_progress,
                     continue_count,
                     max_continues,
@@ -538,7 +567,7 @@ class Conversation:
                 )
 
                 try:
-                    prompt = Conversation._get_continue_prompt(
+                    prompt = _ResponseContinuer._get_continue_prompt(
                         continue_prompt,
                         continue_count,
                         max_continues,
@@ -553,12 +582,12 @@ class Conversation:
 
                     continue_result = continue_iterator.result.to_chat_result()
                     current_result, accumulated_text = (
-                        Conversation._process_continue_step(
+                        _ResponseContinuer._process_continue_step(
                             continue_result, all_results, working_messages
                         )
                     )
                 except LexiluxError as e:
-                    Conversation._handle_continue_error(
+                    _ResponseContinuer._handle_continue_error(
                         e, current_result, all_results, on_error, on_error_callback
                     )
                     break
@@ -579,7 +608,7 @@ class Conversation:
         """
         Apply continue delay asynchronously.
         """
-        delay = Conversation._get_delay_seconds(continue_delay, continue_count)
+        delay = _ResponseContinuer._get_delay_seconds(continue_delay, continue_count)
         if delay is not None:
             await asyncio.sleep(delay)
 
@@ -625,21 +654,23 @@ class Conversation:
             continue_count,
             accumulated_text,
             original_prompt,
-        ) = Conversation._prepare_continue_loop(last_result, messages, original_prompt)
+        ) = _ResponseContinuer._prepare_continue_loop(
+            last_result, messages, original_prompt
+        )
 
         while (
             current_result.finish_reason == "length" and continue_count < max_continues
         ):
             continue_count += 1
-            await Conversation._apply_continue_delay_async(
+            await _ResponseContinuer._apply_continue_delay_async(
                 continue_delay, continue_count
             )
-            Conversation._call_progress_callback(
+            _ResponseContinuer._call_progress_callback(
                 on_progress, continue_count, max_continues, current_result, all_results
             )
 
             try:
-                prompt = Conversation._get_continue_prompt(
+                prompt = _ResponseContinuer._get_continue_prompt(
                     continue_prompt,
                     continue_count,
                     max_continues,
@@ -651,15 +682,17 @@ class Conversation:
 
                 continue_result = await chat.acall(working_messages, **params)
 
-                current_result, accumulated_text = Conversation._process_continue_step(
-                    continue_result, all_results, working_messages
+                current_result, accumulated_text = (
+                    _ResponseContinuer._process_continue_step(
+                        continue_result, all_results, working_messages
+                    )
                 )
             except LexiluxError as e:
-                return Conversation._handle_continue_error(
+                return _ResponseContinuer._handle_continue_error(
                     e, current_result, all_results, on_error, on_error_callback
                 )
 
-        return Conversation._finalize_continue_request(
+        return _ResponseContinuer._finalize_continue_request(
             current_result, all_results, auto_merge
         )
 
@@ -703,7 +736,9 @@ class Conversation:
             continue_count,
             accumulated_text,
             original_prompt,
-        ) = Conversation._prepare_continue_loop(last_result, messages, original_prompt)
+        ) = _ResponseContinuer._prepare_continue_loop(
+            last_result, messages, original_prompt
+        )
 
         all_results.clear()
         all_results.append(last_result)
@@ -716,10 +751,10 @@ class Conversation:
                 and continue_count < max_continues
             ):
                 continue_count += 1
-                await Conversation._apply_continue_delay_async(
+                await _ResponseContinuer._apply_continue_delay_async(
                     continue_delay, continue_count
                 )
-                Conversation._call_progress_callback(
+                _ResponseContinuer._call_progress_callback(
                     on_progress,
                     continue_count,
                     max_continues,
@@ -728,7 +763,7 @@ class Conversation:
                 )
 
                 try:
-                    prompt = Conversation._get_continue_prompt(
+                    prompt = _ResponseContinuer._get_continue_prompt(
                         continue_prompt,
                         continue_count,
                         max_continues,
@@ -744,12 +779,12 @@ class Conversation:
 
                     continue_result = continue_iterator.result.to_chat_result()
                     current_result, accumulated_text = (
-                        Conversation._process_continue_step(
+                        _ResponseContinuer._process_continue_step(
                             continue_result, all_results, working_messages
                         )
                     )
                 except LexiluxError as e:
-                    Conversation._handle_continue_error(
+                    _ResponseContinuer._handle_continue_error(
                         e, current_result, all_results, on_error, on_error_callback
                     )
                     break
@@ -775,7 +810,7 @@ class _BaseMergedContinueIterator:
     def result(self) -> StreamingResult:
         """Get merged result from all continues."""
         if self._merged_result is None:
-            self._merged_result = Conversation._merged_streaming_result(
+            self._merged_result = _ResponseContinuer._merged_streaming_result(
                 self._initial_result,
                 self._all_results_ref,
             )
@@ -800,7 +835,7 @@ class _MergedContinueIterator(StreamingIterator, _BaseMergedContinueIterator):
             self._result.update(chunk)
             yield chunk
         if self._all_results_ref:
-            Conversation._filter_empty_results(self._all_results_ref)
+            _ResponseContinuer._filter_empty_results(self._all_results_ref)
 
 
 class _AsyncMergedContinueIterator(AsyncStreamingIterator, _BaseMergedContinueIterator):
@@ -822,5 +857,28 @@ class _AsyncMergedContinueIterator(AsyncStreamingIterator, _BaseMergedContinueIt
             return chunk
         except StopAsyncIteration:
             if self._all_results_ref:
-                Conversation._filter_empty_results(self._all_results_ref)
+                _ResponseContinuer._filter_empty_results(self._all_results_ref)
             raise
+
+
+# =============================================================================
+# Backward Compatibility Alias
+# =============================================================================
+
+
+def __getattr__(name: str):
+    """Provide backward-compatible access to Conversation alias."""
+    if name == "Conversation":
+        warnings.warn(
+            "Conversation is deprecated and will be removed in v3.0.0. "
+            "Use chat.complete() for automatic continuation instead. "
+            "For low-level control, use _ResponseContinuer (internal API).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _ResponseContinuer
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+# Alias for backward compatibility (used by internal code)
+Conversation = _ResponseContinuer

@@ -74,6 +74,29 @@ class StreamingResult:
         """Whether streaming is done."""
         return self._done
 
+    def set_result(
+        self,
+        text: str,
+        finish_reason: str | None,
+        usage: Usage,
+    ) -> None:
+        """
+        Set complete result directly (for merged streaming results).
+
+        This method properly sets all attributes according to __slots__,
+        avoiding dynamic attribute creation.
+
+        Args:
+            text: Complete text content.
+            finish_reason: Reason why generation stopped.
+            usage: Usage statistics.
+        """
+        self._text_parts = [text]  # Store as single-element list
+        self._text_cache = text  # Pre-compute cache
+        self._finish_reason = finish_reason
+        self._usage = usage
+        self._done = True
+
     def to_chat_result(self) -> ChatResult:
         """Convert to ChatResult (for history)."""
         return ChatResult(

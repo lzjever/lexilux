@@ -55,8 +55,24 @@ class Chat(BaseAPIClient):
     Provides a simple, function-like API for chat completions with support for
     both non-streaming and streaming responses.
 
+    **Important:** Chat is STATELESS - each call is independent. For multi-turn
+    conversations, use ChatHistory to manage context and pass it via the
+    `history` parameter.
+
+    Method Overview:
+        - `chat()` / `acall()`: Single request (may be truncated)
+        - `stream()` / `astream()`: Streaming response (may be truncated)
+        - `complete()` / `acomplete()`: Auto-continue if truncated
+        - `complete_stream()` / `acomplete_stream()`: Streaming + auto-continue
+
+    Related Classes:
+        - ChatHistory: Manages conversation state (pass via `history` parameter)
+        - Conversation: Low-level utility for handling truncated responses
+            (use `chat.complete()` instead for simplicity)
+
     Examples:
-        >>> chat = Chat(base_url="https://api.example.com/v1", api_key="key", model="gpt-4")
+        >>> # Simple single-turn query
+        >>> chat = Chat(base_url="...", api_key="...", model="gpt-4")
         >>> result = chat("Hello, world!")
         >>> print(result.text)
 
@@ -64,8 +80,17 @@ class Chat(BaseAPIClient):
         >>> for chunk in chat.stream("Tell me a joke"):
         ...     print(chunk.delta, end="")
 
-        >>> # With system message
-        >>> result = chat("What is Python?", system="You are a helpful assistant")
+        >>> # Multi-turn conversation (use ChatHistory)
+        >>> from lexilux import ChatHistory
+        >>> history = ChatHistory(system="You are helpful")
+        >>> history.add_user("My name is Alice")
+        >>> result = chat(history.get_messages())
+        >>> history.add_assistant(result.text)
+        >>> history.add_user("What's my name?")
+        >>> result = chat(history.get_messages())  # AI remembers!
+
+        >>> # Long content (auto-continue)
+        >>> result = chat.complete("Write an essay", max_tokens=100)
     """
 
     def __init__(
@@ -545,6 +570,10 @@ class Chat(BaseAPIClient):
         )
 
         async def _async_chunk_generator() -> AsyncIterator[ChatStreamChunk]:
+            # Apply rate limiting if configured (before starting stream)
+            if self._rate_limiter is not None:
+                await self._rate_limiter.acquire()
+
             parser = SSEChatStreamParser(
                 return_raw_events=return_raw_events,
                 include_reasoning=include_reasoning,

@@ -470,11 +470,16 @@ class Rerank(AsyncClientMixin):
             proxies: Optional proxy configuration dict (e.g., {"http": "http://proxy:port"}).
                     If None, uses environment variables (HTTP_PROXY, HTTPS_PROXY).
                     To disable proxies, pass {}.
-            pool_size: Connection pool size for HTTP adapter (default: 10).
+            pool_size: Connection pool size for HTTP adapter (default: 10, max: 100).
 
         Raises:
-            ValueError: If mode is not supported.
+            ValueError: If mode is not supported or pool_size is out of range.
         """
+        if pool_size < 1:
+            raise ValueError(f"pool_size must be at least 1, got {pool_size}")
+        if pool_size > 100:
+            raise ValueError(f"pool_size must be at most 100, got {pool_size}")
+
         if mode not in self._HANDLERS:
             available = ", ".join(f'"{m}"' for m in self._HANDLERS.keys())
             raise ValueError(f'Mode must be one of {available}, got "{mode}"')

@@ -118,8 +118,16 @@ class Embed(AsyncClientMixin):
             proxies: Optional proxy configuration dict (e.g., {"http": "http://proxy:port"}).
                     If None, uses environment variables (HTTP_PROXY, HTTPS_PROXY).
                     To disable proxies, pass {}.
-            pool_size: Connection pool size for HTTP adapter (default: 10).
+            pool_size: Connection pool size for HTTP adapter (default: 10, max: 100).
+
+        Raises:
+            ValueError: If pool_size is not in range [1, 100].
         """
+        if pool_size < 1:
+            raise ValueError(f"pool_size must be at least 1, got {pool_size}")
+        if pool_size > 100:
+            raise ValueError(f"pool_size must be at most 100, got {pool_size}")
+
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from functools import lru_cache
 from importlib import resources
 from typing import TYPE_CHECKING, Iterator
@@ -87,6 +88,7 @@ class ModelRegistry:
     """
 
     _instance: ModelRegistry | None = None
+    _lock = threading.Lock()
 
     def __init__(self, data_path: str | None = None):
         """
@@ -118,6 +120,7 @@ class ModelRegistry:
 
         Returns a shared registry instance, creating it if necessary.
         This is the recommended way to access the registry in most cases.
+        Thread-safe with double-checked locking.
 
         Returns:
             The singleton ModelRegistry instance.
@@ -127,7 +130,9 @@ class ModelRegistry:
             >>> spec = registry.get("gpt-4o")
         """
         if cls._instance is None:
-            cls._instance = cls()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls()
         return cls._instance
 
     @classmethod
