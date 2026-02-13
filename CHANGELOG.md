@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.2] - 2026-02-13
+
+### Fixed
+
+- **Python 3.9 compatibility**: Added `__init__.py` to `lexilux/data/` directory
+  - Required for `importlib.resources.read_text()` to work with subpackages in Python 3.9
+  - Fixed bundled data loading in `ModelRegistry`
+
 ## [2.7.1] - 2026-02-13
 
 ### Added
