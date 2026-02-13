@@ -316,8 +316,14 @@ async def test_async_retry_on_rate_limit_error():
         mock_response.json.return_value = {"result": "ok"}
         return mock_response
 
-    with patch.object(client, "_ado_request", side_effect=mock_request):
+    # Patch the instance method directly for async compatibility
+    original_method = client._ado_request
+    client._ado_request = mock_request
+
+    try:
         await client._amake_request("test", {})
+    finally:
+        client._ado_request = original_method
 
     assert call_count == 2
 

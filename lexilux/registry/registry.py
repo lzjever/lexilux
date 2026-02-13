@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import threading
 from functools import lru_cache
-from importlib import resources
 from typing import TYPE_CHECKING, Iterator
 
 from lexilux.registry.models import (
@@ -27,6 +27,48 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+def _load_bundled_data() -> dict | None:
+    """
+    Load bundled models.json data in a Python 3.9+ compatible way.
+
+    Returns:
+        dict or None: The loaded data, or None if loading failed.
+    """
+    # Python 3.10+ supports resources.files() with subpackages
+    if sys.version_info >= (3, 10):
+        from importlib import resources
+
+        try:
+            data_file = resources.files("lexilux.data").joinpath("models.json")
+            return json.loads(data_file.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError, TypeError) as e:
+            logger.warning(f"Could not load bundled models data: {e}")
+            return None
+    else:
+        # Python 3.9 fallback using pkg_resources or importlib_resources
+        try:
+            # Try importlib_resources (backport)
+            import importlib_resources
+
+            data_file = importlib_resources.files("lexilux.data").joinpath(
+                "models.json"
+            )
+            return json.loads(data_file.read_text(encoding="utf-8"))
+        except ImportError:
+            # Fall back to pkg_resources
+            try:
+                import pkg_resources
+
+                data = pkg_resources.resource_string("lexilux.data", "models.json")
+                return json.loads(data.decode("utf-8"))
+            except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+                logger.warning(f"Could not load bundled models data: {e}")
+                return None
+        except (FileNotFoundError, json.JSONDecodeError, OSError, TypeError) as e:
+            logger.warning(f"Could not load bundled models data: {e}")
+            return None
 
 
 # Conservative default configuration for unknown models
@@ -146,7 +188,7 @@ class ModelRegistry:
 
     def _load_data(self, data_path: str | None = None) -> None:
         """Load model data from file."""
-        data: dict = {}
+        data: dict | None = None
 
         if data_path:
             try:
@@ -157,15 +199,11 @@ class ModelRegistry:
                 return
         else:
             # Load from package data
-            try:
-                data_file = resources.files("lexilux.data").joinpath("models.json")
-                data = json.loads(data_file.read_text(encoding="utf-8"))
-            except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
-                logger.warning(f"Could not load bundled models data: {e}")
-                return
+            data = _load_bundled_data()
 
-        self._parse_data(data)
-        self._loaded = True
+        if data:
+            self._parse_data(data)
+            self._loaded = True
 
     def _parse_data(self, data: dict) -> None:
         """Parse models.dev API data format."""
