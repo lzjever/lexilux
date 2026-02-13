@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.4] - 2026-02-13
+
+### Added
+
+- **Multi-Provider Documentation**: New `docs/PROVIDERS.md` documenting core philosophy
+  - "One client, multiple providers" design principle
+  - Tier 1 providers: OpenAI, DeepSeek, GLM, Kimi, Minimax, Qwen, Groq, etc.
+  - Quick start examples for each provider
+  - Provider-specific considerations (rate limits, connection pooling)
+  - Future roadmap for provider support
+
+### Changed
+
+- **README.md**: Added "One Client, Multiple Providers" section with quick reference table
+  - Links to detailed PROVIDERS.md documentation
+  - Examples showing how to switch between providers
+
 ## [2.7.3] - 2026-02-13
 
 ### Changed

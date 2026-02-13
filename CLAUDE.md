@@ -6,6 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Lexilux is a unified LLM API client library for Python that provides function-like APIs for Chat, Embedding, Rerank, and Tokenizer services. It supports OpenAI-compatible endpoints with streaming, async, rate limiting, and connection pooling.
 
+## Core Philosophy: One Client, Multiple Providers
+
+Lexilux is designed to work seamlessly across all major LLM providers through their OpenAI-compatible APIs. The goal is to minimize provider lock-in by providing a unified interface.
+
+**Tier 1 Providers (Fully Supported):**
+- OpenAI, DeepSeek, GLM (ZhipuAI), Kimi (Moonshot), Minimax, Qwen (Alibaba), Groq, Azure OpenAI, Together AI, Fireworks AI
+
+**Key Principle:** Switching providers should only require changing `base_url` and `api_key`, not rewriting application code.
+
+See `docs/PROVIDERS.md` for complete provider documentation.
+
 ## Development Commands
 
 ### Setup

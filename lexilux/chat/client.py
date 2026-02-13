@@ -22,6 +22,12 @@ from lexilux.chat._request import (
     prepare_messages_for_request,
 )
 from lexilux.chat.continuer import ConversationContinuer
+from lexilux.chat.reasoning import (
+    build_reasoning_request,
+    extract_reasoning_content,
+    normalize_reasoning,
+)
+from lexilux.providers.registry import detect_provider_from_url
 
 from lexilux.chat.history import ChatHistory
 from lexilux.chat.models import ChatResult, ChatStreamChunk, MessagesLike
@@ -175,6 +181,7 @@ class Chat(BaseAPIClient):
         extra: Json | None,
         stream: bool,
         include_usage: bool,
+        reasoning: bool | dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Json:
         """
@@ -206,6 +213,19 @@ class Chat(BaseAPIClient):
             kwargs["stop"] = validated_stop
 
         param_dict = build_params_dict(params=params, **kwargs)
+
+        # Build reasoning params if enabled
+        reasoning_params = {}
+        if reasoning is not None:
+            provider_id = detect_provider_from_url(self.base_url)
+            if provider_id:
+                normalized = normalize_reasoning(reasoning)
+                reasoning_params = build_reasoning_request(provider_id, normalized)
+
+        # Merge reasoning params into param_dict
+        if reasoning_params:
+            param_dict.update(reasoning_params)
+
         return build_payload(
             model=final_model,
             messages=api_messages,
@@ -314,6 +334,7 @@ class Chat(BaseAPIClient):
         parallel_tool_calls: bool | None = None,
         params: ChatParams | None = None,
         extra: Json | None = None,
+        reasoning: bool | dict[str, Any] | None = None,
         return_raw: bool = False,
     ) -> ChatResult:
         """
@@ -330,6 +351,7 @@ class Chat(BaseAPIClient):
             extra=extra,
             stream=False,
             include_usage=False,
+            reasoning=reasoning,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
@@ -366,6 +388,7 @@ class Chat(BaseAPIClient):
         parallel_tool_calls: bool | None = None,
         params: ChatParams | None = None,
         extra: Json | None = None,
+        reasoning: bool | dict[str, Any] | None = None,
         include_usage: bool = True,
         return_raw_events: bool = False,
         include_reasoning: bool = False,
@@ -384,6 +407,7 @@ class Chat(BaseAPIClient):
             extra=extra,
             stream=True,
             include_usage=include_usage,
+            reasoning=reasoning,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
@@ -483,6 +507,7 @@ class Chat(BaseAPIClient):
         parallel_tool_calls: bool | None = None,
         params: ChatParams | None = None,
         extra: Json | None = None,
+        reasoning: bool | dict[str, Any] | None = None,
         return_raw: bool = False,
     ) -> ChatResult:
         """
@@ -499,6 +524,7 @@ class Chat(BaseAPIClient):
             extra=extra,
             stream=False,
             include_usage=False,
+            reasoning=reasoning,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
@@ -537,6 +563,7 @@ class Chat(BaseAPIClient):
         parallel_tool_calls: bool | None = None,
         params: ChatParams | None = None,
         extra: Json | None = None,
+        reasoning: bool | dict[str, Any] | None = None,
         include_usage: bool = True,
         return_raw_events: bool = False,
         include_reasoning: bool = False,
@@ -555,6 +582,7 @@ class Chat(BaseAPIClient):
             extra=extra,
             stream=True,
             include_usage=include_usage,
+            reasoning=reasoning,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,

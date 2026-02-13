@@ -1,4 +1,4 @@
-.PHONY: help clean install dev-install test test-examples test-cov test-integration lint format format-check check build sdist wheel docs html clean-docs upload upload-test check-package setup-venv pre-commit-install pre-commit-run pre-commit-update
+.PHONY: help clean install dev-install test test-examples test-cov test-integration lint format format-check check build sdist wheel docs html clean-docs upload upload-test check-package setup-venv pre-commit-install pre-commit-run pre-commit-update sync-models
 
 # Use uv if available, otherwise fall back to pip
 UV := $(shell command -v uv 2>/dev/null)
@@ -51,6 +51,9 @@ help:
 	@echo "Documentation:"
 	@echo "  docs          - Build documentation"
 	@echo "  html          - Build HTML documentation"
+	@echo ""
+	@echo "Data Sync:"
+	@echo "  sync-models   - Sync models.json from models.dev"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         - Clean build artifacts"
@@ -227,3 +230,8 @@ pre-commit-update:
 		pre-commit autoupdate; \
 	fi
 	@echo "✅ Pre-commit hooks updated!"
+
+sync-models:
+	@echo "Syncing models.json from models.dev..."
+	@curl -sL "https://models.dev/api.json" -o lexilux/data/models.json
+	@echo "✅ models.json synced!"

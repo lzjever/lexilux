@@ -202,6 +202,20 @@ def parse_chat_completion_response(
         message = {}
     text = message.get("content", "") or ""
 
+    # Extract reasoning content (for DeepSeek, Kimi, GLM, etc.)
+    reasoning = message.get("reasoning_content") or None
+
+    # For Anthropic-style responses with content blocks
+    if not reasoning:
+        content_blocks = message.get("content", [])
+        if isinstance(content_blocks, list):
+            reasoning_parts = []
+            for block in content_blocks:
+                if isinstance(block, dict) and block.get("type") == "thinking":
+                    reasoning_parts.append(block.get("thinking", ""))
+            if reasoning_parts:
+                reasoning = "\n".join(reasoning_parts)
+
     tool_calls_list = _parse_tool_calls(message.get("tool_calls"))
 
     # Side patch: fallback to text-based tool call parsing for flawed providers
@@ -216,6 +230,7 @@ def parse_chat_completion_response(
         usage=usage,
         finish_reason=finish_reason,
         tool_calls=tool_calls_list,
+        reasoning=reasoning,
         raw=response_data if return_raw else {},
     )
 

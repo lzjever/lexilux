@@ -26,6 +26,35 @@
 - **Multimodal Support**: Vision capabilities with image inputs
 - **Async Support**: Full async/await API for concurrent operations
 
+## One Client, Multiple Providers
+
+Lexilux is designed to work seamlessly with all major LLM providers through their OpenAI-compatible APIs:
+
+| Provider | Base URL |
+|----------|----------|
+| **OpenAI** | `https://api.openai.com/v1` |
+| **DeepSeek** | `https://api.deepseek.com` |
+| **GLM / ZhipuAI** | `https://open.bigmodel.cn/api/paas/v4` |
+| **Kimi / Moonshot** | `https://api.moonshot.cn/v1` |
+| **Minimax** | `https://api.minimax.chat/v1` |
+| **Qwen / Alibaba** | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| **Groq** | `https://api.groq.com/openai/v1` |
+
+Simply change `base_url` and `api_key` to switch providers:
+
+```python
+# OpenAI
+chat = Chat(base_url="https://api.openai.com/v1", api_key="sk-...", model="gpt-4o")
+
+# DeepSeek
+chat = Chat(base_url="https://api.deepseek.com", api_key="sk-...", model="deepseek-chat")
+
+# GLM (智谱)
+chat = Chat(base_url="https://open.bigmodel.cn/api/paas/v4", api_key="...", model="glm-4-plus")
+```
+
+See [PROVIDERS.md](docs/PROVIDERS.md) for complete provider documentation.
+
 ## Installation
 
 ### Quick Install

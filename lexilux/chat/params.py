@@ -178,6 +178,9 @@ class ChatParams:
     tool_choice: str | ToolChoice | None = None
     parallel_tool_calls: bool | None = None
 
+    # Reasoning mode (extended thinking)
+    reasoning: bool | dict[str, Any] | None = None
+
     # Extra parameters
     extra: dict[str, Any] | None = None
 

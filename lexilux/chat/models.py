@@ -218,6 +218,7 @@ class ChatResult(ResultBase):
         finish_reason: str | None = None,
         tool_calls: list[ToolCall] | None = None,
         raw: Json | None = None,
+        reasoning: str | None = None,
     ):
         """
         Initialize ChatResult.
@@ -228,11 +229,13 @@ class ChatResult(ResultBase):
             finish_reason: Reason why generation stopped.
             tool_calls: List of tool calls initiated by the model.
             raw: Raw API response.
+            reasoning: Reasoning/thinking content (for models with extended thinking).
         """
         super().__init__(usage=usage, raw=raw)
         self.text = text
         self.finish_reason = finish_reason
         self.tool_calls = tool_calls or []
+        self.reasoning = reasoning
 
     @property
     def has_tool_calls(self) -> bool:
@@ -250,13 +253,29 @@ class ChatResult(ResultBase):
         """
         return len(self.tool_calls) > 0
 
+    @property
+    def has_reasoning(self) -> bool:
+        """
+        Check if result contains reasoning content.
+
+        Returns:
+            True if reasoning is non-empty.
+
+        Examples:
+            >>> result = chat("...", reasoning=True)
+            >>> if result.has_reasoning:
+            ...     print(result.reasoning)
+        """
+        return bool(self.reasoning)
+
     def __str__(self) -> str:
         """Return the text content when converted to string."""
         return self.text
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"ChatResult(text={self.text!r}, finish_reason={self.finish_reason!r}, usage={self.usage!r}, tool_calls={len(self.tool_calls)})"
+        reasoning_info = f", reasoning={len(self.reasoning)} chars" if self.reasoning else ""
+        return f"ChatResult(text={self.text!r}, finish_reason={self.finish_reason!r}, usage={self.usage!r}, tool_calls={len(self.tool_calls)}{reasoning_info})"
 
 
 class ChatStreamChunk(ResultBase):
@@ -393,6 +412,36 @@ class ChatStreamChunk(ResultBase):
             True
         """
         return len(self.tool_calls) > 0
+
+    @property
+    def reasoning(self) -> str:
+        """
+        Get reasoning content delta (alias for reasoning_content).
+
+        Returns:
+            Reasoning delta string (empty if none).
+
+        Examples:
+            >>> for chunk in chat.stream("...", reasoning=True):
+            ...     if chunk.reasoning:
+            ...         print(chunk.reasoning, end="")
+        """
+        return self.reasoning_content or ""
+
+    @property
+    def has_reasoning(self) -> bool:
+        """
+        Check if chunk contains reasoning content.
+
+        Returns:
+            True if reasoning_content is non-empty.
+
+        Examples:
+            >>> for chunk in chat.stream("...", reasoning=True):
+            ...     if chunk.has_reasoning:
+            ...         print(f"Reasoning: {chunk.reasoning}")
+        """
+        return bool(self.reasoning_content)
 
     @property
     def has_streaming_tool_calls(self) -> bool:
